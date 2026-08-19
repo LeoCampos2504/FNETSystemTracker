@@ -1,15 +1,510 @@
-// Minimal Prisma infrastructure for the foundation. Gino owns this file and
-// the full business data model (see docs/WORK_SPLIT.md) — do not add models
-// here as part of unrelated work.
+// Prisma schema for FNET System Tracker.
+// Owner: Gino (see docs/WORK_SPLIT.md). Do not edit outside this ownership.
 //
-// The prototype must run without DATABASE_URL set; nothing in the app
-// depends on this schema yet.
+// Target: PostgreSQL. Locally we run against `prisma dev` (a real, embedded
+// Postgres-wire-compatible server bundled with Prisma 7 — no Docker/external
+// infra required). Prisma 7 moved connection config out of this file: the
+// actual URL is resolved in `prisma.config.ts` / the PrismaClient adapter, not
+// here. See docs/DATABASE.md for how to run everything locally and how this
+// maps to a real production PostgreSQL instance later.
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (mirror src/contracts/enums.ts exactly — keep in sync manually,
+// contracts are the source of truth and are frozen/shared)
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  TECHNICIAN
+  COORDINATOR
+  ADMIN
+}
+
+enum TaskType {
+  PREVENTIVE
+  CORRECTIVE
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  IN_REVIEW
+  SENT
+  REJECTED
+  APPROVED_WITH_PENDING
+  APPROVED
+}
+
+enum TaskCriticality {
+  NORMAL
+  URGENT
+}
+
+enum CrewRole {
+  PRIMARY
+  COLLABORATOR
+}
+
+enum QuoteStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  COMPLETED_WITH_PENDING
+  COMPLETED
+}
+
+enum ExternalSource {
+  SYTEX
+  BIZFLOW
+  MAXTRACKER
+  INTERNAL
+}
+
+enum VehicleStatus {
+  ACTIVE
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum NotificationType {
+  NEW_TASK
+  CORRECTIVE_URGENT
+  GUARD_CHANGE
+  VEHICLE_CHANGE
+  SCHEDULE_CHANGE
+}
+
+// ---------------------------------------------------------------------------
+// Users / auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  /// Hashed with bcryptjs. Never store plaintext passwords.
+  passwordHash String
+  role         UserRole
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  technician    Technician?
+  coordinator   Coordinator?
+  notifications Notification[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Org structure: technicians, coordinators, zones, sites
+// ---------------------------------------------------------------------------
+
+model Technician {
+  id     String  @id @default(cuid())
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  name  String
+  phone String?
+
+  /// Zone the technician normally belongs to.
+  primaryZoneId String
+  primaryZone   Zone   @relation("TechnicianPrimaryZone", fields: [primaryZoneId], references: [id])
+
+  /// Set when temporarily loaned to another zone. Kept separate from
+  /// primaryZoneId so loan periods never overwrite/destroy the technician's
+  /// home-zone history.
+  onLoanZoneId String?
+  onLoanZone   Zone?   @relation("TechnicianOnLoanZone", fields: [onLoanZoneId], references: [id])
+
+  active Boolean @default(true)
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  taskAssignments     TaskTechnician[]
+  guardAssignments    GuardTechnician[]
+  vehicleAssignments  VehicleAssignment[]
+
+  @@index([primaryZoneId])
+  @@index([onLoanZoneId])
+  @@map("technicians")
+}
+
+model Coordinator {
+  id     String  @id @default(cuid())
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  name String
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// A coordinator may administer more than one zone (many-to-many).
+  zones  CoordinatorZone[]
+  quotes Quote[]
+
+  @@map("coordinators")
+}
+
+/// Join table: a coordinator can have multiple zones, a zone can have
+/// multiple coordinators.
+model CoordinatorZone {
+  coordinatorId String
+  coordinator   Coordinator @relation(fields: [coordinatorId], references: [id], onDelete: Cascade)
+  zoneId        String
+  zone          Zone        @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([coordinatorId, zoneId])
+  @@index([zoneId])
+  @@map("coordinator_zones")
+}
+
+model Zone {
+  id   String @id @default(cuid())
+  name String
+  code String @unique
+
+  /// Free-form project/context label for the zone (e.g. a BizFlow project
+  /// name). Optional — not every zone has one.
+  project String?
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  coordinators        CoordinatorZone[]
+  sites               Site[]
+  tasks               Task[]
+  guards              Guard[]
+  quotes              Quote[]
+  primaryTechnicians  Technician[]      @relation("TechnicianPrimaryZone")
+  onLoanTechnicians   Technician[]      @relation("TechnicianOnLoanZone")
+
+  @@map("zones")
+}
+
+model Site {
+  id   String @id @default(cuid())
+  code String @unique
+  name String
+
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  latitude  Float
+  longitude Float
+  address   String?
+  /// Reasonable free-form extra data from the source system (e.g. contact,
+  /// access notes) that doesn't need its own column yet.
+  metadata  Json?
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks Task[]
+
+  @@index([zoneId])
+  @@map("sites")
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+model Task {
+  id       String  @id @default(cuid())
+  taskCode String  @unique
+  formCode String?
+
+  type        TaskType
+  description String
+  /// Free-form business priority (e.g. "1", "Alta"), distinct from criticality.
+  priority    String
+  criticality TaskCriticality
+  status      TaskStatus
+
+  /// Day the coordinator scheduled the task for (date only).
+  scheduledDate DateTime @db.Date
+  /// Actual/planned start timestamp, when known.
+  scheduledAt   DateTime?
+
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id])
+  /// Snapshot of the site code at assignment time (mirrors what the source
+  /// system sends), kept alongside the siteId relation.
+  siteCode String
+
+  /// Snapshot zone relation. Kept even though it's derivable via site.zoneId
+  /// so historical tasks stay correct if a site is ever reassigned to a
+  /// different zone later.
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  latitude  Float
+  longitude Float
+
+  arrivalAt   DateTime?
+  departureAt DateTime?
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  technicians   TaskTechnician[]
+  statusHistory TaskStatusHistory[]
+  rejections    TaskRejection[]
+
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([type])
+  @@index([zoneId])
+  @@index([siteId])
+  @@map("tasks")
+}
+
+/// Explicit join entity instead of technician1Id/technician2Id columns, so a
+/// task can carry PRIMARY + COLLABORATOR (the normal two-person crew) or,
+/// exceptionally, a single PRIMARY technician.
+model TaskTechnician {
+  taskId       String
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id])
+
+  role CrewRole
+
+  assignedAt DateTime @default(now())
+
+  @@id([taskId, technicianId])
+  @@index([technicianId])
+  @@map("task_technicians")
+}
+
+/// One row per status transition. Preserves the full history instead of only
+/// the current Task.status.
+model TaskStatusHistory {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  status    TaskStatus
+  changedAt DateTime       @default(now())
+  source    ExternalSource @default(INTERNAL)
+  /// User id or external actor identifier, when known.
+  actor     String?
+
+  @@index([taskId])
+  @@map("task_status_history")
+}
+
+/// One row per rejection EVENT. A task rejected twice has two rows here —
+/// the rejections KPI counts these rows, never a counter column.
+model TaskRejection {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  rejectedAt DateTime
+  reason     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@map("task_rejections")
+}
+
+// ---------------------------------------------------------------------------
+// Guards (on-call)
+// ---------------------------------------------------------------------------
+
+model Guard {
+  id     String @id @default(cuid())
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  startAt DateTime
+  endAt   DateTime
+
+  /// userId of the coordinator who created/assigned this guard, when known.
+  createdBy String?
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  technicians GuardTechnician[]
+
+  @@index([zoneId])
+  @@index([startAt, endAt])
+  @@map("guards")
+}
+
+/// Join table so a guard's crew can be edited (temporary/mixed crews) without
+/// touching Guard itself.
+model GuardTechnician {
+  guardId      String
+  guard        Guard      @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@id([guardId, technicianId])
+  @@index([technicianId])
+  @@map("guard_technicians")
+}
+
+// ---------------------------------------------------------------------------
+// Vehicles
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id    String @id @default(cuid())
+  plate String @unique
+  brand String
+  model String
+
+  mileageKm Int
+  status    VehicleStatus @default(ACTIVE)
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Current holder is derived as the assignment with endAt = null — never
+  /// stored as a separate column, so history is never overwritten.
+  assignments VehicleAssignment[]
+
+  @@map("vehicles")
+}
+
+/// Full assignment history. `endAt: null` means it's the current assignment.
+/// Answers "which vehicle did Juan have on 2026-08-18?" by range query.
+model VehicleAssignment {
+  id           String     @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle    @relation(fields: [vehicleId], references: [id])
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id])
+
+  startAt DateTime
+  endAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId, startAt])
+  @@index([technicianId, startAt])
+  @@map("vehicle_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// Quotes
+// ---------------------------------------------------------------------------
+
+model Quote {
+  id        String @id @default(cuid())
+  code      String @unique
+  projectId String?
+
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  /// Optional direct link when a coordinator is known explicitly; ownership
+  /// is still derived primarily via zone (+ project) per the product rules.
+  coordinatorId String?
+  coordinator   Coordinator? @relation(fields: [coordinatorId], references: [id])
+
+  status QuoteStatus
+
+  externalId      String?        @unique
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([zoneId])
+  @@index([status])
+  @@map("quotes")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id])
+  type   NotificationType
+
+  title   String
+  message String
+
+  entityType String?
+  entityId   String?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id      String @id @default(cuid())
+  actorId String
+  action  String
+  entity  String
+  entityId String
+
+  /// Opaque before/after snapshots. Never store secrets here.
+  before Json?
+  after  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@map("audit_logs")
 }
