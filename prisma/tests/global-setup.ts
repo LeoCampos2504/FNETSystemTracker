@@ -14,5 +14,25 @@ export default async function globalSetup() {
         "before `npm run test:db` — see docs/DATABASE.md.",
     );
   }
-  execFileSync("npx", ["tsx", "prisma/seed.ts"], { stdio: "inherit", env: process.env, shell: true });
+  await runSeedWithRetry();
+}
+
+/**
+ * The local `prisma dev` embedded server occasionally drops a connection
+ * ("Connection terminated unexpectedly") under this suite's connection
+ * churn — many short-lived PrismaClient instances across globalSetup, 15+
+ * test files, and the seed-idempotency test's own repeated seed runs, all
+ * against one lightweight dev-only process. A real Postgres instance
+ * doesn't need this. One retry after a short pause has been enough in
+ * practice; see docs/DATABASE.md.
+ */
+async function runSeedWithRetry(attemptsLeft = 2): Promise<void> {
+  try {
+    execFileSync("npx", ["tsx", "prisma/seed.ts"], { stdio: "inherit", env: process.env, shell: true });
+  } catch (error) {
+    if (attemptsLeft <= 1) throw error;
+    console.warn("Seed failed (likely a transient local dev-DB connection drop), retrying once...");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await runSeedWithRetry(attemptsLeft - 1);
+  }
 }

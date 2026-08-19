@@ -1,4 +1,5 @@
 export type { UserRepository } from "./user.repository";
+export type { AuthCredentialsRepository } from "./auth-credentials.repository";
 export type { TechnicianRepository } from "./technician.repository";
 export type { TaskRepository, TaskListFilter } from "./task.repository";
 export type { GuardRepository, GuardListFilter } from "./guard.repository";

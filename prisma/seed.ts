@@ -51,18 +51,32 @@ async function clearDatabase() {
   await prisma.user.deleteMany();
 }
 
+/**
+ * mockUsers has no inactive fixture (every seeded technician/coordinator/
+ * admin is active: true). AuthCredentialsRepository must not filter by
+ * active — that policy belongs to AuthService — so one seeded user is
+ * flipped to inactive here (only in the DB, src/mocks/** stays untouched)
+ * to give that boundary something real to test against.
+ */
+const INACTIVE_DEMO_USER_ID = "user-tech-14";
+
 async function seedUsers() {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
-  await prisma.user.createMany({
-    data: mockUsers.map((user) => ({
+  // Hashed per user, not once and reused: bcrypt salts each call
+  // independently, so this is also what makes "two different users have
+  // their own hash" a real, meaningful thing to test (see
+  // prisma/tests/repositories/auth-credentials.test.ts) instead of
+  // trivially true because every row shares one literal string.
+  const data = await Promise.all(
+    mockUsers.map(async (user) => ({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
-      active: user.active,
-      passwordHash,
+      active: user.id === INACTIVE_DEMO_USER_ID ? false : user.active,
+      passwordHash: await bcrypt.hash(DEMO_PASSWORD, 10),
     })),
-  });
+  );
+  await prisma.user.createMany({ data });
 }
 
 async function seedZones() {
@@ -344,12 +358,14 @@ async function main() {
   console.log("Seeding audit log...");
   await seedAuditLog();
 
-  const [users, tasks, guards, vehicles] = await Promise.all([
-    prisma.user.count(),
-    prisma.task.count(),
-    prisma.guard.count(),
-    prisma.vehicle.count(),
-  ]);
+  // Sequential, not Promise.all: a burst of concurrent queries right after
+  // ~50+ sequential inserts is what was tripping "Connection terminated
+  // unexpectedly" against the local `prisma dev` embedded server (see the
+  // same fix in prisma/tests/seed-idempotency.test.ts and docs/DATABASE.md).
+  const users = await prisma.user.count();
+  const tasks = await prisma.task.count();
+  const guards = await prisma.guard.count();
+  const vehicles = await prisma.vehicle.count();
   console.log(`Done. users=${users} tasks=${tasks} guards=${guards} vehicles=${vehicles}`);
   console.log(`Demo login: any seeded email (e.g. admin@fnet.local) / password "${DEMO_PASSWORD}" (DEMO ONLY).`);
 }

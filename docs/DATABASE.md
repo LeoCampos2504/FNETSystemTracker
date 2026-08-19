@@ -4,6 +4,10 @@ Dueño: Gino ([WORK_SPLIT.md](WORK_SPLIT.md)). Cubre `prisma/**`,
 `src/server/repositories/prisma/**`, `src/server/kpis/**` y
 `src/app/api/kpis/**`.
 
+Para el checkpoint de integración con el backend de Leo (los 10 ports que
+necesita, su adapter Prisma, tests y estado) ver
+[PRISMA_PORT_MATRIX.md](PRISMA_PORT_MATRIX.md).
+
 ## Motor y por qué
 
 **Objetivo productivo: PostgreSQL.** El `datasource` de
@@ -101,6 +105,29 @@ equivocado — nos pasó armando este mismo bloque) vas a ver errores tipo
 Solución: `npx prisma dev -d` de nuevo con el mismo `--name` — reusa los
 mismos datos, no hace falta re-migrar ni re-sembrar.
 
+**Dos causas distintas de `Connection terminated unexpectedly`, encontradas
+armando este proyecto:**
+
+1. **Ráfagas de queries concurrentes** (`Promise.all` con varios
+   `prisma.*.count()`/queries al mismo tiempo) contra el servidor embebido
+   — esto era un bug real, no solo inestabilidad: tanto
+   `prisma/seed.ts` (el resumen final) como
+   `prisma/tests/seed-idempotency.test.ts` lo tenían, y en ambos casos la
+   fix fue la misma: **secuencial en vez de `Promise.all`**. Ya corregido en
+   los dos lugares.
+2. **Degradación del proceso `prisma dev` bajo uso sostenido dentro de una
+   sesión larga** — el patrón observado es reproducible: una corrida
+   completa de `npm run test:db` (que abre y cierra decenas de conexiones
+   cortas — cada archivo de test + cada `seed.ts` que corre adentro) deja al
+   servidor embebido en buen estado, pero una **segunda** corrida completa
+   inmediatamente después, contra el mismo proceso, tiende a degradarlo
+   (empiezan a fallar queries individuales, no solo las ráfagas). No es un
+   bug de este código — un Postgres real no tiene este problema. Mitigación
+   práctica: si necesitás correr `npm run test:db` varias veces seguidas,
+   reiniciá el servidor (`npx prisma dev stop <name>` + `npx prisma dev -n
+   <name> -d`) entre corridas si empezás a ver fallos que no tienen que ver
+   con tu cambio.
+
 ### Resetear la demo
 
 ```bash
@@ -123,7 +150,11 @@ Ver [`prisma/schema.prisma`](../prisma/schema.prisma) como fuente de verdad;
 resumen:
 
 - **User** — auth. `passwordHash` (bcrypt, nunca texto plano). `Technician`/
-  `Coordinator` opcionalmente apuntan a un `User` (`userId` único).
+  `Coordinator` opcionalmente apuntan a un `User` (`userId` único). Leído por
+  dos adapters con propósitos distintos: `UserRepository` (identidad —
+  nunca expone `passwordHash`) y `AuthCredentialsRepository` (solo el hash,
+  vía `select`, para que `AuthService` de Leo lo compare — ver
+  [PRISMA_PORT_MATRIX.md](PRISMA_PORT_MATRIX.md)).
 - **Zone**, **CoordinatorZone**, **Coordinator** — muchos a muchos: un
   coordinador puede tener varias zonas y viceversa, vía tabla puente.
 - **Site** — pertenece a una `Zone`, tiene lat/lng propios (no un JSON de
@@ -176,6 +207,17 @@ resumen:
   `OPEN` inicial y, si corresponde, una segunda con el estado actual — es
   una aproximación razonable para la demo, no un reemplazo de los eventos
   reales que va a mandar Sytex.
+- **Un usuario inactivo en la demo**: `mockUsers` no trae ningún usuario
+  `active: false`, así que el seed marca `user-tech-14` como inactivo
+  (solo en la fila de la DB — `src/mocks/**` no se tocó) para poder probar
+  que `AuthCredentialsRepository` sigue devolviendo el hash de un usuario
+  inactivo (esa política es de `AuthService`, no del repository — ver
+  `prisma/tests/repositories/auth-credentials.test.ts`).
+- **Cada usuario tiene su propio hash bcrypt** (se hashea la contraseña demo
+  una vez *por usuario*, no una vez para todos) — no por seguridad real
+  (todos comparten la misma contraseña demo documentada), sino porque si no
+  fuera así, "dos usuarios distintos tienen su propio hash" sería cierto por
+  casualidad (comparten el mismo string) en vez de por diseño.
 - **`prisma dev` es un servidor local para desarrollo**, no para producción.
   El paso a producción es: apuntar `DATABASE_URL`/`SHADOW_DATABASE_URL` a una
   instancia real de PostgreSQL y correr `prisma migrate deploy`. Nada del

@@ -12,4 +12,7 @@ export { zonePrismaRepository } from "./zone.prisma-repository";
 export { quotePrismaRepository } from "./quote.prisma-repository";
 export { notificationPrismaRepository } from "./notification.prisma-repository";
 export { auditPrismaRepository } from "./audit.prisma-repository";
+export { authCredentialsPrismaRepository } from "./auth-credentials.prisma-repository";
+export { createPrismaRepositories } from "./factory";
+export type { PrismaRepositories } from "./factory";
 export { prisma } from "./client";
