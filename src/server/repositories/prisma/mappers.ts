@@ -150,9 +150,16 @@ export function mapSite(row: Prisma.SiteGetPayload<object>): Site {
   };
 }
 
-/** Vehicle's current holder is derived from assignments (endAt: null), never stored as its own column. */
+/**
+ * Vehicle's current holder is derived from assignments (endAt: null), never
+ * stored as its own column. `orderBy` + `take: 1` make the pick
+ * deterministic (most recent startAt) instead of an arbitrary row — nothing
+ * in this codebase can currently create two open assignments for the same
+ * vehicle (VehicleRepository has no write path), but if that invariant were
+ * ever violated by a future writer, this avoids a nondeterministic result.
+ */
 export const vehicleInclude = {
-  assignments: { where: { endAt: null } },
+  assignments: { where: { endAt: null }, orderBy: { startAt: "desc" }, take: 1 },
 } satisfies Prisma.VehicleInclude;
 
 type VehicleRow = Prisma.VehicleGetPayload<{ include: typeof vehicleInclude }>;

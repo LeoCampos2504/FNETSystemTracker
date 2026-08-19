@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid query params", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const ranking = await getTechnicianRanking(parsed.data);
-  return NextResponse.json(ranking);
+  try {
+    const ranking = await getTechnicianRanking(parsed.data);
+    return NextResponse.json(ranking);
+  } catch (error) {
+    console.error("GET /api/kpis/ranking failed", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

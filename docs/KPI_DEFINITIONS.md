@@ -134,4 +134,7 @@ se comporta hoy `mock-api.ts`, y así se mantuvo la paridad).
 
 Ambos devuelven `200` con el body tipado por el contrato (`TechnicianKpis |
 null`, `TechnicianRankingEntry[]`), nunca `404` — igual que el resto de los
-endpoints `X | null` del contrato.
+endpoints `X | null` del contrato. Un error inesperado de la capa de datos
+(DB caída, timeout, etc.) devuelve `500` con `{ error: "Internal server
+error" }` — nunca el mensaje/stack real, que solo se loguea server-side
+(`console.error`). Ver `prisma/tests/api/kpis-error-handling.test.ts`.

@@ -20,8 +20,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: "Invalid query params", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  // Response body is always the `TechnicianKpis | null` the Api contract
-  // promises — 200 either way, mirroring GET /api/tasks/:id's convention.
-  const kpis = await getTechnicianKpis(id, parsed.data);
-  return NextResponse.json(kpis);
+  try {
+    // Response body is always the `TechnicianKpis | null` the Api contract
+    // promises — 200 either way, mirroring GET /api/tasks/:id's convention.
+    const kpis = await getTechnicianKpis(id, parsed.data);
+    return NextResponse.json(kpis);
+  } catch (error) {
+    // Log the real error server-side; never forward its message/stack to
+    // the client (could leak connection strings, table names, etc.).
+    console.error(`GET /api/kpis/technicians/${id} failed`, error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
