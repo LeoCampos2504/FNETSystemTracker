@@ -1,0 +1,15 @@
+// Minimal Prisma infrastructure for the foundation. Gino owns this file and
+// the full business data model (see docs/WORK_SPLIT.md) — do not add models
+// here as part of unrelated work.
+//
+// The prototype must run without DATABASE_URL set; nothing in the app
+// depends on this schema yet.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
