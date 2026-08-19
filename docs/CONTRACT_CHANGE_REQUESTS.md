@@ -105,3 +105,25 @@ No hay "cambios chicos que no ameritan pasar por acá": si toca
   `src/app/api/technicians/[id]/route.test.ts`).
 - Impacto: solo `src/app/api/**` y `src/server/services/**` (mi ownership).
   `src/contracts/api.ts` y `src/lib/api/http-api.ts` no se tocaron.
+
+### [Resuelto] Matriz de compatibilidad `http-api.ts` ↔ backend: PASS (Leo)
+- Quién lo pidió: Leo (construcción de la matriz de regresión HTTP,
+  `docs/API_TEST_MATRIX.md`)
+- Contrato afectado: ninguno — verificación, no cambio.
+- Por qué: antes de que Gino conecte Prisma y Euge consuma el backend real
+  (`NEXT_PUBLIC_USE_MOCK_API=false`), había que confirmar con evidencia (no
+  solo lectura de código) que cada método no-KPI de `Api` tiene una ruta real
+  que coincide en método HTTP, path, query, body y forma de respuesta.
+- Verificación: los 19 métodos no-KPI de `Api` (`login`, `getCurrentUser`,
+  `getTodayTasks`, `getPendingTasks`, `getTask`, `assignTechniciansToTask`,
+  `scheduleTask`, `updateTaskStatus`, `getGuards`, `getGuardPerformance`,
+  `assignGuard`, `getTechnician`, `getCoordinatorZones`,
+  `getZoneTechnicians`, `getZoneSites`, `getVehicle`,
+  `getTechnicianVehicle`, `getQuotes`, `getNotifications`) tienen ruta
+  implementada y test de ruta pasando. **PASS**, sin mismatches nuevos más
+  allá del ya resuelto arriba. Las 5 rutas adicionales que no forman parte de
+  `Api` (`POST /api/auth/logout`, `GET /api/guards/:id`, `POST /api/guards`,
+  `PATCH /api/guards/:id`, `GET /api/quotes/:id`) también tienen test propio
+  y no son código huérfano.
+- Impacto: ninguno en código — `docs/API_TEST_MATRIX.md` documenta la matriz
+  completa endpoint por endpoint.
