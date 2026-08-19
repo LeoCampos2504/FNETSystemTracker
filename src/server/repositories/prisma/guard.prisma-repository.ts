@@ -42,4 +42,38 @@ export const guardPrismaRepository: GuardRepository = {
     const row = await prisma.guard.findUniqueOrThrow({ where: { id: guardId }, include: guardInclude });
     return mapGuard(row);
   },
+
+  async create(input) {
+    const row = await prisma.guard.create({
+      data: {
+        zoneId: input.zoneId,
+        startAt: new Date(input.startAt),
+        endAt: new Date(input.endAt),
+        technicians: { create: input.technicianIds.map((technicianId) => ({ technicianId })) },
+      },
+      include: guardInclude,
+    });
+    return mapGuard(row);
+  },
+
+  async update(guardId, patch) {
+    if (patch.technicianIds) {
+      await prisma.$transaction([
+        prisma.guardTechnician.deleteMany({ where: { guardId } }),
+        prisma.guardTechnician.createMany({
+          data: patch.technicianIds.map((technicianId) => ({ guardId, technicianId })),
+        }),
+      ]);
+    }
+    const row = await prisma.guard.update({
+      where: { id: guardId },
+      data: {
+        ...(patch.zoneId ? { zoneId: patch.zoneId } : {}),
+        ...(patch.startAt ? { startAt: new Date(patch.startAt) } : {}),
+        ...(patch.endAt ? { endAt: new Date(patch.endAt) } : {}),
+      },
+      include: guardInclude,
+    });
+    return mapGuard(row);
+  },
 };

@@ -36,6 +36,27 @@ describe("quotePrismaRepository (real DB)", () => {
   it("list returns an empty array when nothing matches", async () => {
     expect(await quotePrismaRepository.list({ zoneId: "zone-does-not-exist" })).toEqual([]);
   });
+
+  it("list filters by from/to (createdAt range)", async () => {
+    const all = await quotePrismaRepository.list();
+    expect(all.length).toBeGreaterThan(0);
+    const midpoint = [...all].sort((a, b) => a.createdAt.localeCompare(b.createdAt))[Math.floor(all.length / 2)]!;
+
+    const filtered = await quotePrismaRepository.list({ from: midpoint.createdAt });
+    expect(filtered.length).toBeGreaterThan(0);
+    expect(filtered.every((q) => q.createdAt >= midpoint.createdAt)).toBe(true);
+  });
+
+  it("findById returns a seeded quote", async () => {
+    const all = await quotePrismaRepository.list();
+    const target = all[0]!;
+    const found = await quotePrismaRepository.findById(target.id);
+    expect(found).toMatchObject({ id: target.id, code: target.code });
+  });
+
+  it("findById returns null for a nonexistent quote (never throws)", async () => {
+    expect(await quotePrismaRepository.findById("quote-does-not-exist")).toBeNull();
+  });
 });
 
 afterAll(async () => {

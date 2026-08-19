@@ -24,8 +24,12 @@ import { authCredentialsPrismaRepository } from "./auth-credentials.prisma-repos
 /**
  * Every port Prisma has an adapter for, keyed the way a composition root
  * would want to inject them. This type is deliberately NOT named
- * `BackendRepositories` — that type belongs to Leo's container (a separate
- * branch, not merged here); this is only Prisma's side of the handshake.
+ * `BackendRepositories` — that type is owned by Leo's container
+ * (`src/server/ports/backend-repositories.ts`); this is only Prisma's side of
+ * the handshake, kept separate so this file has no dependency on the
+ * container. The two shapes are proven structurally identical where they're
+ * wired together (see the repository provider selector), via a typed
+ * assignment rather than a cast.
  * Each field is typed to the real port interface, so if any *.prisma-repository.ts
  * stops structurally satisfying its port, this file fails to compile —
  * that's the "TypeScript checks it structurally" guarantee, not a runtime

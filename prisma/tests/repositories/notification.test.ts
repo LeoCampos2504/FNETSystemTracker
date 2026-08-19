@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { NotificationType } from "@/contracts";
 import { notificationPrismaRepository } from "@/server/repositories/prisma";
 import { prisma } from "@/server/repositories/prisma/client";
 
@@ -24,6 +25,28 @@ describe("notificationPrismaRepository (real DB)", () => {
     const notifications = await notificationPrismaRepository.listByUser("user-tech-01");
     expect(notifications.some((n) => n.readAt === null)).toBe(true);
     expect(notifications.some((n) => n.readAt !== null)).toBe(true);
+  });
+
+  it("create persists exactly what it's given and is durable", async () => {
+    const created = await notificationPrismaRepository.create({
+      userId: "user-tech-01",
+      type: NotificationType.NEW_TASK,
+      title: "Test notification",
+      message: "Created by the guard/notification adapter integration test",
+      readAt: null,
+      relatedEntityType: "Task",
+      relatedEntityId: "task-P0001",
+    });
+
+    expect(created.id).toBeTruthy();
+    expect(created.userId).toBe("user-tech-01");
+    expect(created.title).toBe("Test notification");
+    expect(created.readAt).toBeNull();
+    expect(created.relatedEntityType).toBe("Task");
+    expect(created.relatedEntityId).toBe("task-P0001");
+
+    const reFetched = await notificationPrismaRepository.listByUser("user-tech-01");
+    expect(reFetched.some((n) => n.id === created.id)).toBe(true);
   });
 });
 

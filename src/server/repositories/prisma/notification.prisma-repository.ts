@@ -7,4 +7,19 @@ export const notificationPrismaRepository: NotificationRepository = {
     const rows = await prisma.notification.findMany({ where: { userId }, orderBy: { createdAt: "desc" } });
     return rows.map(mapNotification);
   },
+
+  async create(entry) {
+    const row = await prisma.notification.create({
+      data: {
+        userId: entry.userId,
+        type: entry.type,
+        title: entry.title,
+        message: entry.message,
+        entityType: entry.relatedEntityType,
+        entityId: entry.relatedEntityId,
+        readAt: entry.readAt,
+      },
+    });
+    return mapNotification(row);
+  },
 };

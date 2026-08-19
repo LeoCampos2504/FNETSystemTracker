@@ -31,8 +31,26 @@ function createPrismaClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
-export const prisma: PrismaClient = globalThis.__fnetPrisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__fnetPrisma = prisma;
+function getPrismaClient(): PrismaClient {
+  if (!globalThis.__fnetPrisma) {
+    const client = createPrismaClient();
+    if (process.env.NODE_ENV !== "production") {
+      globalThis.__fnetPrisma = client;
+    }
+    return client;
+  }
+  return globalThis.__fnetPrisma;
 }
+
+/**
+ * Lazy by design: constructing the real client (and its DATABASE_URL check)
+ * only happens on first actual use, not on import. This lets code that only
+ * conditionally needs Prisma (the repository provider selector) import this
+ * module unconditionally without requiring DATABASE_URL to be set when the
+ * memory provider is the one actually in use.
+ */
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    return Reflect.get(getPrismaClient(), prop, receiver);
+  },
+});

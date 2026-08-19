@@ -5,6 +5,27 @@ backend de `src/server/repositories/prisma/**` para poder reemplazar
 `src/server/repositories/memory/**` sin tocar ni un servicio ni una ruta.
 No se integró Prisma en esta rama — esto es preparación, no integración.
 
+## Estado post-integración: 10 adapters VERIFICADOS
+
+**`integration/leo-gino-prisma`** mergeó `feature/leo-backend-core` +
+`feature/gino-data-kpis` y conectó los 10 adapters Prisma reales contra los
+ports post-merge (no contra el estado reportado más abajo, que es
+pre-merge). Resultado: **los 10 adapters cumplen `BackendRepositories`**,
+verificado por tipo (`npm run build`, sin casts inseguros) y en runtime
+contra PostgreSQL real (`npm run test:db`, HTTP smoke con
+`FNET_REPOSITORY_PROVIDER=prisma`). 3 de los 10 necesitaron un fix real —
+`GuardRepository.create`/`update`, `NotificationRepository.create`,
+`QuoteRepository.findById` no existían todavía en la rama de Gino porque
+Leo extendió esos ports después de que Gino bifurcó. Detalle completo,
+matriz actualizada y evidencia de smoke: `docs/BACKEND_PRISMA_INTEGRATION.md`
+(reemplaza a `docs/PRISMA_PORT_MATRIX.md` como fuente de verdad
+post-merge — ese documento queda como registro histórico del estado
+pre-merge tal como Gino lo auto-reportó).
+
+El resto de este documento es el registro histórico de la preparación
+pre-merge (qué se sabía, qué faltaba verificar) — se deja sin modificar
+como contexto de cómo se llegó a la integración real.
+
 **Regla de lectura de este documento:** todo lo marcado **CONFIRMADO** viene
 de leer el código real de `feature/leo-backend-core`. Todo lo marcado
 **PENDIENTE DE VERIFICAR EN RAMA DE GINO** es lo que el estado conocido
