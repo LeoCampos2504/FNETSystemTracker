@@ -1,4 +1,5 @@
 export type { UserRepository } from "./user.repository";
+export type { AuthCredentialsRepository } from "./auth-credentials.repository";
 export type { TechnicianRepository } from "./technician.repository";
 export type { TaskRepository, TaskListFilter } from "./task.repository";
 export type { GuardRepository, GuardListFilter, CreateGuardInput, UpdateGuardInput } from "./guard.repository";
@@ -7,5 +8,4 @@ export type { ZoneRepository } from "./zone.repository";
 export type { QuoteRepository, QuoteListFilter } from "./quote.repository";
 export type { NotificationRepository } from "./notification.repository";
 export type { AuditRepository } from "./audit.repository";
-export type { AuthCredentialsRepository } from "./auth-credentials.repository";
 export type { BackendRepositories } from "./backend-repositories";

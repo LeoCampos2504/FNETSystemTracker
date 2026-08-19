@@ -1,15 +1,600 @@
-// Minimal Prisma infrastructure for the foundation. Gino owns this file and
-// the full business data model (see docs/WORK_SPLIT.md) — do not add models
-// here as part of unrelated work.
+// Prisma schema for FNET System Tracker.
+// Owner: Gino (see docs/WORK_SPLIT.md). Do not edit outside this ownership.
 //
-// The prototype must run without DATABASE_URL set; nothing in the app
-// depends on this schema yet.
+// Target: PostgreSQL. Locally we run against `prisma dev` (a real, embedded
+// Postgres-wire-compatible server bundled with Prisma 7 — no Docker/external
+// infra required). Prisma 7 moved connection config out of this file: the
+// actual URL is resolved in `prisma.config.ts` / the PrismaClient adapter, not
+// here. See docs/DATABASE.md for how to run everything locally and how this
+// maps to a real production PostgreSQL instance later.
+//
+// Every DateTime field below (other than Task.scheduledDate, a pure calendar
+// date) is stored as `timestamptz`, not the Postgres default `timestamp`
+// (no time zone). `timestamp` stores a naive wall-clock value and depends on
+// the reading/writing session's timezone to mean anything — exactly the
+// "asumir timezone local silenciosamente" trap. `timestamptz` always stores
+// a real UTC instant regardless of session timezone. The app always
+// reads/writes these as ISO-8601 UTC strings (see src/contracts/common.ts),
+// so this is the type that actually matches what the code assumes.
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums (mirror src/contracts/enums.ts exactly — keep in sync manually,
+// contracts are the source of truth and are frozen/shared)
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  TECHNICIAN
+  COORDINATOR
+  ADMIN
+}
+
+enum TaskType {
+  PREVENTIVE
+  CORRECTIVE
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  IN_REVIEW
+  SENT
+  REJECTED
+  APPROVED_WITH_PENDING
+  APPROVED
+}
+
+enum TaskCriticality {
+  NORMAL
+  URGENT
+}
+
+enum CrewRole {
+  PRIMARY
+  COLLABORATOR
+}
+
+enum QuoteStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  COMPLETED_WITH_PENDING
+  COMPLETED
+}
+
+enum ExternalSource {
+  SYTEX
+  BIZFLOW
+  MAXTRACKER
+  INTERNAL
+}
+
+enum VehicleStatus {
+  ACTIVE
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum NotificationType {
+  NEW_TASK
+  CORRECTIVE_URGENT
+  GUARD_CHANGE
+  VEHICLE_CHANGE
+  SCHEDULE_CHANGE
+}
+
+// ---------------------------------------------------------------------------
+// Users / auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  /// Hashed with bcryptjs. Never store plaintext passwords. Required —
+  /// there is no login without a password, so this is never nullable.
+  passwordHash String
+  role         UserRole
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  technician    Technician?
+  coordinator   Coordinator?
+  notifications Notification[]
+
+  // Known limitation, documented rather than "fixed": `email @unique` is
+  // case-sensitive, so "User@x.com" and "user@x.com" could both exist. We
+  // deliberately did not add a DB-level fix for this: Postgres `citext`
+  // needs Prisma's `postgresqlExtensions` preview feature (not something to
+  // pull into a schema meant to map cleanly to production Postgres), and a
+  // hand-written `CREATE UNIQUE INDEX ... (lower(email))` migration isn't
+  // representable in schema.prisma at all — a future `prisma migrate dev`
+  // diff could silently propose dropping it, which is worse than not having
+  // it. There's also no write path for creating users yet (UserRepository
+  // is read-only — see src/server/ports/user.repository.ts), so nothing in
+  // this codebase can create a duplicate today. Mitigation: normalize email
+  // to lowercase before every write once a signup path exists (Leo's auth
+  // work) — see docs/DATABASE.md.
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Org structure: technicians, coordinators, zones, sites
+// ---------------------------------------------------------------------------
+
+model Technician {
+  id     String  @id @default(cuid())
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  name  String
+  phone String?
+
+  /// Zone the technician normally belongs to.
+  primaryZoneId String
+  primaryZone   Zone   @relation("TechnicianPrimaryZone", fields: [primaryZoneId], references: [id])
+
+  /// Set when temporarily loaned to another zone. Kept separate from
+  /// primaryZoneId so loan periods never overwrite/destroy the technician's
+  /// home-zone history.
+  onLoanZoneId String?
+  onLoanZone   Zone?   @relation("TechnicianOnLoanZone", fields: [onLoanZoneId], references: [id])
+
+  active Boolean @default(true)
+
+  /// Sync identity is scoped per source, not globally: (externalSource,
+  /// externalId) is the real unique key, not externalId alone — see the
+  /// @@unique below. A bare `externalId @unique` would incorrectly reject a
+  /// legitimate BIZFLOW row whose id happens to collide with an unrelated
+  /// SYTEX/MAXTRACKER id string in the same table.
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  taskAssignments    TaskTechnician[]
+  guardAssignments   GuardTechnician[]
+  vehicleAssignments VehicleAssignment[]
+
+  @@unique([externalSource, externalId])
+  @@index([primaryZoneId])
+  @@index([onLoanZoneId])
+  @@map("technicians")
+}
+
+model Coordinator {
+  id     String  @id @default(cuid())
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  name String
+
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  /// A coordinator may administer more than one zone (many-to-many).
+  zones  CoordinatorZone[]
+  quotes Quote[]
+
+  @@unique([externalSource, externalId])
+  @@map("coordinators")
+}
+
+/// Join table: a coordinator can have multiple zones, a zone can have
+/// multiple coordinators. The composite primary key IS the "don't duplicate
+/// the same coordinator+zone pair" constraint — no separate @@unique needed.
+model CoordinatorZone {
+  coordinatorId String
+  coordinator   Coordinator @relation(fields: [coordinatorId], references: [id], onDelete: Cascade)
+  zoneId        String
+  zone          Zone        @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([coordinatorId, zoneId])
+  @@index([zoneId])
+  @@map("coordinator_zones")
+}
+
+model Zone {
+  id   String @id @default(cuid())
+  name String
+  code String @unique
+
+  /// Free-form project/context label for the zone (e.g. a BizFlow project
+  /// name). Optional — not every zone has one.
+  project String?
+
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  coordinators       CoordinatorZone[]
+  sites              Site[]
+  tasks              Task[]
+  guards             Guard[]
+  quotes             Quote[]
+  primaryTechnicians Technician[]      @relation("TechnicianPrimaryZone")
+  onLoanTechnicians  Technician[]      @relation("TechnicianOnLoanZone")
+
+  @@unique([externalSource, externalId])
+  @@map("zones")
+}
+
+model Site {
+  id   String @id @default(cuid())
+  code String @unique
+  name String
+
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  latitude  Float
+  longitude Float
+  address   String?
+  /// Reasonable free-form extra data from the source system (e.g. contact,
+  /// access notes) that doesn't need its own column yet.
+  metadata  Json?
+
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tasks Task[]
+
+  @@unique([externalSource, externalId])
+  @@index([zoneId])
+  @@map("sites")
+}
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+
+model Task {
+  id       String  @id @default(cuid())
+  taskCode String  @unique
+  formCode String?
+
+  type        TaskType
+  description String
+  /// Free-form business priority (e.g. "1", "Alta"), distinct from criticality.
+  priority    String
+  criticality TaskCriticality
+  status      TaskStatus
+
+  /// Day the coordinator scheduled the task for. Deliberately a pure
+  /// calendar date (@db.Date, no time-of-day, no timezone) — scheduling is
+  /// "which day", not an instant.
+  scheduledDate DateTime @db.Date
+  /// Actual/planned start timestamp, when known.
+  scheduledAt   DateTime? @db.Timestamptz(3)
+
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id])
+  /// Snapshot of the site code at assignment time (mirrors what the source
+  /// system sends), kept alongside the siteId relation.
+  siteCode String
+
+  /// Snapshot zone relation. Kept even though it's derivable via site.zoneId
+  /// so historical tasks stay correct if a site is ever reassigned to a
+  /// different zone later.
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  latitude  Float
+  longitude Float
+
+  /// Both nullable and independent on purpose: a task that hasn't been
+  /// worked yet has neither. The DB does not force departureAt to imply
+  /// arrivalAt — see docs/DATABASE.md for why that's not enforced with a
+  /// CHECK constraint either (no write path can violate it today).
+  arrivalAt   DateTime? @db.Timestamptz(3)
+  departureAt DateTime? @db.Timestamptz(3)
+
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  technicians   TaskTechnician[]
+  statusHistory TaskStatusHistory[]
+  rejections    TaskRejection[]
+
+  @@unique([externalSource, externalId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@index([type])
+  @@index([zoneId])
+  @@index([siteId])
+  @@map("tasks")
+}
+
+/// Explicit join entity instead of technician1Id/technician2Id columns, so a
+/// task can carry PRIMARY + COLLABORATOR (the normal two-person crew) or,
+/// exceptionally, a single PRIMARY technician. The composite primary key
+/// below is what prevents the same technician being assigned twice to the
+/// same task — see task.prisma-repository.test.ts for a real-DB assertion
+/// of that.
+model TaskTechnician {
+  taskId       String
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id])
+
+  role CrewRole
+
+  assignedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([taskId, technicianId])
+  @@index([technicianId])
+  @@map("task_technicians")
+}
+
+/// One row per status transition. Preserves the full history instead of only
+/// the current Task.status — rows are only ever inserted, never edited.
+model TaskStatusHistory {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  status    TaskStatus
+  changedAt DateTime       @default(now()) @db.Timestamptz(3)
+  source    ExternalSource @default(INTERNAL)
+  /// User id or external actor identifier, when known.
+  actor     String?
+
+  @@index([taskId])
+  @@map("task_status_history")
+}
+
+/// One row per rejection EVENT — deliberately no unique constraint on taskId.
+/// A task rejected three times has three rows here; the rejections KPI
+/// counts rows, never a counter column.
+model TaskRejection {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  rejectedAt DateTime @db.Timestamptz(3)
+  reason     String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([taskId])
+  @@map("task_rejections")
+}
+
+// ---------------------------------------------------------------------------
+// Guards (on-call)
+// ---------------------------------------------------------------------------
+
+model Guard {
+  id     String @id @default(cuid())
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  startAt DateTime @db.Timestamptz(3)
+  endAt   DateTime @db.Timestamptz(3)
+
+  /// userId of the coordinator who created/assigned this guard, when known.
+  createdBy String?
+
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  technicians GuardTechnician[]
+
+  @@unique([externalSource, externalId])
+  @@index([zoneId])
+  @@index([startAt, endAt])
+  @@map("guards")
+}
+
+/// Join table so a guard's crew can be edited (temporary/mixed crews)
+/// without touching Guard itself. Composite primary key prevents the same
+/// technician being added twice to the same guard.
+model GuardTechnician {
+  guardId      String
+  guard        Guard      @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id])
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([guardId, technicianId])
+  @@index([technicianId])
+  @@map("guard_technicians")
+}
+
+// ---------------------------------------------------------------------------
+// Vehicles
+// ---------------------------------------------------------------------------
+
+model Vehicle {
+  id    String @id @default(cuid())
+  /// Kept as a plain unique constraint (not composite with externalSource):
+  /// a license plate is a real-world identity, not a per-source sync key —
+  /// two different source systems reporting the same plate should be the
+  /// same physical vehicle, not two rows. If MaxTracker is ever found to
+  /// reuse/duplicate plates in practice, revisit this.
+  plate String @unique
+  brand String
+  model String
+
+  mileageKm Int
+  status    VehicleStatus @default(ACTIVE)
+
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  /// Current holder is derived as the assignment with endAt = null — never
+  /// stored as a separate column, so history is never overwritten.
+  assignments VehicleAssignment[]
+
+  @@unique([externalSource, externalId])
+  @@map("vehicles")
+}
+
+/// Full assignment history. `endAt: null` means it's the current assignment.
+/// Answers "which vehicle did Juan have on 2026-08-18?" by range query, and
+/// "what's Juan's vehicle right now?" by an endAt-is-null lookup — the two
+/// index shapes below match those two access patterns respectively.
+model VehicleAssignment {
+  id           String     @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle    @relation(fields: [vehicleId], references: [id])
+  technicianId String
+  technician   Technician @relation(fields: [technicianId], references: [id])
+
+  startAt DateTime  @db.Timestamptz(3)
+  endAt   DateTime? @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  // (vehicleId/technicianId, startAt): point-in-time range queries
+  // ("what vehicle did X have on date D").
+  @@index([vehicleId, startAt])
+  @@index([technicianId, startAt])
+  // (vehicleId/technicianId, endAt): the "current assignment" fast path
+  // actually used today by vehicle.prisma-repository.ts (`findByTechnician`
+  // filters technicianId + endAt: null; mapVehicle's include filters
+  // vehicleId + endAt: null) — a plain (col, startAt) index doesn't help
+  // that filter at all since startAt isn't part of the predicate.
+  @@index([technicianId, endAt])
+  @@index([vehicleId, endAt])
+  @@map("vehicle_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// Quotes
+// ---------------------------------------------------------------------------
+
+model Quote {
+  id String @id @default(cuid())
+  /// Plain unique, same reasoning as Vehicle.plate — a quote code is a
+  /// business identity, not a per-source sync key.
+  code      String  @unique
+  projectId String?
+
+  zoneId String
+  zone   Zone   @relation(fields: [zoneId], references: [id])
+
+  /// Optional direct link when a coordinator is known explicitly; ownership
+  /// is still derived primarily via zone (+ project) per the product rules.
+  /// Currently always null — nothing writes to it yet (src/mocks/quotes.ts
+  /// doesn't carry it, so prisma/seed.ts doesn't either) — so it
+  /// deliberately has no index; add one if/when it's actually populated and
+  /// queried.
+  coordinatorId String?
+  coordinator   Coordinator? @relation(fields: [coordinatorId], references: [id])
+
+  status QuoteStatus
+
+  externalId      String?
+  externalSource  ExternalSource @default(INTERNAL)
+  sourceUpdatedAt DateTime?      @db.Timestamptz(3)
+
+  /// "openedAt"/"completedAt" per docs/PROJECT_CONTEXT.md map to
+  /// createdAt/updatedAt here — a quote's lifecycle is single-pass
+  /// (OPEN -> ... -> COMPLETED), so there's no need for a separate
+  /// TaskStatusHistory-style table the way Task has one.
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([externalSource, externalId])
+  @@index([zoneId])
+  @@index([status])
+  // quote.prisma-repository.ts always does `orderBy: { createdAt: "desc" }`
+  // with no LIMIT — without this, every list() call sorts the full matching
+  // set from scratch.
+  @@index([createdAt])
+  @@map("quotes")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id     String           @id @default(cuid())
+  userId String
+  user   User             @relation(fields: [userId], references: [id])
+  type   NotificationType
+
+  title   String
+  message String
+
+  entityType String?
+  entityId   String?
+
+  readAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  // Matches the actual current query (notification.prisma-repository.ts:
+  // `where: { userId } orderBy: { createdAt: "desc" }`) exactly — equality
+  // + sort in one index. Replaces the old plain userId index, which that
+  // composite already covers as a prefix (queries on userId alone still use
+  // it), so keeping both would just be redundant write overhead.
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id       String @id @default(cuid())
+  actorId  String
+  action   String
+  entity   String
+  entityId String
+
+  /// Opaque before/after snapshots. Never store secrets here.
+  before Json?
+  after  Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entity, entityId])
+  // "acciones de usuario" / "período": not queried by the current port
+  // (AuditRepository only exposes listByEntity today), but an audit table
+  // that can only be queried by entity is missing its two other standard
+  // access patterns (by actor, by time window) — cheap to have ready given
+  // how infrequently audit rows are written.
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
