@@ -25,6 +25,7 @@ import {
   mockZones,
 } from "../src/mocks";
 import { TaskStatus } from "../src/contracts";
+import { assertDestructiveSeedAllowed } from "./seed-guard";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -332,6 +333,14 @@ async function seedAuditLog() {
 }
 
 async function main() {
+  // Must run before anything else in main() — before clearDatabase(), before
+  // any query. See prisma/seed-guard.ts and docs/DB_PRODUCTION_RUNBOOK.md.
+  const guardDecision = assertDestructiveSeedAllowed(process.env);
+  if (!guardDecision.allowed) {
+    console.error(guardDecision.reason);
+    throw new Error("Destructive seed refused in production.");
+  }
+
   console.log("Clearing existing data...");
   await clearDatabase();
 
