@@ -1,54 +1,19 @@
-import type {
-  AuditRepository,
-  AuthCredentialsRepository,
-  GuardRepository,
-  NotificationRepository,
-  QuoteRepository,
-  TaskRepository,
-  TechnicianRepository,
-  UserRepository,
-  VehicleRepository,
-  ZoneRepository,
-} from "@/server/ports";
-import {
-  auditMemoryRepository,
-  authCredentialsMemoryRepository,
-  guardMemoryRepository,
-  notificationMemoryRepository,
-  quoteMemoryRepository,
-  taskMemoryRepository,
-  technicianMemoryRepository,
-  userMemoryRepository,
-  vehicleMemoryRepository,
-  zoneMemoryRepository,
-} from "@/server/repositories/memory";
+import type { BackendRepositories } from "@/server/ports";
+import { createMemoryRepositories } from "@/server/repositories/memory";
 
 /**
- * Single composition root: every service imports its repositories from here,
- * never from `repositories/memory` or `repositories/prisma` directly. When
- * Gino's Prisma repositories exist, swapping the values below is the only
- * change needed — no service/business-logic code changes.
+ * Single composition root: the default (memory, for now) `BackendRepositories`
+ * every service's default export is bound to — see the "Default instance..."
+ * comment at the bottom of each `*.service.ts` file. Swapping memory for
+ * Prisma later means changing what this points to; it does not require
+ * touching any service or route.
+ *
+ * Deliberately the ONLY thing this file exports. `createBackendContainer`
+ * (src/server/backend-container.ts) needs service-factory imports that in
+ * turn import `repositories` from here for their own default wiring — if
+ * both lived in this one file, that would be a real circular import
+ * (verified: it breaks at runtime, not just in theory). Keeping this file
+ * to just the repositories value, with zero imports from `services/**`,
+ * keeps the dependency graph one-directional: services -> container -> memory.
  */
-export const repositories: {
-  user: UserRepository;
-  technician: TechnicianRepository;
-  task: TaskRepository;
-  guard: GuardRepository;
-  vehicle: VehicleRepository;
-  zone: ZoneRepository;
-  quote: QuoteRepository;
-  notification: NotificationRepository;
-  audit: AuditRepository;
-  authCredentials: AuthCredentialsRepository;
-} = {
-  user: userMemoryRepository,
-  technician: technicianMemoryRepository,
-  task: taskMemoryRepository,
-  guard: guardMemoryRepository,
-  vehicle: vehicleMemoryRepository,
-  zone: zoneMemoryRepository,
-  quote: quoteMemoryRepository,
-  notification: notificationMemoryRepository,
-  audit: auditMemoryRepository,
-  authCredentials: authCredentialsMemoryRepository,
-};
+export const repositories: BackendRepositories = createMemoryRepositories();

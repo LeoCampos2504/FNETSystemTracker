@@ -1,7 +1,24 @@
 import type { Technician } from "@/contracts";
-import { repositories } from "@/server/container";
+import type { BackendRepositories } from "@/server/ports";
+import { repositories as defaultRepositories } from "@/server/container";
 
-/** Matches `Api.getTechnician()`/`Api.getTechnicianVehicle()`: "not found" resolves null, never a throw. */
-export async function findTechnicianById(technicianId: string): Promise<Technician | null> {
-  return repositories.technician.findById(technicianId);
+export interface TechnicianService {
+  findTechnicianById(technicianId: string): Promise<Technician | null>;
 }
+
+type TechnicianRepositories = Pick<BackendRepositories, "technician">;
+
+/** Pure factory: depends only on the `technician` port. */
+export function createTechnicianService(repositories: TechnicianRepositories): TechnicianService {
+  return {
+    /** Matches `Api.getTechnician()`/`Api.getTechnicianVehicle()`: "not found" resolves null, never a throw. */
+    async findTechnicianById(technicianId) {
+      return repositories.technician.findById(technicianId);
+    },
+  };
+}
+
+// Default instance bound to the app's default (memory, for now) repositories
+// — preserves today's call sites (flat function imports) untouched.
+const defaultTechnicianService = createTechnicianService(defaultRepositories);
+export const { findTechnicianById } = defaultTechnicianService;

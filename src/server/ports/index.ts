@@ -8,3 +8,4 @@ export type { QuoteRepository, QuoteListFilter } from "./quote.repository";
 export type { NotificationRepository } from "./notification.repository";
 export type { AuditRepository } from "./audit.repository";
 export type { AuthCredentialsRepository } from "./auth-credentials.repository";
+export type { BackendRepositories } from "./backend-repositories";
