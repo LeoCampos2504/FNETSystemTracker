@@ -34,7 +34,7 @@ texto plano ni en el `User` del contrato.
 |---|---|---|---|
 | GET | `/api/tasks/today` | `?technicianId?&zoneId?&date?` | `Task[]` |
 | GET | `/api/tasks/pending` | `?technicianId?&zoneId?&asOfDate?` | `Task[]` (pendientes de reprogramar) |
-| GET | `/api/tasks/:id` | — | `Task \| null` |
+| GET | `/api/tasks/:id` | — | `Task \| null`. Nunca 404: "no existe" es `null`, igual que `/api/auth/me`. |
 | PUT | `/api/tasks/:id/assignments` | `AssignTechniciansToTaskInput { taskId, assignments }` | `Task` |
 | PUT | `/api/tasks/:id/schedule` | `ScheduleTaskInput { taskId, scheduledDate }` | `Task`. También es el endpoint de **reprogramación**: programar de nuevo con otra fecha una tarea ya programada es "reprogramar" — no hay una ruta separada, ver [CONTRACT_CHANGE_REQUESTS.md](CONTRACT_CHANGE_REQUESTS.md). |
 | PUT | `/api/tasks/:id/status` | `UpdateTaskStatusInput { taskId, status }` | `Task` |
@@ -55,15 +55,19 @@ a un technician que integre la guardia consultada.
 | GET | `/api/guards/:id` | — | `Guard`. Adicional, no estaba documentado originalmente. |
 | POST | `/api/guards` | `{ zoneId, technicianIds (1-2), startAt, endAt }` | `Guard` (201). Adicional. |
 | PATCH | `/api/guards/:id` | Subconjunto parcial de `{ zoneId, technicianIds, startAt, endAt }` | `Guard`. Adicional — permite editar horario/zona además de la cuadrilla. |
-| GET | `/api/guards/:id/performance` | — | `GuardPerformance \| null` |
+| GET | `/api/guards/:id/performance` | — | `GuardPerformance \| null`. Resuelve `null` tanto si la guardia no tiene rendimiento registrado como si la guardia misma no existe — nunca 404. |
 | PUT | `/api/guards/:id/assignments` | `AssignGuardInput { guardId, technicianIds }` | `Guard`. Atajo de `PATCH` que solo toca `technicianIds` (esta es la que expone `Api.assignGuard`). |
+
+`technicianIds` nunca acepta duplicados ni un `zoneId`/`technicianId` inexistente
+(400 en ambos casos). Solo se notifica a los técnicos que **se agregan** a la
+cuadrilla — reasignar exactamente la misma cuadrilla no reenvía notificaciones.
 
 ## Técnicos
 
 | Método | Ruta | Body / Query | Respuesta |
 |---|---|---|---|
-| GET | `/api/technicians/:id` | — | `Technician \| null` |
-| GET | `/api/technicians/:id/vehicle` | — | `Vehicle \| null` |
+| GET | `/api/technicians/:id` | — | `Technician \| null`. Nunca 404: se verifica primero si existe (`null` si no) y recién después se autoriza el acceso. |
+| GET | `/api/technicians/:id/vehicle` | — | `Vehicle \| null`. Mismo orden: existencia primero, autorización después. |
 
 ## KPIs (dueño: Gino)
 
@@ -126,4 +130,15 @@ no manda zona) / Admin. Technician no tiene acceso (no está en su rol).
   `status` de una tarea `APPROVED` devuelven 409 (ya no se puede tocar desde acá).
 - Sesión: JWT (jose, HS256) en cookie httpOnly `fnet_session`
   (`src/server/auth/**`). `AUTH_SECRET` por env var; en dev sin esa var usa
-  un fallback claramente marcado como inseguro (nunca en producción).
+  un fallback claramente marcado como inseguro (nunca en producción). Un JWT
+  válido solo prueba que la sesión era válida al momento del login —
+  `requireSession` revalida en cada request que el usuario siga existiendo y
+  activo (`repositories.user`), así que desactivar una cuenta corta el
+  acceso incluso con un token todavía no expirado.
+- Auditoría antes/después: los repositorios memory mutan el registro en el
+  lugar y devuelven la MISMA referencia (ver `task.memory-repository.ts` /
+  `guard.memory-repository.ts`). Los servicios (`task.service.ts`,
+  `guard.service.ts`) por eso capturan una copia del estado "antes" apenas lo
+  obtienen, nunca leyendo el objeto original después de la llamada que muta
+  — si tocás estos servicios, mantené ese orden o el `AuditLog.before`
+  terminará siendo idéntico a `after`.

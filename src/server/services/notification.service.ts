@@ -30,9 +30,15 @@ async function userIdsForTechnicianIds(technicianIds: string[]): Promise<string[
   return technicians.flatMap((t) => (t?.userId ? [t.userId] : []));
 }
 
-/** Case: a technician is assigned/reassigned to a task. */
-export async function notifyTaskAssignment(task: Task): Promise<void> {
-  const userIds = await userIdsForTechnicianIds(task.assignments.map((a) => a.technicianId));
+/**
+ * Case: a technician is assigned/reassigned to a task.
+ * `technicianIds` is the set to actually notify (normally just the ones
+ * newly added to the crew) — the caller decides that, this function doesn't
+ * assume "all current assignees" so it never re-notifies someone whose
+ * assignment didn't change.
+ */
+export async function notifyTaskAssignment(task: Task, technicianIds: string[]): Promise<void> {
+  const userIds = await userIdsForTechnicianIds(technicianIds);
   await Promise.all(
     userIds.map((userId) =>
       notifyUser(

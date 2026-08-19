@@ -1,7 +1,7 @@
 import type { Task, TaskAssignment, TaskStatus } from "@/contracts";
 import { TaskStatus as TaskStatusEnum } from "@/contracts";
 import { repositories } from "@/server/container";
-import { conflict, notFound } from "@/server/http/errors";
+import { badRequest, conflict, notFound } from "@/server/http/errors";
 import { recordAudit } from "./audit.service";
 import { notifyScheduleChange, notifyTaskAssignment } from "./notification.service";
 
@@ -53,12 +53,30 @@ export async function getTaskById(taskId: string): Promise<Task> {
   return task;
 }
 
+/**
+ * Non-throwing counterpart for `Api.getTask(): Promise<Task | null>` — the
+ * only route this backs is `GET /api/tasks/:id`. Every other caller wants
+ * the throwing `getTaskById` (mutations legitimately 404 on a missing task;
+ * that contract op has no null variant).
+ */
+export async function findTaskById(taskId: string): Promise<Task | null> {
+  return repositories.task.findById(taskId);
+}
+
 function assertMutable(task: Task): void {
   if (task.status === TaskStatusEnum.APPROVED) {
     throw conflict(`Task ${task.id} is APPROVED and can no longer be modified from here`);
   }
 }
 
+/**
+ * Memory repositories mutate their stored record in place and return that
+ * SAME reference (see task.memory-repository.ts). That means a `before`
+ * object fetched earlier in this function silently reflects the NEW values
+ * by the time it's read after the repository call — so every "before"
+ * snapshot below is captured into a plain value/array copy BEFORE the
+ * mutating repository call runs, never read off `before`/`updated` after it.
+ */
 export async function assignTechniciansToTask(
   actorId: string,
   taskId: string,
@@ -67,22 +85,45 @@ export async function assignTechniciansToTask(
   const before = await getTaskById(taskId);
   assertMutable(before);
 
+  const previousAssignments = before.assignments.map((a) => ({ ...a }));
+  const previousTechnicianIds = new Set(previousAssignments.map((a) => a.technicianId));
+
+  const technicians = await Promise.all(assignments.map((a) => repositories.technician.findById(a.technicianId)));
+  const unknownTechnicianIds = assignments
+    .filter((_, i) => !technicians[i])
+    .map((a) => a.technicianId);
+  if (unknownTechnicianIds.length > 0) {
+    throw badRequest(`Unknown technicianId(s): ${unknownTechnicianIds.join(", ")}`);
+  }
+
   const updated = await repositories.task.updateAssignments(taskId, assignments);
   await recordAudit(
     actorId,
     "TASK_ASSIGNMENTS_UPDATED",
     "Task",
     taskId,
-    { assignments: before.assignments },
-    { assignments: updated.assignments },
+    { assignments: previousAssignments },
+    { assignments: updated.assignments.map((a) => ({ ...a })) },
   );
-  await notifyTaskAssignment(updated);
+
+  // Only notify technicians who are newly part of the crew, so a no-op or
+  // partial reassignment (e.g. swapping just the COLLABORATOR) doesn't
+  // re-spam someone who was already on the task.
+  const newlyAddedTechnicianIds = assignments
+    .map((a) => a.technicianId)
+    .filter((id) => !previousTechnicianIds.has(id));
+  if (newlyAddedTechnicianIds.length > 0) {
+    await notifyTaskAssignment(updated, newlyAddedTechnicianIds);
+  }
+
   return updated;
 }
 
 export async function scheduleTask(actorId: string, taskId: string, scheduledDate: string): Promise<Task> {
   const before = await getTaskById(taskId);
   assertMutable(before);
+  const previousScheduledDate = before.scheduledDate;
+  const dateActuallyChanged = previousScheduledDate !== scheduledDate;
 
   const updated = await repositories.task.updateSchedule(taskId, scheduledDate);
   await recordAudit(
@@ -90,10 +131,13 @@ export async function scheduleTask(actorId: string, taskId: string, scheduledDat
     "TASK_SCHEDULED",
     "Task",
     taskId,
-    { scheduledDate: before.scheduledDate },
+    { scheduledDate: previousScheduledDate },
     { scheduledDate: updated.scheduledDate },
   );
-  await notifyScheduleChange(updated);
+
+  if (dateActuallyChanged) {
+    await notifyScheduleChange(updated);
+  }
   return updated;
 }
 
@@ -106,7 +150,9 @@ export async function scheduleTask(actorId: string, taskId: string, scheduledDat
  */
 export async function updateTaskStatus(actorId: string, taskId: string, status: TaskStatus): Promise<Task> {
   const before = await getTaskById(taskId);
+  const previousStatus = before.status;
+
   const updated = await repositories.task.updateStatus(taskId, status);
-  await recordAudit(actorId, "TASK_STATUS_CHANGED", "Task", taskId, { status: before.status }, { status: updated.status });
+  await recordAudit(actorId, "TASK_STATUS_CHANGED", "Task", taskId, { status: previousStatus }, { status: updated.status });
   return updated;
 }

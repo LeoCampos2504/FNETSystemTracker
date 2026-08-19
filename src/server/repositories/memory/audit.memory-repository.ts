@@ -8,7 +8,7 @@ export const auditMemoryRepository: AuditRepository = {
   async append(entry) {
     const record = {
       ...entry,
-      id: `audit-${auditLog.length + 1}`.padStart(9, "0"),
+      id: `audit-mem-${auditLog.length + 1}`,
       timestamp: new Date().toISOString(),
     };
     auditLog.push(record);

@@ -43,13 +43,28 @@ describe("GET /api/tasks/[id]", () => {
     expect(response.status).toBe(401);
   });
 
-  it("returns 404 for an unknown task id, for an authenticated admin", async () => {
+  it("resolves null (200) for an unknown task id, matching Api.getTask(): Promise<Task | null>", async () => {
+    // Regression test: this used to 404, which broke http-api.ts's contract
+    // (its generic `request()` throws on any non-2xx, so httpApi.getTask()
+    // would reject instead of resolving null like the Api type promises).
     const response = await requestAs("does-not-exist", {
       sub: "user-admin-1",
       role: UserRole.ADMIN,
       technicianId: null,
       coordinatorId: null,
     });
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBeNull();
+  });
+
+  it("also resolves null for an unknown task id when queried by a technician (nothing to authorize against)", async () => {
+    const response = await requestAs("does-not-exist", {
+      sub: "user-tech-01",
+      role: UserRole.TECHNICIAN,
+      technicianId: "tech-01",
+      coordinatorId: null,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBeNull();
   });
 });

@@ -83,3 +83,25 @@ No hay "cambios chicos que no ameritan pasar por acá": si toca
      son opcionales y `http-api.ts` nunca los envía, no rompen el contrato.
 - Impacto: `docs/API_CONTRACTS.md` actualizado con estos endpoints/params.
   `src/contracts/api.ts` no se tocó.
+
+### [Resuelto] Auditoría técnica: 3 endpoints no cumplían el `X | null` de `Api` (Leo)
+- Quién lo pidió: Leo (auditoría de compatibilidad `http-api.ts` vs backend)
+- Contrato afectado: ninguno en `src/contracts/**` — bug de implementación en
+  mi propio backend, corregido sin tocar el contrato.
+- Por qué: `Api.getTask`, `Api.getGuardPerformance` y `Api.getTechnician`
+  tipan `... | null` para "no existe". Las tres rutas (`GET /api/tasks/:id`,
+  `GET /api/guards/:id/performance`, `GET /api/technicians/:id`) en cambio
+  devolvían 404 cuando el recurso no existía. Como `http-api.ts` usa un
+  `request()` genérico que lanza excepción ante cualquier respuesta no-2xx,
+  `httpApi.getTask()` (etc.) iba a **rechazar la promesa** en vez de resolver
+  `null` como promete el tipo — cualquier código de Euge que hiciera
+  `const task = await api.getTask(id); if (!task) {...}` se hubiera roto con
+  una excepción no capturada en vez de entrar al branch de "no existe".
+- Corrección: las 3 rutas ahora verifican existencia primero (devolviendo
+  `null` con 200 si no existe) y recién después aplican autorización. Se
+  agregaron tests de regresión a nivel ruta y servicio
+  (`findTaskById`/`findGuardById`/`findTechnicianById`, más
+  `src/app/api/tasks/[id]/route.test.ts` y el nuevo
+  `src/app/api/technicians/[id]/route.test.ts`).
+- Impacto: solo `src/app/api/**` y `src/server/services/**` (mi ownership).
+  `src/contracts/api.ts` y `src/lib/api/http-api.ts` no se tocaron.

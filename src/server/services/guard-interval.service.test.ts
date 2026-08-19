@@ -29,6 +29,26 @@ describe("isTaskWithinGuard", () => {
     expect(isTaskWithinGuard(task, guard)).toBe(true);
   });
 
+  it("is true on the exact boundary (task starts exactly when the guard starts)", () => {
+    const task = { arrivalAt: "2026-08-14T18:00:00.000Z", departureAt: "2026-08-14T19:00:00.000Z", scheduledAt: null };
+    expect(isTaskWithinGuard(task, guard)).toBe(true);
+  });
+
+  it("is true on the exact boundary (task ends exactly when the guard ends)", () => {
+    const task = { arrivalAt: "2026-08-21T06:00:00.000Z", departureAt: "2026-08-21T08:00:00.000Z", scheduledAt: null };
+    expect(isTaskWithinGuard(task, guard)).toBe(true);
+  });
+
+  it("is true when the task fully contains the guard interval (starts before, ends after)", () => {
+    const task = { arrivalAt: "2026-08-10T00:00:00.000Z", departureAt: "2026-08-25T00:00:00.000Z", scheduledAt: null };
+    expect(isTaskWithinGuard(task, guard)).toBe(true);
+  });
+
+  it("is false when the task interval is entirely after the guard interval", () => {
+    const task = { arrivalAt: "2026-08-25T09:00:00.000Z", departureAt: "2026-08-25T10:00:00.000Z", scheduledAt: null };
+    expect(isTaskWithinGuard(task, guard)).toBe(false);
+  });
+
   it("does NOT use a fixed 'hour >= 18' rule — an 08:00-17:00 task on a guard day still overlaps a guard covering part of it", () => {
     const dayGuard = { startAt: "2026-08-16T16:00:00.000Z", endAt: "2026-08-17T08:00:00.000Z" };
     const task = { arrivalAt: "2026-08-16T08:00:00.000Z", departureAt: "2026-08-16T17:00:00.000Z", scheduledAt: null };

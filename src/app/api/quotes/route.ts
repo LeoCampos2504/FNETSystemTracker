@@ -15,11 +15,16 @@ export async function GET(request: NextRequest) {
     const query = parseOrThrow(quoteListQuerySchema, searchParamsToObject(request.nextUrl.searchParams));
 
     if (session.role === UserRole.COORDINATOR) {
+      // Validated independently (not nested if/else-if) so a coordinator
+      // can't combine an allowed zoneId with someone else's coordinatorId
+      // to smuggle an unauthorized filter past the check.
+      if (query.coordinatorId && query.coordinatorId !== session.coordinatorId) {
+        throw forbidden("You can only view your own quotes");
+      }
       if (query.zoneId) {
         await requireZoneAccess(session, query.zoneId);
-      } else if (query.coordinatorId && query.coordinatorId !== session.coordinatorId) {
-        throw forbidden("You can only view your own quotes");
-      } else if (!query.coordinatorId) {
+      }
+      if (!query.zoneId && !query.coordinatorId) {
         query.coordinatorId = session.coordinatorId ?? undefined;
       }
     }
