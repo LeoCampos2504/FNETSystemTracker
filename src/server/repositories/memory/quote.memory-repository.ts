@@ -10,7 +10,13 @@ export const quoteMemoryRepository: QuoteRepository = {
       (q) =>
         (!filter.zoneId || q.zoneId === filter.zoneId) &&
         (!filter.status || q.status === filter.status) &&
+        (!filter.projectId || q.projectId === filter.projectId) &&
+        (!filter.from || q.createdAt >= filter.from) &&
+        (!filter.to || q.createdAt <= filter.to) &&
         (!coordinatorZoneIds || coordinatorZoneIds.has(q.zoneId)),
     );
+  },
+  async findById(id) {
+    return mockQuotes.find((q) => q.id === id) ?? null;
   },
 };

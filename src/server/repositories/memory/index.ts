@@ -13,3 +13,4 @@ export { zoneMemoryRepository } from "./zone.memory-repository";
 export { quoteMemoryRepository } from "./quote.memory-repository";
 export { notificationMemoryRepository } from "./notification.memory-repository";
 export { auditMemoryRepository } from "./audit.memory-repository";
+export { authCredentialsMemoryRepository } from "./auth-credentials.memory-repository";
