@@ -14,8 +14,8 @@ export interface User {
 
 export interface AuthSession {
   user: User;
-  /** Opaque token for the http-api implementation (e.g. a signed JWT). */
-  token: string;
+  /** Present only in adapters that do not use an HttpOnly session cookie. */
+  token?: string;
   expiresAt: string;
 }
 

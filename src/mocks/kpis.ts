@@ -5,6 +5,14 @@ import { mockTechnicians } from "./technicians";
 import { mockGuards, mockGuardPerformances } from "./guards";
 import { MOCK_TODAY, toDateString } from "./constants";
 
+export const mockZoneMetrics: Record<string, { completion: number; planned: number }> = {
+  "zone-noa": { completion: 86, planned: 12 },
+  "zone-nea": { completion: 78, planned: 10 },
+  "zone-cuyo": { completion: 74, planned: 9 },
+  "zone-centro": { completion: 69, planned: 8 },
+  "zone-patagonia": { completion: 63, planned: 7 },
+};
+
 const COMPLETED_STATUSES = new Set<string>([TaskStatus.APPROVED, TaskStatus.APPROVED_WITH_PENDING]);
 const periodStart = "2026-08-01";
 const periodEnd = "2026-08-31";

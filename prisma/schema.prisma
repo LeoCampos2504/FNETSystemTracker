@@ -6,6 +6,103 @@ datasource db {
   provider = "postgresql"
 }
 
+model app_users {
+  id            String         @id @default(uuid()) @db.Uuid
+  email         String         @unique
+  name          String
+  passwordHash  String         @map("password_hash")
+  role          String
+  technicianId  String?        @map("technician_id")
+  coordinatorId String?        @map("coordinator_id")
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sessions      app_sessions[]
+
+  @@index([role, active], map: "idx_app_users_role_active")
+  @@map("app_users")
+}
+
+model app_sessions {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  userId    String    @map("user_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      app_users @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt], map: "idx_app_sessions_expires_at")
+  @@index([userId], map: "idx_app_sessions_user_id")
+  @@map("app_sessions")
+}
+
+model app_login_attempts {
+  keyHash         String   @id @map("key_hash") @db.VarChar(64)
+  attemptCount    Int      @default(0) @map("attempt_count")
+  windowStartedAt DateTime @default(now()) @map("window_started_at") @db.Timestamptz(6)
+
+  @@index([windowStartedAt], map: "idx_app_login_attempts_window")
+  @@map("app_login_attempts")
+}
+
+model mendel_transactions {
+  id                    BigInt    @id @default(autoincrement())
+  transactionId         String    @unique @map("transaction_id") @db.VarChar(80)
+  transactionDate       DateTime  @map("transaction_date") @db.Timestamptz(6)
+  confirmationDate      DateTime? @map("confirmation_date") @db.Timestamptz(6)
+  userName              String?   @map("user_name") @db.VarChar(200)
+  merchant              String?   @db.VarChar(250)
+  totalAmount           Decimal   @map("total_amount") @db.Decimal(18, 2)
+  currency              String    @db.VarChar(3)
+  internationalAmount   Decimal?  @map("international_amount") @db.Decimal(18, 2)
+  internationalCurrency String?   @map("international_currency") @db.VarChar(3)
+  bankFee               Decimal?  @map("bank_fee") @db.Decimal(18, 2)
+  budget                String?   @db.VarChar(200)
+  budgetId              String?   @map("budget_id") @db.VarChar(100)
+  paymentMethod         String?   @map("payment_method") @db.VarChar(100)
+  transactionType       String?   @map("transaction_type") @db.VarChar(100)
+  transactionStatus     String?   @map("transaction_status") @db.VarChar(100)
+  referenceCode         String?   @map("reference_code") @db.VarChar(100)
+  paymentOrigin         String?   @map("payment_origin") @db.VarChar(100)
+  channel               String?   @db.VarChar(100)
+  merchantCategory      String?   @map("merchant_category") @db.VarChar(150)
+  transactionCategory   String?   @map("transaction_category") @db.VarChar(150)
+  hasReceipt            Boolean?  @map("has_receipt")
+  documentName          String?   @map("document_name") @db.VarChar(250)
+  invoiceTotal          Decimal?  @map("invoice_total") @db.Decimal(18, 2)
+  invoiceDifference     Decimal?  @map("invoice_difference") @db.Decimal(18, 2)
+  receiptStatus         String?   @map("receipt_status") @db.VarChar(150)
+  vat                   Decimal?  @db.Decimal(18, 2)
+  grossIncomeTax        Decimal?  @map("gross_income_tax") @db.Decimal(18, 2)
+  otherTaxes            Decimal?  @map("other_taxes") @db.Decimal(18, 2)
+  exemptAmount          Decimal?  @map("exempt_amount") @db.Decimal(18, 2)
+  nonTaxedAmount        Decimal?  @map("non_taxed_amount") @db.Decimal(18, 2)
+  reconciliationStatus  String    @default("PENDING") @map("reconciliation_status") @db.VarChar(30)
+  importedAt            DateTime  @default(now()) @map("imported_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([transactionDate], map: "idx_mendel_transactions_date")
+  @@index([transactionStatus], map: "idx_mendel_transactions_status")
+  @@index([receiptStatus], map: "idx_mendel_transactions_receipt_status")
+  @@index([reconciliationStatus], map: "idx_mendel_transactions_reconciliation")
+  @@index([userName], map: "idx_mendel_transactions_user")
+  @@index([merchant], map: "idx_mendel_transactions_merchant")
+  @@map("mendel_transactions")
+}
+
+model mendel_import_batches {
+  id            BigInt   @id @default(autoincrement())
+  fileHash      String   @map("file_hash") @db.VarChar(64)
+  rowCount      Int      @map("row_count")
+  insertedCount Int      @map("inserted_count")
+  updatedCount  Int      @map("updated_count")
+  importedBy    String   @map("imported_by") @db.Uuid
+  importedAt    DateTime @default(now()) @map("imported_at") @db.Timestamptz(6)
+
+  @@index([importedAt], map: "idx_mendel_import_batches_imported_at")
+  @@map("mendel_import_batches")
+}
+
 model correctivos {
   id                              BigInt    @id @default(autoincrement())
   codigo                          String    @unique
@@ -261,15 +358,15 @@ model pendientes_visita {
 
 /// FNET-owned assignment state. It intentionally has no foreign key to Sytex tables.
 model task_assignments {
-  id                       BigInt   @id @default(autoincrement())
-  task_type                String
-  task_code                String
-  technician_primary       String
-  technician_collaborator  String
-  assigned_at              DateTime @default(now()) @db.Timestamptz(6)
-  assigned_by              String
-  updated_at               DateTime @updatedAt @db.Timestamptz(6)
-  active                   Boolean  @default(true)
+  id                      BigInt   @id @default(autoincrement())
+  task_type               String
+  task_code               String
+  technician_primary      String
+  technician_collaborator String
+  assigned_at             DateTime @default(now()) @db.Timestamptz(6)
+  assigned_by             String
+  updated_at              DateTime @updatedAt @db.Timestamptz(6)
+  active                  Boolean  @default(true)
 
   @@unique([task_type, task_code], map: "uq_fnet_task_assignment_task")
   @@index([task_type, active], map: "idx_fnet_task_assignment_active")
@@ -278,15 +375,15 @@ model task_assignments {
 
 /// FNET-owned audit trail for changes to task_assignments.
 model task_assignment_history {
-  id                        BigInt   @id @default(autoincrement())
-  task_type                 String
-  task_code                 String
+  id                               BigInt   @id @default(autoincrement())
+  task_type                        String
+  task_code                        String
   previous_technician_primary      String?
   previous_technician_collaborator String?
   new_technician_primary           String
   new_technician_collaborator      String
-  changed_at                DateTime @default(now()) @db.Timestamptz(6)
-  changed_by                String
+  changed_at                       DateTime @default(now()) @db.Timestamptz(6)
+  changed_by                       String
 
   @@index([task_type, task_code, changed_at], map: "idx_fnet_task_assignment_history_task")
   @@map("task_assignment_history")

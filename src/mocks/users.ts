@@ -30,6 +30,16 @@ const coordinatorUsers: User[] = mockCoordinators.map((coordinator) => ({
   active: true,
 }));
 
+const managerUser: User = {
+  id: "user-manager-1",
+  email: "manager@fnet.local",
+  name: "Gerencia Operativa",
+  role: UserRole.MANAGER,
+  technicianId: null,
+  coordinatorId: null,
+  active: true,
+};
+
 const technicianUsers: User[] = mockTechnicians.map((technician) => ({
   id: technician.userId ?? `user-${technician.id}`,
   email: `${technician.id}@fnet.local`,
@@ -40,4 +50,4 @@ const technicianUsers: User[] = mockTechnicians.map((technician) => ({
   active: technician.active,
 }));
 
-export const mockUsers: User[] = [adminUser, ...coordinatorUsers, ...technicianUsers];
+export const mockUsers: User[] = [adminUser, managerUser, ...coordinatorUsers, ...technicianUsers];

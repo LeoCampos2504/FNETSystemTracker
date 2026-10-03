@@ -6,6 +6,7 @@
 export const UserRole = {
   TECHNICIAN: "TECHNICIAN",
   COORDINATOR: "COORDINATOR",
+  MANAGER: "MANAGER",
   ADMIN: "ADMIN",
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
@@ -53,6 +54,8 @@ export const ExternalSource = {
   SYTEX: "SYTEX",
   BIZFLOW: "BIZFLOW",
   MAXTRACKER: "MAXTRACKER",
+  INTRAOPERATIVA: "INTRAOPERATIVA",
+  OPPEN: "OPPEN",
   INTERNAL: "INTERNAL",
 } as const;
 export type ExternalSource = (typeof ExternalSource)[keyof typeof ExternalSource];
