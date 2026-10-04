@@ -1,3 +1,5 @@
+import { extractFormReferences } from "./form-references";
+
 export type MendelTransactionImport = {
   transactionId: string;
   transactionDate: Date;
@@ -29,6 +31,7 @@ export type MendelTransactionImport = {
   otherTaxes: string | null;
   exemptAmount: string | null;
   nonTaxedAmount: string | null;
+  formReferences?: string[];
 };
 
 export type MendelCsvParseResult = {
@@ -195,6 +198,7 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
       hasReceipt: parseBoolean(value(record, "Hay ticket")), documentName: clean(value(record, "Nombre PDF"), 250),
       invoiceTotal: parsedAmounts[2], invoiceDifference: parsedAmounts[3], receiptStatus: clean(value(record, "Estado comprobacion"), 150),
       vat: parsedAmounts[4], grossIncomeTax: parsedAmounts[5], otherTaxes: parsedAmounts[6], exemptAmount: parsedAmounts[7], nonTaxedAmount: parsedAmounts[8],
+      ...(index("Notas") >= 0 ? { formReferences: extractFormReferences(value(record, "Notas")) } : {}),
     };
     const serialized = JSON.stringify(row);
     const previous = seen.get(row.transactionId);

@@ -97,6 +97,12 @@ La ruta `/compras` está protegida para Admin. Desde allí se puede subir un CSV
 
 FNET guarda los datos operativos y contables necesarios para conciliar compras. Omite correos, identificaciones personales, datos de tarjeta y notas de auditoría. La exportación disponible no da una relación verificable entre transacciones, archivos de comprobantes e ítems de Intraoperativa: esos cruces quedan pendientes y el stock oficial no se modifica.
 
+En `/insumos`, las compras relacionadas se buscan por código FO exacto en `referenceCode` o en las referencias extraídas de la columna `Notas` del CSV Mendel. No se compara un formulario con IDs de transacción o presupuesto. Solo se guardan los códigos FO extraídos en la tabla propia `mendel_form_references`, nunca las notas completas. Una compra puede referenciar varios formularios y un formulario puede tener varias compras; todas se muestran para revisión, sin confirmar consumo ni alterar cantidades.
+
+Antes de desplegar esta versión, ejecutar `npm run db:prepare-app` como Pre-Deploy para crear la tabla aditiva de referencias. Para transacciones importadas con una versión anterior, volver a importar el CSV original con `Notas`; la app actualiza las mismas transacciones y conserva su conciliación interna. Un CSV sin esa columna conserva las referencias ya importadas; uno con notas vacías las elimina para esa transacción.
+
+La vista pagina todos los registros consultados, muestra por separado técnico asignado y último editor, y expone el rango de `sincronizado_el` almacenado en PostgreSQL. El editor no prueba quién conserva un insumo. “Consultar de nuevo” vuelve a leer PostgreSQL y no ejecuta una extracción de Sytex: la actualización de la fuente sigue a cargo de n8n o del importador autorizado. Una descarga del export por sí sola no demuestra que se haya actualizado la base.
+
 La descarga diaria requiere que Mendel habilite una API o entrega SFTP para la cuenta. Hasta entonces, se puede repetir la exportación CSV y subirla desde `/compras`; las transacciones existentes se actualizan sin perder su estado interno de conciliación.
 
 ## Insumos y despliegue en Railway

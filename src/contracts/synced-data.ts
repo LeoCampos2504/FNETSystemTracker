@@ -36,6 +36,7 @@ export interface PostgresSupply {
   technician: string | null;
   lastEditedBy: string | null;
   lastEditedAt: string | null;
+  syncedAt: string;
 }
 
 export interface SyncedCounts {

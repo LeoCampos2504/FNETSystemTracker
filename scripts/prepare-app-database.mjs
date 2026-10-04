@@ -7,10 +7,12 @@ const ownedMigrations = [
   "20260916_add_fnet_task_assignments",
   "20260924_add_app_users",
   "20260925_add_mendel_transactions",
+  "20261004_add_mendel_form_references",
 ];
 const ownedTables = new Set([
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
   "app_login_attempts", "mendel_transactions", "mendel_import_batches",
+  "mendel_form_references",
 ]);
 
 export function readAppMigrations() {

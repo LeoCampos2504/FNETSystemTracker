@@ -12,7 +12,7 @@ function iso(value: DateLike): string | null { return value?.toISOString() ?? nu
 function dateOnly(value: DateLike): string { return value ? value.toISOString().slice(0, 10) : "sin-fecha"; }
 function decimal(value: Prisma.Decimal | null): string | null { return value?.toString() ?? null; }
 function numberValue(value: Prisma.Decimal | null): number | null { return value === null ? null : Number(value.toString()); }
-function normalized(value: string | null): string { return value?.trim().toUpperCase().replace(/[\s-]+/g, "_") ?? ""; }
+function normalized(value: string | null): string { return value?.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[\s-]+/g, "_") ?? ""; }
 
 function jsonText(value: Prisma.JsonValue, keys: string[]): string | null {
   const wanted = new Set(keys.map((key) => normalized(key)));
@@ -101,18 +101,20 @@ export async function getSyncedData(): Promise<SyncedData> {
     prisma.correctivos.findMany({ select: { id: true, codigo: true, nombre: true, descripcion: true, tarea: true, estado: true, proyecto: true, codigos_sitios_afectados: true, plantilla: true, fecha_plan: true, creado_el: true, abierto_el: true, atributos: true, contratista_asignado: true, asignado_a: true, usuario_colaborador: true, cantidad_rechazos: true, enlace: true, sincronizado_el: true }, orderBy: { actualizado_bd: "desc" } }),
     prisma.preventivos.findMany({ select: { id: true, codigo: true, nombre: true, descripcion: true, tarea: true, estado: true, proyecto: true, codigos_sitios_afectados: true, plantilla: true, fecha_plan: true, creado_el: true, abierto_el: true, atributos: true, contratista_asignado: true, asignado_a: true, usuario_colaborador: true, cantidad_rechazos: true, enlace: true, sincronizado_el: true }, orderBy: { actualizado_bd: "desc" } }),
     prisma.cotizaciones.findMany({ select: { id: true, codigo: true, estado: true, proyecto: true, proveedor: true, total: true, divisa: true, codigo_tarea: true, codigo_sitio: true, nombre_sitio: true, fecha_creacion: true, actualizado_bd: true, enlace: true }, orderBy: { actualizado_bd: "desc" } }),
-    prisma.insumos.findMany({ select: { id: true, formulario: true, grupo: true, indice: true, cantidad: true, descripcion: true, provisto_por: true, codigo_sitio: true, nombre_sitio: true, estado: true, imagen: true, ultima_edicion_el: true, raw_data: true }, orderBy: { actualizado_bd: "desc" } }),
+    prisma.insumos.findMany({ select: { id: true, formulario: true, grupo: true, indice: true, cantidad: true, descripcion: true, provisto_por: true, codigo_sitio: true, nombre_sitio: true, estado: true, imagen: true, ultima_edicion_el: true, sincronizado_el: true, raw_data: true }, orderBy: { actualizado_bd: "desc" } }),
     getSyncedCounts(), getFuelData(), getPendingData(), listActiveTaskAssignments(),
   ]);
   const correctiveCodes = new Set(correctivos.map((row) => row.codigo));
-  const tasks = [...correctivos.map((row) => mapTask(row, TaskType.CORRECTIVE, internalAssignments.get(assignmentMapKey("CORRECTIVO", row.codigo)))), ...preventivos.map((row) => mapTask(row, TaskType.PREVENTIVE, internalAssignments.get(assignmentMapKey("PREVENTIVE", row.codigo))))];
+  const tasks = [...correctivos.map((row) => mapTask(row, TaskType.CORRECTIVE, internalAssignments.get(assignmentMapKey("CORRECTIVO", row.codigo)))), ...preventivos.map((row) => mapTask(row, TaskType.PREVENTIVE, internalAssignments.get(assignmentMapKey("PREVENTIVO", row.codigo))))];
+  const preventiveByForm = new Map(preventivos.map((row) => [row.codigo, row]));
   const pendingBySite = await getPendingBySites(tasks.map((task) => task.siteCode));
   const quotes: PostgresQuote[] = cotizaciones.map((row) => ({ id: row.id.toString(), code: row.codigo, status: quoteStatus(row.estado), zoneId: row.codigo_sitio ?? "Sin sitio informado", projectId: row.proyecto, supplier: row.proveedor, total: decimal(row.total), currency: row.divisa, taskCode: row.codigo_tarea, relatedCorrectiveCode: row.codigo_tarea && correctiveCodes.has(row.codigo_tarea) ? row.codigo_tarea : null, siteCode: row.codigo_sitio, siteName: row.nombre_sitio, createdAt: iso(row.fecha_creacion), updatedAt: row.actualizado_bd.toISOString(), link: row.enlace }));
   const supplies: PostgresSupply[] = insumos.map((row) => ({
     id: row.id.toString(), formulario: row.formulario, grupo: row.grupo, indice: row.indice, quantity: numberValue(row.cantidad), description: row.descripcion,
     provider: row.provisto_por, siteCode: row.codigo_sitio, siteName: row.nombre_sitio, status: row.estado, image: row.imagen,
-    technician: jsonText(row.raw_data, ["tecnico", "technician", "asignado_a", "assigned_to", "responsable", "usuario_responsable"]),
+    technician: jsonText(row.raw_data, ["tecnico", "technician", "asignado_a", "assigned_to", "responsable", "usuario_responsable"]) ?? preventiveByForm.get(row.formulario)?.asignado_a ?? null,
     lastEditedBy: jsonText(row.raw_data, ["ultima_edicion_por", "last_edited_by", "edited_by", "updated_by", "editor"]), lastEditedAt: iso(row.ultima_edicion_el),
+    syncedAt: row.sincronizado_el.toISOString(),
   }));
   return { source: "postgresql", counts, tasks, quotes, insumos: supplies, fuel: fuelData.items, fuelMetrics: fuelData.metrics, pendientes: pendingData.items, pendingMetrics: pendingData.metrics, pendingBySite };
 }

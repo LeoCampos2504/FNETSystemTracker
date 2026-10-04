@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
       duplicateRowsSkipped: parsed.duplicateCount,
       invalidRows: parsed.invalidRowCount,
       errors: parsed.errors,
+      transactionsWithFormReferences: parsed.rows.filter((row) => row.formReferences?.length).length,
     };
     if (mode === "preview") return NextResponse.json(preview, { headers: { "Cache-Control": "no-store" } });
     if (parsed.invalidRowCount > 0) return NextResponse.json({ code: "CSV_HAS_INVALID_ROWS", ...preview }, { status: 422, headers: { "Cache-Control": "no-store" } });
@@ -63,12 +64,18 @@ export async function POST(request: NextRequest) {
 
     await prisma.$transaction(async (tx) => {
       for (const row of parsed.rows) {
-        const { transactionId, ...data } = row;
+        const { transactionId, formReferences, ...data } = row;
         await tx.mendel_transactions.upsert({
           where: { transactionId },
           create: { transactionId, ...data },
           update: data,
         });
+        if (formReferences !== undefined) {
+          await tx.mendel_form_references.deleteMany({ where: { transactionId } });
+          if (formReferences.length) await tx.mendel_form_references.createMany({
+            data: formReferences.map((formCode) => ({ transactionId, formCode })),
+          });
+        }
       }
       await tx.mendel_import_batches.create({
         data: { fileHash, rowCount: parsed.rows.length, insertedCount, updatedCount, importedBy: authorization.user.id },

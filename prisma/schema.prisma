@@ -80,6 +80,7 @@ model mendel_transactions {
   reconciliationStatus  String    @default("PENDING") @map("reconciliation_status") @db.VarChar(30)
   importedAt            DateTime  @default(now()) @map("imported_at") @db.Timestamptz(6)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  formReferences        mendel_form_references[]
 
   @@index([transactionDate], map: "idx_mendel_transactions_date")
   @@index([transactionStatus], map: "idx_mendel_transactions_status")
@@ -101,6 +102,16 @@ model mendel_import_batches {
 
   @@index([importedAt], map: "idx_mendel_import_batches_imported_at")
   @@map("mendel_import_batches")
+}
+
+model mendel_form_references {
+  transactionId String             @map("transaction_id") @db.VarChar(80)
+  formCode      String             @map("form_code") @db.VarChar(20)
+  transaction   mendel_transactions @relation(fields: [transactionId], references: [transactionId], onDelete: Cascade, map: "fk_mendel_form_reference_transaction")
+
+  @@id([transactionId, formCode], map: "pk_mendel_form_references")
+  @@index([formCode], map: "idx_mendel_form_references_form")
+  @@map("mendel_form_references")
 }
 
 model correctivos {

@@ -12,9 +12,9 @@ const STORAGE_KEY = "fnet-insumos-demo-v1";
 const WARNING_AFTER_DAYS = 14;
 const TECHNICIAN_DEMO = "tech-01";
 const mockSyncedRows: PostgresSupply[] = [
-  { id: "demo-s-1", formulario: "FO-26-541064", grupo: "Insumos", indice: "1", quantity: 4, description: "Filtro de aire 50 × 50", provider: "Stock Claro", siteCode: "JU00068", siteName: "Libertador", status: "Aprobado", image: null, lastEditedAt: new Date().toISOString() },
-  { id: "demo-s-2", formulario: "FO-26-541021", grupo: "Insumos", indice: "2", quantity: 30, description: "Precintos plásticos 3.6 × 150 mm", provider: "Stock Contratista", siteCode: "ST00072", siteName: "Salta", status: "Aprobado", image: null, lastEditedAt: new Date().toISOString() },
-  { id: "demo-s-3", formulario: "FO-26-540992", grupo: "Insumos", indice: "1", quantity: 2, description: "Kit de limpieza de gabinete", provider: "Stock Contratista", siteCode: "ST00150", siteName: "Salta", status: "En revisión", image: null, lastEditedAt: new Date().toISOString() },
+  { id: "demo-s-1", formulario: "FO-26-541064", grupo: "Insumos", indice: "1", quantity: 4, description: "Filtro de aire 50 × 50", provider: "Stock Claro", siteCode: "JU00068", siteName: "Libertador", status: "Aprobado", image: null, technician: null, lastEditedBy: null, syncedAt: new Date().toISOString(), lastEditedAt: new Date().toISOString() },
+  { id: "demo-s-2", formulario: "FO-26-541021", grupo: "Insumos", indice: "2", quantity: 30, description: "Precintos plásticos 3.6 × 150 mm", provider: "Stock Contratista", siteCode: "ST00072", siteName: "Salta", status: "Aprobado", image: null, technician: null, lastEditedBy: null, syncedAt: new Date().toISOString(), lastEditedAt: new Date().toISOString() },
+  { id: "demo-s-3", formulario: "FO-26-540992", grupo: "Insumos", indice: "1", quantity: 2, description: "Kit de limpieza de gabinete", provider: "Stock Contratista", siteCode: "ST00150", siteName: "Salta", status: "En revisión", image: null, technician: null, lastEditedBy: null, syncedAt: new Date().toISOString(), lastEditedAt: new Date().toISOString() },
 ];
 
 type Invoice = {

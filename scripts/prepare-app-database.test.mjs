@@ -4,7 +4,10 @@ import { prepareAppDatabase, readAppMigrations } from "./prepare-app-database.mj
 describe("Railway application database preparation", () => {
   it("only prepares owned tables and preserves the Sytex sources", () => {
     const migrations = readAppMigrations();
-    expect(migrations.flatMap((migration) => migration.tables.map((table) => table.name))).toHaveLength(7);
+    expect(migrations.flatMap((migration) => migration.tables.map((table) => table.name)).sort()).toEqual([
+      "app_login_attempts", "app_sessions", "app_users", "mendel_form_references",
+      "mendel_import_batches", "mendel_transactions", "task_assignment_history", "task_assignments",
+    ]);
     for (const { sql } of migrations) {
       expect(sql).not.toMatch(/^\s*(?:ALTER|DROP|TRUNCATE|DELETE|UPDATE)\b/im);
       expect(sql).not.toMatch(/CREATE TABLE(?: IF NOT EXISTS)? "(?:correctivos|preventivos|cotizaciones|insumos|pendientes_visita|cargas_combustible_ge)"/);
