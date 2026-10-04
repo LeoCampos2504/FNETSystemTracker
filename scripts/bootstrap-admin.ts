@@ -19,7 +19,8 @@ async function main() {
     }
     if (!name || name.length > 120) throw new Error("BOOTSTRAP_ADMIN_NAME_INVALID");
     await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(680250134139)`;
+      // The lock returns PostgreSQL void; execute without deserializing a result row.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(680250134139)`;
       if (await tx.app_users.count({ where: { role: "ADMIN" } })) throw new Error("ADMIN_ALREADY_BOOTSTRAPPED");
       if (await tx.app_users.findUnique({ where: { email } })) throw new Error("BOOTSTRAP_ADMIN_EMAIL_ALREADY_IN_USE");
       await tx.app_users.create({
