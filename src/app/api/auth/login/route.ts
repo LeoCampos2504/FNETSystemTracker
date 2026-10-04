@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { databaseUserToContract, SESSION_COOKIE, SESSION_SECONDS } from "@/server/auth";
 import { getPrismaClient } from "@/server/prisma";
+import { hasAllowedRequestOrigin } from "@/server/request-origin";
 import { createLoginSession } from "@/server/services/auth-sessions";
 import { clearLoginRateLimit, consumeLoginRateLimit, LOGIN_ACCOUNT_LIMIT, LOGIN_IP_LIMIT, makeLoginRateLimitKey } from "@/server/services/login-rate-limit";
 
@@ -55,9 +56,7 @@ function json(body: unknown, status: number, headers?: HeadersInit) {
 }
 
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-  if (origin && origin !== new URL(request.url).origin) return json({ code: "FORBIDDEN" }, 403);
-  if (request.headers.get("sec-fetch-site") === "cross-site") return json({ code: "FORBIDDEN" }, 403);
+  if (!hasAllowedRequestOrigin(request)) return json({ code: "FORBIDDEN" }, 403);
   if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") return json({ code: "UNSUPPORTED_MEDIA_TYPE" }, 415);
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) return json({ code: "PAYLOAD_TOO_LARGE" }, 413);

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/server/services/auth-sessions";
 import { getPrismaClient } from "@/server/prisma";
 import { parseMendelCsv } from "@/server/mendel-csv";
+import { hasAllowedRequestOrigin } from "@/server/request-origin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,8 +12,7 @@ const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 export async function POST(request: NextRequest) {
   const authorization = await requireAdminSession();
   if (!authorization.ok) return authorization.response;
-  const origin = request.headers.get("origin");
-  if (origin && origin !== request.nextUrl.origin) return NextResponse.json({ code: "INVALID_ORIGIN" }, { status: 403 });
+  if (!hasAllowedRequestOrigin(request)) return NextResponse.json({ code: "INVALID_ORIGIN" }, { status: 403 });
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_UPLOAD_BYTES) return NextResponse.json({ code: "FILE_TOO_LARGE" }, { status: 413 });
 
