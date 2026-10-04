@@ -33,6 +33,8 @@ export interface PostgresSupply {
   siteName: string | null;
   status: string | null;
   image: string | null;
+  technician: string | null;
+  lastEditedBy: string | null;
   lastEditedAt: string | null;
 }
 
