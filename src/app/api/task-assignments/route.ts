@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { InternalTaskType } from "@/contracts";
 import { getTaskAssignment, internalTechnicianOptions, saveTaskAssignment } from "@/server/services/task-assignments";
+import { requireAdminSession } from "@/server/services/auth-sessions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ function errorResponse(error: unknown): NextResponse {
 }
 
 export async function GET(request: Request) {
+  const authorization = await requireAdminSession();
+  if (!authorization.ok) return authorization.response;
   const blocked = productionBlocked();
   if (blocked) return blocked;
   const url = new URL(request.url);
@@ -43,6 +46,8 @@ export async function GET(request: Request) {
 }
 
 async function save(request: Request) {
+  const authorization = await requireAdminSession();
+  if (!authorization.ok) return authorization.response;
   const blocked = productionBlocked();
   if (blocked) return blocked;
   const parsed = assignmentSchema.safeParse(await request.json().catch(() => null));

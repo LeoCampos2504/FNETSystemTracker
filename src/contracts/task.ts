@@ -36,6 +36,10 @@ export interface Task extends ExternalSyncFields {
   siteId: string;
   siteCode: string;
   zoneId: string;
+  /** Optional hierarchy supplied by the source; scope helpers never infer it from IDs. */
+  organizationId?: string | null;
+  regionId?: string | null;
+  baseId?: string | null;
   coordinates: Coordinates;
   /**
    * Normally two entries (PRIMARY + COLLABORATOR); a single PRIMARY entry

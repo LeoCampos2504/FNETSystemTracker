@@ -8,6 +8,7 @@ import {
 import { TaskCriticality, TaskStatus, TaskType } from "@/contracts";
 import type { FuelMetrics, PendingMetrics, PendingVisit, PostgresQuote, Task } from "@/contracts";
 import { isPendingQuoteStatus } from "@/lib/quote-status";
+import { roleLabel } from "@/lib/scope";
 
 type ViewKey = "dashboard" | "schedule" | "tasks" | "supplies" | "quotes" | "guards" | "vehicles";
 type DatabaseState = "loading" | "ready" | "error";
@@ -43,10 +44,6 @@ function formatTime(value: string | null): string {
   if (!value) return "—";
   const date = new Date(value);
   return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
-}
-
-function roleLabel(role: string): string {
-  return role === "ADMIN" ? "Administrador" : role === "TECHNICIAN" ? "Técnico" : "Coordinador";
 }
 
 function isActive(task: Task): boolean {

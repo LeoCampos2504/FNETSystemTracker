@@ -5,8 +5,8 @@ import { MOCK_TODAY, addDaysUtc } from "./constants";
 
 const crewByZone = Object.fromEntries(mockCrews.map((crew) => [crew.zoneId, crew]));
 
-function atUtc(date: Date): string {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), 8, 0, 0)).toISOString();
+function atOperationalTime(date: Date): string {
+  return `${date.toISOString().slice(0, 10)}T08:00:00`;
 }
 
 /**
@@ -25,8 +25,8 @@ function buildWeeklyGuards(zoneId: string, boundaries: number[], idPrefix: strin
       id: `guard-${idPrefix}-${i + 1}`,
       zoneId,
       technicianIds: [crew.primaryId, crew.collaboratorId],
-      startAt: atUtc(addDaysUtc(MOCK_TODAY, boundaries[i])),
-      endAt: atUtc(addDaysUtc(MOCK_TODAY, boundaries[i + 1])),
+      startAt: atOperationalTime(addDaysUtc(MOCK_TODAY, boundaries[i])),
+      endAt: atOperationalTime(addDaysUtc(MOCK_TODAY, boundaries[i + 1])),
       externalId: null,
       externalSource: ExternalSource.INTERNAL,
       sourceUpdatedAt: null,

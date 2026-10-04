@@ -2,6 +2,7 @@ import type { Task, TaskAssignment, TaskRejection } from "@/contracts";
 import { CrewRole, ExternalSource, TaskCriticality, TaskStatus, TaskType } from "@/contracts";
 import { mockCrews } from "./technicians";
 import { mockSites } from "./sites";
+import { mockBases } from "./national";
 import { MOCK_TODAY, addDaysUtc, toDateString } from "./constants";
 
 const ZONE_IDS = ["zone-noa", "zone-nea", "zone-cuyo", "zone-centro", "zone-patagonia"] as const;
@@ -74,6 +75,7 @@ function buildTask(spec: TaskSpec): Task {
 
   const prefix = spec.type === TaskType.PREVENTIVE ? "PM" : "CM";
   const zonePrefix = spec.zoneId.replace("zone-", "").toUpperCase();
+  const hierarchy = mockBases.find((base) => base.zoneId === spec.zoneId);
 
   return {
     id: `task-${spec.idSuffix}`,
@@ -92,6 +94,9 @@ function buildTask(spec: TaskSpec): Task {
     siteId: site.id,
     siteCode: site.code,
     zoneId: spec.zoneId,
+    organizationId: hierarchy?.organizationId ?? null,
+    regionId: hierarchy?.regionId ?? null,
+    baseId: hierarchy?.id ?? null,
     coordinates: site.coordinates,
     assignments: buildAssignments(spec.zoneId, spec.assignMode),
     arrivalAt,

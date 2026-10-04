@@ -42,10 +42,10 @@ export const mockTechnicians: Technician[] = seeds.map((seed) => ({
  * Fixed two-person crews used to build tasks/guards consistently.
  * `floaterId` covers the "exceptionally a single technician" case.
  */
-export const mockCrews: { zoneId: string; primaryId: string; collaboratorId: string; floaterId?: string }[] = [
-  { zoneId: "zone-noa", primaryId: "tech-01", collaboratorId: "tech-02", floaterId: "tech-03" },
-  { zoneId: "zone-nea", primaryId: "tech-04", collaboratorId: "tech-05" },
-  { zoneId: "zone-cuyo", primaryId: "tech-06", collaboratorId: "tech-07", floaterId: "tech-08" },
-  { zoneId: "zone-centro", primaryId: "tech-09", collaboratorId: "tech-10", floaterId: "tech-11" },
-  { zoneId: "zone-patagonia", primaryId: "tech-12", collaboratorId: "tech-13", floaterId: "tech-14" },
+export const mockCrews: { zoneId: string; primaryId: string; collaboratorId: string; floaterId?: string; progressPercent: number }[] = [
+  { zoneId: "zone-noa", primaryId: "tech-01", collaboratorId: "tech-02", floaterId: "tech-03", progressPercent: 74 },
+  { zoneId: "zone-nea", primaryId: "tech-04", collaboratorId: "tech-05", progressPercent: 51 },
+  { zoneId: "zone-cuyo", primaryId: "tech-06", collaboratorId: "tech-07", floaterId: "tech-08", progressPercent: 38 },
+  { zoneId: "zone-centro", primaryId: "tech-09", collaboratorId: "tech-10", floaterId: "tech-11", progressPercent: 38 },
+  { zoneId: "zone-patagonia", primaryId: "tech-12", collaboratorId: "tech-13", floaterId: "tech-14", progressPercent: 38 },
 ];
