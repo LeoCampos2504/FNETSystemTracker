@@ -114,6 +114,46 @@ model mendel_form_references {
   @@map("mendel_form_references")
 }
 
+model sytex_supply_imports {
+  id                  String    @id @default(uuid()) @db.Uuid
+  fileHash            String    @unique(map: "uq_sytex_supply_imports_hash") @map("file_hash") @db.VarChar(64)
+  fileName            String    @map("file_name") @db.VarChar(250)
+  answerCount         Int       @map("answer_count")
+  formCount           Int       @map("form_count")
+  sourceEditedFrom    String?   @map("source_edited_from")
+  sourceEditedThrough String?   @map("source_edited_through")
+  importedBy          String    @map("imported_by") @db.Uuid
+  importedAt          DateTime  @default(now()) @map("imported_at") @db.Timestamptz(6)
+  items               sytex_supply_import_items[]
+
+  @@index([importedAt], map: "idx_sytex_supply_imports_date")
+  @@map("sytex_supply_imports")
+}
+
+model sytex_supply_import_items {
+  id               String    @id @default(uuid()) @db.Uuid
+  importId         String    @map("import_id") @db.Uuid
+  formulario       String
+  grupo            String
+  indice           String
+  description      String?
+  quantity         Decimal?  @db.Decimal(18, 3)
+  provider         String?
+  siteCode         String?   @map("site_code")
+  siteName         String?   @map("site_name")
+  status           String?
+  image            String?
+  imageDeclared    Boolean   @default(false) @map("image_declared")
+  lastEditedBy     String?   @map("last_edited_by")
+  sourceEditedAt   String?   @map("source_edited_at")
+  sourceAnswers    Json      @map("source_answers")
+  import           sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_supply_items_import")
+
+  @@unique([importId, formulario, grupo, indice], map: "uq_sytex_supply_import_item")
+  @@index([formulario], map: "idx_sytex_supply_import_items_form")
+  @@map("sytex_supply_import_items")
+}
+
 model correctivos {
   id                              BigInt    @id @default(autoincrement())
   codigo                          String    @unique

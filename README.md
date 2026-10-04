@@ -4,7 +4,7 @@ Prototipo de PWA interna para planificación, coordinación y seguimiento de ope
 
 ## Requisitos
 
-- Node.js 20+
+- Node.js 20.12+
 - npm 10+
 - PostgreSQL Railway existente para la futura lectura de tablas sincronizadas
 
@@ -102,6 +102,16 @@ En `/insumos`, las compras relacionadas se buscan por código FO exacto en `refe
 Antes de desplegar esta versión, ejecutar `npm run db:prepare-app` como Pre-Deploy para crear la tabla aditiva de referencias. Para transacciones importadas con una versión anterior, volver a importar el CSV original con `Notas`; la app actualiza las mismas transacciones y conserva su conciliación interna. Un CSV sin esa columna conserva las referencias ya importadas; uno con notas vacías las elimina para esa transacción.
 
 La vista pagina todos los registros consultados, muestra por separado técnico asignado y último editor, y expone el rango de `sincronizado_el` almacenado en PostgreSQL. El editor no prueba quién conserva un insumo. “Consultar de nuevo” vuelve a leer PostgreSQL y no ejecuta una extracción de Sytex: la actualización de la fuente sigue a cargo de n8n o del importador autorizado. Una descarga del export por sí sola no demuestra que se haya actualizado la base.
+
+## Carga de exports de respuestas Sytex
+
+En `/insumos`, el Admin puede seleccionar el `.xlsx` original de respuestas, revisar sus conteos y confirmar la importación. Se admiten hasta 8 MB y 50.000 respuestas por archivo. Se agrupan únicamente campos identificados de descripción, cantidad, proveedor e imagen por `formulario + grupo + raíz de índice`: por ejemplo, `9.2A.1` y `9.2A.2` forman un insumo, mientras `9.2B` conserva otro. Preguntas generales, respuestas vacías y acciones `OK` no generan cantidades ni artículos ficticios. Campos repetidos con valores distintos bloquean la importación; cantidades no numéricas quedan pendientes.
+
+Las tablas propias `sytex_supply_imports` y `sytex_supply_import_items` conservan cada export y las respuestas que dieron origen a sus insumos. La escritura del lote y sus filas es atómica; el hash del archivo impide duplicados, incluso en cargas concurrentes. No se escribe sobre las tablas oficiales de n8n. La preparación de estas dos tablas se incorpora a `npm run db:prepare-app` y debe ejecutarse como Pre-Deploy antes de activar la versión.
+
+El selector de fuente separa “Sincronización n8n” de “Último export cargado”; los conteos no se suman ni se interpretan como stock. Al confirmar o abrir un archivo ya importado se muestra ese lote específico. Se informa el nombre del archivo, fecha de carga, cantidad de respuestas/formularios y rango de ediciones. Las fechas de edición del Excel se conservan como horario sin zona del archivo; la fecha de carga sí es un instante UTC.
+
+`Foto del insumo = OK` indica una foto declarada, sin aportar un archivo descargable. Solo un enlace HTTP/HTTPS válido se presenta como imagen accesible. El export de respuestas tampoco informa al técnico asignado: este se muestra únicamente cuando existe una asignación en `preventivos` con el mismo FO, por separado del editor del Excel. Las compras Mendel se cruzan por referencias FO y quedan para revisión; esta importación no confirma consumos, saldos de técnicos ni cargas en Intra Claro.
 
 La descarga diaria requiere que Mendel habilite una API o entrega SFTP para la cuenta. Hasta entonces, se puede repetir la exportación CSV y subirla desde `/compras`; las transacciones existentes se actualizan sin perder su estado interno de conciliación.
 
