@@ -89,6 +89,38 @@ function mapTask(row: {
   };
 }
 
+type FormTaskInput = { code: string; type: string; project: string; siteCode: string; description: string; technicians: unknown; status: string; planDate: Date | null; link: string | null; syncedAt: Date };
+/** A form that came from the direct Sytex synchronization, shown as a task of its zone. Only preventive and corrective forms are tasks. */
+export function formTask(row: FormTaskInput) {
+  const type = row.type === "CORRECTIVO" ? TaskType.CORRECTIVE : row.type === "PREVENTIVO" ? TaskType.PREVENTIVE : null;
+  if (!type) return null;
+  const technicians = Array.isArray(row.technicians) ? row.technicians.filter((name): name is string => typeof name === "string" && name.trim() !== "") : [];
+  const priority = "Sin prioridad informada", siteCode = siteLabel(row.siteCode);
+  return {
+    id: "form-" + row.code, taskCode: row.code, formCode: null as string | null, type, description: row.description || "Sin descripción informada",
+    priority, criticality: taskCriticality(priority, row.status), status: taskStatus(row.status),
+    scheduledDate: dateOnly(row.planDate), scheduledAt: iso(row.planDate), requestDate: null as string | null,
+    assignedTo: technicians[0] ?? null, collaborator: technicians[1] ?? null, contractor: null as string | null,
+    siteId: siteCode, siteCode, zoneId: row.project || "Sin proyecto informado", coordinates: { latitude: 0, longitude: 0 },
+    assignments: technicians.slice(0, 2).map((technicianId, index) => ({ technicianId, crewRole: index === 0 ? CrewRole.PRIMARY : CrewRole.COLLABORATOR })),
+    arrivalAt: null as string | null, departureAt: null as string | null, rejections: [] as { id: string; taskId: string; rejectedAt: string; reason: string | null }[],
+    externalSource: ExternalSource.SYTEX, externalId: row.code, sourceUpdatedAt: row.syncedAt.toISOString(), externalUrl: row.link,
+  };
+}
+async function getFormTasks(skip: Set<string>) {
+  const prisma = getPrismaClient();
+  const [contexts, states, links] = await Promise.all([
+    prisma.sytex_supply_form_contexts.findMany({ include: { import: { select: { importedAt: true } } }, orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
+    prisma.sytex_form_states.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
+    prisma.sytex_form_links.findMany({ select: { code: true, link: true } }),
+  ]);
+  const latest = new Map(contexts.map((row) => [row.code, row])), state = new Map(states.map((row) => [row.code, row])), link = new Map(links.map((row) => [row.code, row.link]));
+  return [...latest.values()].filter((row) => !skip.has(row.code)).flatMap((row) => {
+    const task = formTask({ code: row.code, type: row.type, project: row.project, siteCode: row.siteCode, description: row.description, technicians: row.technicians, status: state.get(row.code)?.status ?? "", planDate: state.get(row.code)?.planDate ?? null, link: link.get(row.code) ?? null, syncedAt: row.import.importedAt });
+    return task ? [task] : [];
+  });
+}
+
 export async function getSyncedCounts(): Promise<SyncedCounts> {
   const prisma = getPrismaClient();
   const [correctivos, preventivos, cotizaciones, insumos] = await Promise.all([prisma.correctivos.count(), prisma.preventivos.count(), prisma.cotizaciones.count(), prisma.insumos.count()]);
@@ -105,7 +137,7 @@ export async function getSyncedData(): Promise<SyncedData> {
     getSyncedCounts(), getFuelData(), getPendingData(), listActiveTaskAssignments(),
   ]);
   const correctiveCodes = new Set(correctivos.map((row) => row.codigo));
-  const tasks = [...correctivos.map((row) => mapTask(row, TaskType.CORRECTIVE, internalAssignments.get(assignmentMapKey("CORRECTIVO", row.codigo)))), ...preventivos.map((row) => mapTask(row, TaskType.PREVENTIVE, internalAssignments.get(assignmentMapKey("PREVENTIVO", row.codigo))))];
+  const tasks = [...correctivos.map((row) => mapTask(row, TaskType.CORRECTIVE, internalAssignments.get(assignmentMapKey("CORRECTIVO", row.codigo)))), ...preventivos.map((row) => mapTask(row, TaskType.PREVENTIVE, internalAssignments.get(assignmentMapKey("PREVENTIVO", row.codigo)))), ...await getFormTasks(new Set([...correctivos, ...preventivos].map((row) => row.codigo)))];
   const preventiveByForm = new Map(preventivos.map((row) => [row.codigo, row]));
   const pendingBySite = await getPendingBySites(tasks.map((task) => task.siteCode));
   const quotes: PostgresQuote[] = cotizaciones.map((row) => ({ id: row.id.toString(), code: row.codigo, status: quoteStatus(row.estado), sourceStatus: row.estado, syncedAt: row.sincronizado_el.toISOString(), zoneId: row.codigo_sitio ?? "Sin sitio informado", projectId: row.proyecto, supplier: row.proveedor, total: decimal(row.total), currency: row.divisa, taskCode: row.codigo_tarea, relatedCorrectiveCode: row.codigo_tarea && correctiveCodes.has(row.codigo_tarea) ? row.codigo_tarea : null, siteCode: row.codigo_sitio, siteName: row.nombre_sitio, createdAt: iso(row.fecha_creacion), updatedAt: row.actualizado_bd.toISOString(), link: row.enlace }));
