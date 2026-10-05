@@ -168,6 +168,17 @@ export async function materials(actor:OperationsActor,requested:string[]=[]):Pro
   }).sort((a,b)=>(b.editedAt??'').slice(0,19).localeCompare((a.editedAt??'').slice(0,19))||b.formulario.localeCompare(a.formulario));
 }
 export type ReviewInput={key:string;project:string;classification:string;intraStatus:string;invoiceNumber:string;countedQuantity:string|null;intraQuantity:string|null;notes:string;version:number;sourceHash:string};
+/** Removes the control saved for an insumo (invoice, Intra state, receipts); the insumo itself stays, as Sytex reports it, and goes back to pending. */
+export async function deleteReview(actor:OperationsActor,input:{key:string;version:number}){
+  const row=(await materials(actor)).find(r=>r.key===input.key);if(!row?.review)fail('NOT_FOUND',404);
+  assertProject(actor,row.review.project);
+  return getPrismaClient().$transaction(async tx=>{
+    await tx.$executeRaw`DELETE FROM ops_review_files WHERE source_key=${input.key}`;
+    const removed=await tx.$executeRaw`DELETE FROM ops_supply_reviews WHERE source_key=${input.key} AND version=${input.version}`;
+    if(!removed)fail('STALE_VERSION');
+    await audit(tx,actor,input.key,'INTRA_REVIEW_DELETED',{project:row.review!.project,invoiceNumber:row.review!.invoiceNumber,intraStatus:row.review!.intraStatus,files:row.files.length});return {deleted:true};
+  });
+}
 export async function saveReview(actor:OperationsActor,input:ReviewInput){
   const row=(await materials(actor)).find(r=>r.key===input.key);if(!row)fail('NOT_FOUND',404);
   const c=await catalog(actor);if(!c.projects.includes(input.project))fail('FORBIDDEN_PROJECT',403);

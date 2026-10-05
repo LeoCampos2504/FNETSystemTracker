@@ -4,7 +4,7 @@ import type { OperationsActor,ReviewInput,VisitInput } from './operations';
 const fake=vi.hoisted(()=>({db:{} as Record<string,unknown>,reviews:[] as unknown[],closed:false,updateCount:1}));
 vi.mock('@/server/prisma',()=>({getPrismaClient:()=>fake.db}));
 vi.mock('./operational-data',()=>({getPendingBySites:async()=>({})}));
-import { addVisit,catalog,closeDay,materials,openForm,operationsActor,saveReview,updateVisit,yearlyMaintenance } from './operations';
+import { addVisit,catalog,closeDay,deleteReview,materials,openForm,operationsActor,saveReview,updateVisit,yearlyMaintenance } from './operations';
 const user={id:'00000000-0000-4000-8000-000000000001',name:'Test',email:'test@example.invalid',role:UserRole.COORDINATOR,active:true,technicianId:null,coordinatorId:null};
 const non='NON - mantenimiento',bam='BAM - mantenimiento';
 const actor:OperationsActor={user,allowed:[non]};
@@ -60,5 +60,23 @@ describe('forms offered when a site is typed',()=>{
  });
  it('uses the Argentina month at the turn of the month',()=>{
   expect(openForm({type:'PREVENTIVO',status:'Open',planDate:'2026-09-15'},new Date('2026-10-01T01:00:00Z'))).toBe(true);
+ });
+});
+
+describe('deleting a saved control',()=>{
+ const saved=(key:string,version=3)=>[{source_key:key,project:non,classification:'INCLUIDO',intra_status:'DESCARGADO',invoice_number:'0022-1',counted_quantity:null,intra_quantity:null,notes:'',source_hash:'h',version,updated_at:new Date(),updated_by:'u'}];
+ it('removes the control and its receipts and leaves a trace',async()=>{
+  const key=(await materials(actor))[0].key;fake.reviews=saved(key);
+  expect(await deleteReview(actor,{key,version:3})).toEqual({deleted:true});
+  const sql=execute.mock.calls.map(call=>(call[0] as TemplateStringsArray).join('?'));
+  expect(sql.some(s=>s.includes('DELETE FROM ops_review_files'))).toBe(true);
+  expect(sql.some(s=>s.includes('DELETE FROM ops_supply_reviews'))).toBe(true);
+  expect(sql.some(s=>s.includes('INTRA_REVIEW_DELETED')||s.includes('ops_events'))).toBe(true);
+ });
+ it('refuses when the control changed meanwhile or does not exist',async()=>{
+  const key=(await materials(actor))[0].key;fake.reviews=saved(key);
+  execute.mockImplementation(async(strings:TemplateStringsArray)=>strings.join('?').includes('DELETE FROM ops_supply_reviews')?0:1);
+  await expect(deleteReview(actor,{key,version:2})).rejects.toThrow('STALE_VERSION');
+  fake.reviews=[];await expect(deleteReview(actor,{key,version:3})).rejects.toThrow('NOT_FOUND');
  });
 });
