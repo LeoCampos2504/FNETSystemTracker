@@ -83,15 +83,20 @@ async function request(config: Config, fetcher: Fetcher, path: string, accept: s
   try {
     response = await fetcher(config.baseUrl + path, {
       headers: { Authorization: config.authorization, Organization: config.organization, Accept: accept, "Accept-Language": "es" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: "error", cache: "no-store",
+      // Exports may be served from another address; fetch drops the Authorization header when the host changes.
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: "follow", cache: "no-store",
     });
-  } catch { throw new SytexError("SYTEX_UNREACHABLE"); }
+  } catch (error) {
+    // Only the kind of failure and the address without its query are kept, never the credential.
+    const cause = error instanceof Error ? (error.cause as { code?: unknown } | undefined)?.code ?? error.name : "desconocido";
+    throw new SytexError("SYTEX_UNREACHABLE", `${path.split("?")[0]} ${String(cause).slice(0, 60)}`);
+  }
   if (response.status === 401 || response.status === 403) {
     // Sytex explains the refusal in a short "detail" text; it never contains the credential.
     const detail = await response.json().then((body: { detail?: unknown }) => typeof body?.detail === "string" ? body.detail.slice(0, 120) : "").catch(() => "");
     throw new SytexError("SYTEX_CREDENTIAL_REJECTED", `${response.status}${detail ? " " + detail : ""}`);
   }
-  if (!response.ok) throw new SytexError("SYTEX_RESPONSE_" + response.status);
+  if (!response.ok) throw new SytexError("SYTEX_RESPONSE_" + response.status, path.split("?")[0]);
   return response;
 }
 
