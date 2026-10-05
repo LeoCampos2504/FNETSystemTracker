@@ -28,6 +28,11 @@ describe("API security boundaries", () => {
     }
   });
 
+  it("lets CTIC accounts reach only the read side of the guard route", () => {
+    const open = routeFiles(apiRoot).filter((path) => readFileSync(path, "utf8").includes("requireOperationsSession(true)")).map((path) => relative(apiRoot, path).replaceAll("\\", "/"));
+    expect(open).toEqual(["operations/guard/route.ts"]);
+  });
+
   it("keeps the authentication migration limited to FNET-owned tables", () => {
     const sql = readFileSync(join(process.cwd(), "prisma/migrations/20260924_add_app_users/migration.sql"), "utf8");
     const createdTables = [...sql.matchAll(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+"([^"]+)"/gi)].map((match) => match[1]);
