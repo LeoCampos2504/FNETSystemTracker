@@ -28,11 +28,20 @@ export function useOperation(){
  return {error,busy,success,setSuccess,run};
 }
 export function Feedback({error,success}:{error?:string;success?:string}){return <>{error&&<p className={s.error} role="alert">{error}</p>}{success&&<p className={s.success} role="status">{success}</p>}</>;}
+export function ProjectPicker({options,selected,onChange,label='Agregar proyecto al filtro'}:{options:string[];selected:string[];onChange:(projects:string[])=>void;label?:string}){
+ const [query,setQuery]=useState('');
+ const available=options.filter(p=>!selected.includes(p)&&p.toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es')));
+ return <div className={s.projectPicker}><label>Buscar proyecto de Sytex<input aria-label="Buscar proyecto de Sytex" placeholder="Escribí parte del nombre completo…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
+ <label>{label}<select aria-label={label} value="" onChange={e=>{if(e.target.value)onChange([...selected,e.target.value]);setQuery('');}}><option value="">Seleccionar un proyecto de Sytex…</option>{available.map(p=><option key={p} value={p}>{p}</option>)}</select></label>
+ {query&&!available.length&&<p className={s.note}>No hay más proyectos disponibles con esa búsqueda.</p>}
+ <div className={s.projectChips}>{selected.map(p=><button key={p} type="button" aria-label={'Quitar '+p} onClick={()=>onChange(selected.filter(v=>v!==p))}>{p} ×</button>)}</div></div>;
+}
 export function ZoneFavorites({state}:{state:ReturnType<typeof useCatalog>}){
  const [name,setName]=useState('Mis zonas'),op=useOperation();
  if(!state.data)return <Feedback error={state.error}/>;
- return <details className={s.zones}><summary>Zonas / proyectos · {state.projects.length?state.projects.join(' / '):'Todas las zonas habilitadas'}</summary>
- <p className={s.note}>Seleccioná una o varias zonas. El favorito queda guardado en tu cuenta para cronograma e insumos.</p>
- <div className={s.checks}><button type="button" onClick={()=>state.setProjects([])}>Todas</button>{state.data.projects.map(p=><label key={p}><input type="checkbox" checked={state.projects.includes(p)} onChange={e=>state.setProjects(e.target.checked?[...state.projects,p]:state.projects.filter(v=>v!==p))}/>{p}</label>)}</div>
+ return <details className={s.zones}><summary>Proyectos de Sytex · {state.projects.length?state.projects.length+' seleccionado(s)':'Todos los proyectos habilitados'}</summary>
+ <p className={s.note}>Lista automática de proyectos completos de Sytex sincronizados en la base. Proyectos distintos no se agrupan por NON, BAS u otra sigla. Seleccioná varios y guardá el favorito para cronograma e insumos.</p>
+ <button type="button" onClick={()=>state.setProjects([])}>Todos los proyectos</button>
+ <ProjectPicker options={state.data.projects} selected={state.projects} onChange={state.setProjects}/>
  <div className={s.favorites}><input aria-label="Nombre del filtro favorito" maxLength={60} value={name} onChange={e=>setName(e.target.value)}/><button disabled={op.busy||!name.trim()} onClick={()=>op.run(async()=>{await opCall('/api/operations',{action:'favorite',name:name.trim(),projects:state.projects});const c=await opCall<OperationsCatalog>('/api/operations');state.setData(c);op.setSuccess('Filtro guardado.');})}>Guardar favorito</button>{state.data.favorites.map(f=><button key={f.name} onClick={()=>{state.setProjects(f.projects);setName(f.name);}}>{f.name}</button>)}</div><Feedback {...op}/></details>;
 }

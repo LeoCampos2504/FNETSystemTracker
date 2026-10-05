@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Material, SourceMaterial } from '@/contracts/operations';
 export function projectKey(value:string|null|undefined):string {
-  const text=(value??'').trim().normalize('NFKC');
-  return text.match(/^([A-Za-z0-9]+)\s*[-–—]/)?.[1].toUpperCase() || text;
+  return (value??'').trim().normalize('NFKC').replace(/\s+/g,' ');
 }
 export function allowedProject(project:string, allowed:string[]|null):boolean { return !!project && (allowed===null || allowed.includes(project)); }
 export function selectProjects(requested:string[], available:string[]):string[] { const selected=requested.length?requested:available; if(selected.some(p=>!available.includes(p))) throw new Error('FORBIDDEN_PROJECT'); return [...new Set(selected)]; }

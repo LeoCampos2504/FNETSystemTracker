@@ -20,16 +20,18 @@ export async function operationsActor(user:User):Promise<OperationsActor> {
 type OfficialTask={codigo:string;proyecto:string|null;codigos_sitios_afectados:string|null;nombres_sitios_afectados:string|null;nombre:string|null;asignado_a:string|null;usuario_colaborador:string|null};
 export async function catalog(actor:OperationsActor):Promise<OperationsCatalog> {
   const db=getPrismaClient();
-  const [preventivos,correctivos,prefs]=await Promise.all([
+  const [preventivos,correctivos,cotizaciones,prefs]=await Promise.all([
     db.preventivos.findMany({select:{codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
     db.correctivos.findMany({select:{codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
+    db.cotizaciones.findMany({select:{proyecto:true},distinct:['proyecto']}),
     db.$queryRaw<{favorites:Favorite[]}[]>`SELECT favorites FROM ops_preferences WHERE user_id=${actor.user.id}::uuid`,
   ]);
   const map=(rows:OfficialTask[],type:string)=>rows.map(r=>({code:r.codigo,type,project:projectKey(r.proyecto),siteCode:r.codigos_sitios_afectados??'',siteName:r.nombres_sitios_afectados??'',description:r.nombre??'',technicians:[r.asignado_a,r.usuario_colaborador].filter((t):t is string=>!!t)}));
   const all=[...map(preventivos,'PREVENTIVO'),...map(correctivos,'CORRECTIVO')];
-  const allProjects=[...new Set(['NON','CEF','BAS','BAM',...all.map(r=>r.project),...(actor.allowed??[])].filter(Boolean))].sort();
+  const allProjects=[...new Set([...all.map(r=>r.project),...cotizaciones.map(r=>projectKey(r.proyecto))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  const projects=allProjects.filter(p=>allowedProject(p,actor.allowed));
   const tasks=all.filter(t=>allowedProject(t.project,actor.allowed));
-  return {projects:allProjects.filter(p=>allowedProject(p,actor.allowed)),allProjects,favorites:(prefs[0]?.favorites??[]).map(f=>({...f,projects:f.projects.filter(p=>allowedProject(p,actor.allowed))})),admin:actor.allowed===null,tasks,technicians:[...new Set(tasks.flatMap(t=>t.technicians))].sort()};
+  return {projects,allProjects,favorites:(prefs[0]?.favorites??[]).filter(f=>!f.projects.length||f.projects.some(p=>projects.includes(p))).map(f=>({...f,projects:f.projects.filter(p=>projects.includes(p))})),admin:actor.allowed===null,tasks,technicians:[...new Set(tasks.flatMap(t=>t.technicians))].sort()};
 }
 export async function saveFavorite(actor:OperationsActor,favorite:Favorite) {
   const c=await catalog(actor); selectProjects(favorite.projects,c.projects);
