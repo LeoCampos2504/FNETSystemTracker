@@ -15,6 +15,7 @@ export async function saveSytexSupplyExport(parsed: SytexSupplyExport, fileHash:
         sourceEditedFrom: parsed.sourceEditedFrom, sourceEditedThrough: parsed.sourceEditedThrough,
         items: { create: parsed.items },
         ...(parsed.formContexts ? { forms: { create: parsed.formContexts } } : {}),
+        ...(parsed.maintenance ? { maintenance: { create: parsed.maintenance.map((fact) => ({ ...fact, lastDate: new Date(fact.lastDate + "T00:00:00Z") })) } } : {}),
       },
       select: { id: true },
     });
