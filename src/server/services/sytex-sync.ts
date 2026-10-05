@@ -12,6 +12,16 @@ import { saveSytexSupplyExport } from "@/server/services/sytex-supply-imports";
  */
 export const SYNC_SOURCE_NAME = "Sincronización directa Sytex";
 const PROJECT_SEARCHES = ["MPC", "MCC"];
+/**
+ * The key Sytex issues for data sources (the one Excel uses) only opens the export addresses,
+ * not the project list. These are the civil maintenance projects (MPC, MCC and MCCIntegral)
+ * where FNET had forms on 2026-10-05; SYTEX_PROJECT_IDS replaces the list without a new release.
+ */
+const KNOWN_PROJECT_IDS = [2273, 2274, 2277, 2340, 2344, 2345, 2346, 2347, 2350, 8677, 8678, 1824, 1950, 1971, 1972, 1974, 1975, 1976, 1977, 1978, 1979, 1980, 1981, 1982, 1983, 1984, 2061, 2284, 8149, 8182, 8183, 8184, 8185, 8186, 8187, 8188, 8189, 8190, 8191, 8192, 8193, 8679, 8680];
+export function configuredProjectIds(env: Record<string, string | undefined> = process.env): number[] {
+  const custom = (env.SYTEX_PROJECT_IDS ?? "").split(/[\s,;]+/).map(Number).filter((id) => Number.isInteger(id) && id > 0);
+  return custom.length ? [...new Set(custom)] : KNOWN_PROJECT_IDS;
+}
 const CONCURRENCY = 4;
 const REQUEST_TIMEOUT_MS = 180_000;
 
@@ -47,7 +57,8 @@ export async function sytexConfig(settings: Settings, fetcher: Fetcher = fetch):
   const refusals: string[] = [];
   for (const authorization of settings.candidates) {
     const config = { baseUrl: settings.baseUrl, organization: settings.organization, authorization };
-    try { await request(config, fetcher, "/api/project/?q=MPC&limit=1", "application/json"); }
+    // Checked against an export address with a date that matches nothing: that is what the data-source key opens.
+    try { await request(config, fetcher, `/api/formdata/?org_id=${encodeURIComponent(settings.organization)}&plan_date__gte=2999-01-01&project=${configuredProjectIds()[0]}`, "*/*"); }
     catch (error) { if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") { refusals.push(`${authorization.split(" ")[0]}: ${error.detail}`); continue; } throw error; }
     accepted = { key, authorization };
     return config;
@@ -114,7 +125,10 @@ const hasRows = (rows: unknown[][]) => rows.slice(1).some((row) => row.some((cel
 
 export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date()) {
   const since = syncWindowStart(now);
-  const projects = await listProjects(config, fetcher);
+  const projects = await listProjects(config, fetcher).catch((error: unknown) => {
+    if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") return configuredProjectIds().map((id) => ({ id, name: "" }));
+    throw error;
+  });
   const formLists = await inBatches(projects, async (project) => ({ project, rows: await sheet(config, fetcher, "formdata", project.id, since) }));
   const active = formLists.filter((entry) => hasRows(entry.rows));
   if (!active.length) return { projects: 0, forms: 0, items: 0, changed: false, since };
