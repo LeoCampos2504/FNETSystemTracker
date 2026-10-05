@@ -3,7 +3,7 @@ import { exactFormReference } from "./form-references";
 
 type Issue = { line: number; code: string };
 type SourceAnswer = { line: number; index: string; question: string; answer: string | null; editedAt: string | null; editor: string | null };
-export type SytexFormContext = { code: string; type: string; project: string; siteCode: string; siteName: string; description: string; technicians: string[] };
+export type SytexFormContext = { code: string; type: string; project: string; siteCode: string; siteName: string; description: string; technicians: string[]; link?: string };
 export type SytexExportItem = {
   formulario: string; grupo: string; indice: string;
   description: string | null; quantity: string | null; provider: string | null;
@@ -28,7 +28,7 @@ const HEADER_ALIASES: Record<string, string> = {
   "affected sites codes": "codigos de sitios afectados", "affected sites names": "nombres de sitios afectados",
   status: "estado", "last edition on": "ultima edicion el", "last edition by": "ultima edicion por",
   code: "codigo", name: "nombre", template: "plantilla", project: "proyecto",
-  "assigned to": "asignado a", "collaborator user": "usuario colaborador",
+  "assigned to": "asignado a", "collaborator user": "usuario colaborador", link: "enlace",
 };
 function normalize(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " "); }
 function text(value: unknown): string | null {
@@ -146,7 +146,8 @@ export function parseSytexFormRows(rows: unknown[][]): SytexFormContext[] {
     const template = normalize(get(row, "Plantilla"));
     const value = { code, project, type: template.includes("correctivo") ? "CORRECTIVO" : template.includes("preventivo") ? "PREVENTIVO" : "OTRO",
       siteCode: get(row, "Códigos de sitios afectados"), siteName: get(row, "Nombres de sitios afectados"),
-      description: get(row, "Nombre"), technicians: [...new Set([get(row, "Asignado a"), get(row, "Usuario colaborador")].filter(Boolean))] };
+      description: get(row, "Nombre"), technicians: [...new Set([get(row, "Asignado a"), get(row, "Usuario colaborador")].filter(Boolean))],
+      ...(headers.includes("enlace") && imageUrl(get(row, "Enlace")) ? { link: get(row, "Enlace") } : {}) };
     const previous = forms.get(code);
     if (previous && JSON.stringify(previous) !== JSON.stringify(value)) throw new Error("SYTEX_EXPORT_FORM_CONFLICT");
     forms.set(code, value);

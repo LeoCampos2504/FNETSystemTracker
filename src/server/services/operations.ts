@@ -135,25 +135,27 @@ type ReviewRow={source_key:string;project:string;classification:string;intra_sta
 const reviewContract=(r:ReviewRow):MaterialReview=>({project:r.project,classification:r.classification,intraStatus:r.intra_status,invoiceNumber:r.invoice_number,countedQuantity:r.counted_quantity?.toString()??null,intraQuantity:r.intra_quantity?.toString()??null,notes:r.notes,sourceHash:r.source_hash,version:r.version,updatedAt:r.updated_at.toISOString(),updatedBy:r.updated_by});
 export async function materials(actor:OperationsActor,requested:string[]=[]):Promise<Material[]>{
   const db=getPrismaClient(),c=await catalog(actor),projects=selectProjects(requested,c.projects),global=actor.allowed===null?c:await catalog({...actor,allowed:null});
-  const [official,exported,reviews,files]=await Promise.all([
+  const [official,exported,reviews,files,links]=await Promise.all([
     db.insumos.findMany({orderBy:{sincronizado_el:'desc'}}),
     db.sytex_supply_import_items.findMany({include:{import:{select:{importedAt:true}}}}),
     db.$queryRaw<ReviewRow[]>`SELECT * FROM ops_supply_reviews`,
     db.$queryRaw<{id:string;source_key:string;file_name:string;mime_type:string}[]>`SELECT id,source_key,file_name,mime_type FROM ops_review_files`,
+    db.sytex_form_links.findMany({select:{code:true,link:true}}),
   ]);
+  const linkByForm=new Map(links.map(l=>[l.code,l.link]));
   const projectByForm=new Map<string,Set<string>>();for(const t of global.tasks){const set=projectByForm.get(t.code)??new Set<string>();set.add(t.project);projectByForm.set(t.code,set);}
-  const make=(r:{formulario:string;group:string|null;index:string|null;description:string|null;quantity:string|null;siteCode:string|null;siteName:string|null;image:string|null;imageDeclared:boolean;technician:string;source:string;syncedAt:string}):SourceMaterial=>{const value={key:sourceIdentity(r.formulario,r.group,r.index),formulario:r.formulario,group:r.group??'',index:r.index??'',description:r.description??'',quantity:r.quantity,siteCode:r.siteCode??'',siteName:r.siteName??'',technician:r.technician,image:safeImage(r.image),imageDeclared:r.imageDeclared,projects:[...(projectByForm.get(r.formulario)??[])],source:r.source,syncedAt:r.syncedAt};return {...value,hash:sourceHash(value)};};
+  const make=(r:{formulario:string;group:string|null;index:string|null;description:string|null;quantity:string|null;siteCode:string|null;siteName:string|null;image:string|null;imageDeclared:boolean;technician:string;source:string;syncedAt:string;formStatus:string|null;editedAt:string|null;provider:string|null}):SourceMaterial=>{const value={formStatus:r.formStatus??'',editedAt:r.editedAt,provider:r.provider??'',link:safeImage(linkByForm.get(r.formulario)),key:sourceIdentity(r.formulario,r.group,r.index),formulario:r.formulario,group:r.group??'',index:r.index??'',description:r.description??'',quantity:r.quantity,siteCode:r.siteCode??'',siteName:r.siteName??'',technician:r.technician,image:safeImage(r.image),imageDeclared:r.imageDeclared,projects:[...(projectByForm.get(r.formulario)??[])],source:r.source,syncedAt:r.syncedAt};return {...value,hash:sourceHash(value)};};
   const taskByCode=new Map(c.tasks.map(t=>[t.code,t]));
   const all=mergeMaterials([
-    ...official.map(r=>make({formulario:r.formulario,group:r.grupo,index:r.indice,description:r.descripcion,quantity:r.cantidad?.toString()??null,siteCode:r.codigo_sitio,siteName:r.nombre_sitio,image:r.imagen,imageDeclared:!!r.imagen,technician:taskByCode.get(r.formulario)?.technicians.join(' / ')??'',source:'Sytex · n8n',syncedAt:r.sincronizado_el.toISOString()})),
-    ...exported.map(r=>make({formulario:r.formulario,group:r.grupo,index:r.indice,description:r.description,quantity:r.quantity?.toString()??null,siteCode:r.siteCode,siteName:r.siteName,image:r.image,imageDeclared:r.imageDeclared,technician:taskByCode.get(r.formulario)?.technicians.join(' / ')??'',source:'Export Sytex',syncedAt:r.import.importedAt.toISOString()})),
+    ...official.map(r=>make({formulario:r.formulario,group:r.grupo,index:r.indice,description:r.descripcion,quantity:r.cantidad?.toString()??null,siteCode:r.codigo_sitio,siteName:r.nombre_sitio,image:r.imagen,imageDeclared:!!r.imagen,technician:taskByCode.get(r.formulario)?.technicians.join(' / ')??'',source:'Sytex · n8n',syncedAt:r.sincronizado_el.toISOString(),formStatus:r.estado,editedAt:r.ultima_edicion_el?.toISOString()??null,provider:r.provisto_por})),
+    ...exported.map(r=>make({formulario:r.formulario,group:r.grupo,index:r.indice,description:r.description,quantity:r.quantity?.toString()??null,siteCode:r.siteCode,siteName:r.siteName,image:r.image,imageDeclared:r.imageDeclared,technician:taskByCode.get(r.formulario)?.technicians.join(' / ')??'',source:'Export Sytex',syncedAt:r.import.importedAt.toISOString(),formStatus:r.status,editedAt:r.sourceEditedAt,provider:r.provider})),
   ]);
   const byKey=new Map(reviews.map(r=>[r.source_key,reviewContract(r)]));
   return all.map(r=>{const review=byKey.get(r.key)??null,changed=!!review&&review.sourceHash!==r.hash;return {...r,review,changed,files:files.filter(f=>f.source_key===r.key).map(f=>({id:f.id,fileName:f.file_name,mimeType:f.mime_type})),...materialAlert({...r,review,changed})};}).filter(r=>{
     const assigned=r.review?.project || (r.projects.length===1?r.projects[0]:'');
     if(actor.allowed!==null)return !!assigned&&projects.includes(assigned)&&allowedProject(assigned,actor.allowed);
     return !requested.length || (!!assigned&&projects.includes(assigned));
-  });
+  }).sort((a,b)=>(b.editedAt??'').slice(0,19).localeCompare((a.editedAt??'').slice(0,19))||b.formulario.localeCompare(a.formulario));
 }
 export type ReviewInput={key:string;project:string;classification:string;intraStatus:string;invoiceNumber:string;countedQuantity:string|null;intraQuantity:string|null;notes:string;version:number;sourceHash:string};
 export async function saveReview(actor:OperationsActor,input:ReviewInput){
