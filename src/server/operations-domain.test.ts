@@ -10,11 +10,11 @@ describe('control de insumos',()=>{
  it('groups the same insumo repeated in one form into one row with the total quantity',()=>{
   const line=(group:string,over:Partial<SourceMaterial>={})=>({...row,key:sourceIdentity('FO-26-1',group,'1.1'),group,description:'Llave térmica de C63',quantity:'1',provider:'Stock Claro',siteCode:'ST00122',...over});
   const rows=groupMaterials([line('[#3] Insumo'),line('[#1] Insumo'),line('[#2] Insumo',{description:'  LLAVE térmica de c63 '}),line('[#4] Insumo',{description:'Cable'}),line('[#5] Insumo',{provider:'Compra propia'}),{...line('[#1] Insumo'),formulario:'FO-26-2',key:sourceIdentity('FO-26-2','[#1] Insumo','1.1')}]);
-  expect(rows).toHaveLength(5);
+  expect(rows).toHaveLength(4);
   const grouped=rows.find(r=>r.formulario==='FO-26-1'&&r.description==='Llave térmica de C63'&&r.provider==='Stock Claro')!;
   expect(grouped).toMatchObject({quantity:'3',lines:3,key:sourceIdentity('FO-26-1','[#1] Insumo','1.1')});
   expect(grouped.hash).toBe(sourceHash({...grouped,quantity:'3'}));
-  expect(rows.filter(r=>r.lines===1)).toHaveLength(4);
+  expect(rows.filter(r=>r.lines===1)).toHaveLength(3);
  });
  it('counts repeated lines without quantity as one unit each and leaves a single line as it is',()=>{
   const line=(group:string,quantity:string|null)=>({...row,key:sourceIdentity('FO-26-1',group,'1'),group,description:'Ficha rj45',quantity});
