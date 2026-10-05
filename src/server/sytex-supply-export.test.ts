@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSytexSupplyRows } from "./sytex-supply-export";
+import { parseSytexExportSheets, parseSytexSupplyRows } from "./sytex-supply-export";
 
 const headers = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Última edición el", "Última edición por"];
 const date = new Date("2026-10-02T18:00:00Z");
@@ -72,5 +72,38 @@ describe("Sytex answer export material extraction", () => {
   it("rejects missing or ambiguous required headers", () => {
     expect(() => parseSytexSupplyRows([["Formulario"], ["FO-26-000001"]])).toThrow("SYTEX_EXPORT_HEADERS_MISSING");
     expect(() => parseSytexSupplyRows([[...headers, "Respuesta"], row("1.1", "Descripción del insumo:", "LED")])).toThrow("SYTEX_EXPORT_HEADERS_AMBIGUOUS");
+  });
+});
+
+describe("Sytex exports of several projects", () => {
+  const answersEn = ["Form", "Network element", "Affected sites codes", "Status", "Group", "Index", "Question", "Answer", "Last edition on", "Last edition by"];
+  const formsEn = ["Code", "Name", "Template", "Project", "Affected sites codes", "Affected sites names", "Assigned to", "Collaborator user"];
+  it("reads the English column names and joins every project in one import", () => {
+    const result = parseSytexExportSheets([
+      [headers, row("1.1", "Descripción", "Silicona"), row("1.2", "Cantidad", 2)],
+      [answersEn, ["FO-26-000009", null, "BA00001", "Open", "[#1] INSUMOS UTILIZADOS", "4.1A.1", "Descripción", "Precintos", date, "Editor"],
+        ["FO-26-000009", null, "BA00001", "Open", "[#1] INSUMOS UTILIZADOS", "4.1A.2", "Cantidad", 10, date, "Editor"]],
+      [formsEn, ["FO-26-000001", "MPC-AA", "Mantenimiento Preventivo Civil", "NON - MPC Mantenimiento Preventivo Civil O&M", "ST00001", "Sitio", "a@example.invalid", null]],
+      [formsEn, ["FO-26-000009", "Correctivo", "Mantenimiento Correctivo Civil O&M", "BAS - MCCIntegral Mantenimiento Correctivo Civil O&M", "BA00001", "Otro", null, null]],
+    ]);
+    expect(result.items.map((item) => [item.formulario, item.description, item.quantity, item.siteCode])).toEqual([
+      ["FO-26-000001", "Silicona", "2", "ST00001"], ["FO-26-000009", "Precintos", "10", "BA00001"],
+    ]);
+    expect(result.formContexts?.map((form) => [form.code, form.type, form.project])).toEqual([
+      ["FO-26-000001", "PREVENTIVO", "NON - MPC Mantenimiento Preventivo Civil O&M"],
+      ["FO-26-000009", "CORRECTIVO", "BAS - MCCIntegral Mantenimiento Correctivo Civil O&M"],
+    ]);
+    expect(result.errors).toEqual([]);
+  });
+  it("needs at least one answers file and refuses files that are not Sytex exports", () => {
+    expect(() => parseSytexExportSheets([[formsEn, ["FO-26-000001", "A", "B", "NON - MPC", "", "", "", ""]]])).toThrow("SYTEX_EXPORT_ANSWERS_REQUIRED");
+    expect(() => parseSytexExportSheets([[["Otra", "Planilla"], ["a", "b"]]])).toThrow("SYTEX_EXPORT_FILE_UNKNOWN");
+  });
+  it("refuses the same form listed under two different projects", () => {
+    expect(() => parseSytexExportSheets([
+      [headers, row("1.1", "Descripción", "Silicona"), row("1.2", "Cantidad", 2)],
+      [formsEn, ["FO-26-000001", "A", "Preventivo", "NON - MPC", "", "", "", ""]],
+      [formsEn, ["FO-26-000001", "A", "Preventivo", "BAS - MPC", "", "", "", ""]],
+    ])).toThrow("SYTEX_EXPORT_FORM_CONFLICT");
   });
 });

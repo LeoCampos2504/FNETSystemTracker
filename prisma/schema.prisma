@@ -125,9 +125,26 @@ model sytex_supply_imports {
   importedBy          String    @map("imported_by") @db.Uuid
   importedAt          DateTime  @default(now()) @map("imported_at") @db.Timestamptz(6)
   items               sytex_supply_import_items[]
+  forms               sytex_supply_form_contexts[]
 
   @@index([importedAt], map: "idx_sytex_supply_imports_date")
   @@map("sytex_supply_imports")
+}
+
+model sytex_supply_form_contexts {
+  id          String @id @default(uuid()) @db.Uuid
+  importId    String @map("import_id") @db.Uuid
+  code        String
+  type        String
+  project     String
+  siteCode    String @map("site_code")
+  siteName    String @map("site_name")
+  description String
+  technicians Json
+  import      sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_supply_form_contexts_import")
+  @@unique([importId, code], map: "uq_sytex_supply_form_context")
+  @@index([code], map: "idx_sytex_supply_form_context_code")
+  @@map("sytex_supply_form_contexts")
 }
 
 model sytex_supply_import_items {

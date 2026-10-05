@@ -12,12 +12,14 @@ const ownedMigrations = [
   "20261004_add_sytex_supply_imports",
   "20261004_add_supply_control",
   "20261005_add_coordinator_operations",
+  "20261005_add_sytex_form_contexts",
 ];
 const ownedTables = new Set([
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
   "app_login_attempts", "mendel_transactions", "mendel_import_batches",
   "mendel_form_references",
   "sytex_supply_imports", "sytex_supply_import_items",
+  "sytex_supply_form_contexts",
   "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
   "ops_user_access", "ops_preferences", "ops_days", "ops_visits", "ops_supply_reviews", "ops_review_files", "ops_events",
 ]);

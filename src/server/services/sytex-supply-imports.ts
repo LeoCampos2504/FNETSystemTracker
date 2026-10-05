@@ -14,6 +14,7 @@ export async function saveSytexSupplyExport(parsed: SytexSupplyExport, fileHash:
         answerCount: parsed.answerCount, formCount: parsed.formCount,
         sourceEditedFrom: parsed.sourceEditedFrom, sourceEditedThrough: parsed.sourceEditedThrough,
         items: { create: parsed.items },
+        ...(parsed.formContexts ? { forms: { create: parsed.formContexts } } : {}),
       },
       select: { id: true },
     });

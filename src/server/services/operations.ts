@@ -20,14 +20,17 @@ export async function operationsActor(user:User):Promise<OperationsActor> {
 type OfficialTask={codigo:string;proyecto:string|null;codigos_sitios_afectados:string|null;nombres_sitios_afectados:string|null;nombre:string|null;asignado_a:string|null;usuario_colaborador:string|null};
 export async function catalog(actor:OperationsActor):Promise<OperationsCatalog> {
   const db=getPrismaClient();
-  const [preventivos,correctivos,cotizaciones,prefs]=await Promise.all([
+  const [preventivos,correctivos,cotizaciones,prefs,contexts]=await Promise.all([
     db.preventivos.findMany({select:{codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
     db.correctivos.findMany({select:{codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
     db.cotizaciones.findMany({select:{proyecto:true},distinct:['proyecto']}),
     db.$queryRaw<{favorites:Favorite[]}[]>`SELECT favorites FROM ops_preferences WHERE user_id=${actor.user.id}::uuid`,
+    db.sytex_supply_form_contexts.findMany({include:{import:{select:{importedAt:true}}},orderBy:[{import:{importedAt:'asc'}},{id:'asc'}]}),
   ]);
   const map=(rows:OfficialTask[],type:string)=>rows.map(r=>({code:r.codigo,type,project:projectKey(r.proyecto),siteCode:r.codigos_sitios_afectados??'',siteName:r.nombres_sitios_afectados??'',description:r.nombre??'',technicians:[r.asignado_a,r.usuario_colaborador].filter((t):t is string=>!!t)}));
-  const all=[...map(preventivos,'PREVENTIVO'),...map(correctivos,'CORRECTIVO')];
+  const latest=new Map<string,(typeof contexts)[number]>();for(const row of contexts)latest.set(row.code,row);
+  const fresh=[...latest.values()].map(r=>({code:r.code,type:r.type,project:projectKey(r.project),siteCode:r.siteCode,siteName:r.siteName,description:r.description,technicians:Array.isArray(r.technicians)?r.technicians.filter((t):t is string=>typeof t==='string'):[]}));
+  const all=[...map(preventivos,'PREVENTIVO'),...map(correctivos,'CORRECTIVO')].filter(t=>!latest.has(t.code)).concat(fresh);
   const allProjects=[...new Set([...all.map(r=>r.project),...cotizaciones.map(r=>projectKey(r.proyecto))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const projects=allProjects.filter(p=>allowedProject(p,actor.allowed));
   const tasks=all.filter(t=>allowedProject(t.project,actor.allowed));
