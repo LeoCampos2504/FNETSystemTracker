@@ -12,6 +12,20 @@ export function mergeMaterials(rows:SourceMaterial[]):SourceMaterial[] {
   for(const row of rows){ const prior=map.get(row.key); if(!prior || row.syncedAt>prior.syncedAt || (row.syncedAt===prior.syncedAt && row.source==='Export Sytex')) map.set(row.key,row); }
   return [...map.values()];
 }
+const sameMaterial=(row:SourceMaterial)=>JSON.stringify([row.formulario.trim(),row.siteCode.trim().toUpperCase(),(row.provider??'').trim().toLowerCase(),row.description.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ')]);
+/** The same insumo repeated in one form (three lines of "Llave térmica", one each) is one row whose quantity is the total. A line without quantity counts as one unit when it is repeated. The first line (by group and index) represents the rest: its key carries the review. */
+export function groupMaterials(rows:SourceMaterial[]):SourceMaterial[] {
+  const groups=new Map<string,SourceMaterial[]>();
+  for(const row of rows){const key=sameMaterial(row);groups.set(key,[...(groups.get(key)??[]),row]);}
+  return [...groups.values()].map(members=>{
+    const [first,...rest]=[...members].sort((a,b)=>a.key.localeCompare(b.key,'es',{numeric:true}));
+    if(!rest.length)return {...first,lines:1};
+    const total=members.reduce((sum,m)=>sum+(m.quantity===null?1:Number(m.quantity)),0),quantity=String(Math.round(total*1000)/1000);
+    const newest=members.reduce((a,b)=>b.syncedAt>a.syncedAt?b:a);
+    const value={...first,quantity,lines:members.length,syncedAt:newest.syncedAt,editedAt:members.map(m=>m.editedAt??'').sort().pop()||first.editedAt};
+    return {...value,hash:sourceHash(value)};
+  });
+}
 export function materialAlert(row:Pick<Material,'quantity'|'review'|'changed'>) {
   const expected=row.quantity===null?null:Number(row.quantity), counted=row.review?.countedQuantity==null?null:Number(row.review.countedQuantity), intra=row.review?.intraQuantity==null?null:Number(row.review.intraQuantity);
   const difference=counted===null||intra===null?null:Math.round((counted-intra)*1000)/1000;

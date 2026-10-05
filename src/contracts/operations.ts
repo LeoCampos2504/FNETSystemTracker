@@ -1,7 +1,7 @@
 export type VisitStatus = 'PLANIFICADO' | 'EN_CURSO' | 'REALIZADO' | 'CON_PENDIENTES' | 'CANCELADO';
 export type VisitShift = 'LABORAL' | 'FUERA_DE_HORARIO';
 export type Visit = { shift?:VisitShift; id:string; day:string; project:string; siteCode:string; siteName:string; taskType:string; taskCode:string; technicians:string[]; status:VisitStatus; outcome:string; version:number; updatedAt:string; pending:string[]; closed:boolean };
-export type SourceMaterial = { key:string; formulario:string; group:string; index:string; description:string; quantity:string|null; siteCode:string; siteName:string; technician:string; image:string|null; imageDeclared:boolean; projects:string[]; source:string; syncedAt:string; hash:string; formStatus?:string; editedAt?:string|null; provider?:string; link?:string|null };
+export type SourceMaterial = { key:string; formulario:string; group:string; index:string; description:string; quantity:string|null; siteCode:string; siteName:string; technician:string; image:string|null; imageDeclared:boolean; projects:string[]; source:string; syncedAt:string; hash:string; formStatus?:string; editedAt?:string|null; provider?:string; link?:string|null; lines?:number };
 export type MaterialReview = { project:string; classification:string; intraStatus:string; invoiceNumber:string; countedQuantity:string|null; intraQuantity:string|null; notes:string; version:number; sourceHash:string; updatedAt:string; updatedBy:string };
 export type Material = SourceMaterial & { review:MaterialReview|null; files:{id:string;fileName:string;mimeType:string}[]; changed:boolean; missing:boolean; difference:number|null };
 export type Favorite = { name:string; projects:string[] };
