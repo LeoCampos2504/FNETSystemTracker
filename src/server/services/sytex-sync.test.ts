@@ -5,7 +5,7 @@ vi.mock("@/server/prisma", () => ({ getPrismaClient: () => ({ $executeRaw: mocks
 vi.mock("@/server/services/sytex-supply-imports", () => ({ saveSytexSupplyExport: mocks.save }));
 // Each fake response carries its rows as JSON instead of a real workbook.
 vi.mock("read-excel-file/node", () => ({ readSheet: async (bytes: Buffer) => JSON.parse(bytes.toString("utf8")) }));
-import { runSytexSync, syncWindowStart, sytexConfig, sytexSettings } from "./sytex-sync";
+import { configuredProjectIds, runSytexSync, syncWindowStart, sytexConfig, sytexSettings } from "./sytex-sync";
 
 const config = { baseUrl: "https://sytex.example.invalid", authorization: "Token secret", organization: "1" };
 const formHeaders = ["Código", "Nombre", "Plantilla", "Proyecto", "Códigos de sitios afectados", "Nombres de sitios afectados", "Asignado a", "Usuario colaborador"];
@@ -72,8 +72,15 @@ describe("direct Sytex synchronization", () => {
     expect(second.items).toBe(1);
   });
   it("reports a rejected credential without saving", async () => {
-    await expect(runSytexSync("user-id", config, sytex({ "/api/project/": new Response("{}", { status: 401 }) }))).rejects.toThrow("SYTEX_CREDENTIAL_REJECTED");
+    await expect(runSytexSync("user-id", config, sytex({ "/api/": new Response("{}", { status: 401 }) }))).rejects.toThrow("SYTEX_CREDENTIAL_REJECTED");
     expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("uses the known maintenance projects when the key only opens the export addresses", async () => {
+    const calls: { url: string; headers: Record<string, string> }[] = [];
+    const result = await runSytexSync("user-id", config, sytex({ "/api/project/": new Response("{}", { status: 401 }), "/api/entryanswerdata/": nonAnswers, "project=8677": nonForms }, calls));
+    expect(result).toMatchObject({ projects: 1, items: 1 });
+    expect(calls.filter((call) => call.url.includes("/api/formdata/")).length).toBe(configuredProjectIds().length);
+    expect(configuredProjectIds({ SYTEX_PROJECT_IDS: "8677, 2346;8677 x" })).toEqual([8677, 2346]);
   });
   it("saves nothing while no form has materials", async () => {
     const result = await runSytexSync("user-id", config, sytex({ ...projects, "/api/entryanswerdata/": [answerHeaders], "project=7": nonForms }));
