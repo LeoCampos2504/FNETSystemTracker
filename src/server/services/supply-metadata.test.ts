@@ -6,6 +6,9 @@ vi.mock("@/server/prisma", () => ({ getPrismaClient: () => ({
   preventivos: { findMany: mocks.preventives, count: async () => 1 },
   cotizaciones: { findMany: async () => [], count: async () => 0 },
   insumos: { findMany: mocks.supplies, count: async () => 1 },
+  sytex_supply_form_contexts: { findMany: async () => [] },
+  sytex_form_states: { findMany: async () => [] },
+  sytex_form_links: { findMany: async () => [] },
 }) }));
 vi.mock("@/server/services/operational-data", () => ({
   getFuelData: async () => ({ items: [], metrics: {} }),
