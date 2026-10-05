@@ -8,6 +8,7 @@ describe("Railway application database preparation", () => {
       "app_login_attempts", "app_sessions", "app_users", "mendel_form_references",
       "mendel_import_batches", "mendel_transactions", "task_assignment_history", "task_assignments",
       "sytex_supply_import_items", "sytex_supply_imports",
+      "sytex_supply_form_contexts",
       "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
       "ops_user_access", "ops_preferences", "ops_days", "ops_visits", "ops_supply_reviews", "ops_review_files", "ops_events",
     ].sort());

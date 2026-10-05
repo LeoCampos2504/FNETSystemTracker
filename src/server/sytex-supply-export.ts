@@ -3,6 +3,7 @@ import { exactFormReference } from "./form-references";
 
 type Issue = { line: number; code: string };
 type SourceAnswer = { line: number; index: string; question: string; answer: string | null; editedAt: string | null; editor: string | null };
+export type SytexFormContext = { code: string; type: string; project: string; siteCode: string; siteName: string; description: string; technicians: string[] };
 export type SytexExportItem = {
   formulario: string; grupo: string; indice: string;
   description: string | null; quantity: string | null; provider: string | null;
@@ -14,6 +15,16 @@ export type SytexExportItem = {
 export type SytexSupplyExport = {
   answerCount: number; formCount: number; items: SytexExportItem[];
   errors: Issue[]; warnings: Issue[]; sourceEditedFrom: string | null; sourceEditedThrough: string | null;
+  formContexts?: SytexFormContext[];
+};
+const MAX_ROWS = 300_000;
+// Sytex exports use the language of the session that downloaded them; both spellings are the same export.
+const HEADER_ALIASES: Record<string, string> = {
+  form: "formulario", group: "grupo", index: "indice", question: "pregunta", answer: "respuesta",
+  "affected sites codes": "codigos de sitios afectados", "affected sites names": "nombres de sitios afectados",
+  status: "estado", "last edition on": "ultima edicion el", "last edition by": "ultima edicion por",
+  code: "codigo", name: "nombre", template: "plantilla", project: "proyecto",
+  "assigned to": "asignado a", "collaborator user": "usuario colaborador",
 };
 function normalize(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " "); }
 function text(value: unknown): string | null {
@@ -21,6 +32,9 @@ function text(value: unknown): string | null {
   if (!(value instanceof Date) && !["string", "number", "boolean"].includes(typeof value)) return null;
   const result = value instanceof Date ? value.toISOString().replace(/Z$/, "") : String(value).trim();
   return result || null;
+}
+function headerKeys(row: unknown[]): string[] {
+  return row.map((value) => { const key = normalize(text(value) ?? ""); return HEADER_ALIASES[key] ?? key; });
 }
 function quantity(value: string | null): string | null {
   if (!value) return null;
@@ -38,17 +52,17 @@ function imageUrl(value: string | null): string | null {
 }
 function role(question: string): "description" | "quantity" | "provider" | "image" | null {
   const label = normalize(question).replace(/[:?¿]+/g, "");
-  if (/^descripcion(?: del| de)?(?: insumo| material)/.test(label)) return "description";
+  if (label === "descripcion" || /^descripcion(?: del| de)?(?: insumo| material)/.test(label)) return "description";
   if (/^cantidad(?: utilizada)?$/.test(label)) return "quantity";
-  if (/^(?:provisto por|proveedor)$/.test(label)) return "provider";
+  if (/^(?:insumo provisto por|provisto por|proveedor)$/.test(label)) return "provider";
   if (/^(?:foto|imagen)(?: del| de)?(?: insumo| material)/.test(label)) return "image";
   return null;
 }
 
 export function parseSytexSupplyRows(rows: unknown[][]): SytexSupplyExport {
   if (rows.length < 2) throw new Error("SYTEX_EXPORT_EMPTY");
-  if (rows.length > 50_001) throw new Error("SYTEX_EXPORT_TOO_MANY_ROWS");
-  const headers = rows[0].map((value) => normalize(text(value) ?? ""));
+  if (rows.length > MAX_ROWS + 1) throw new Error("SYTEX_EXPORT_TOO_MANY_ROWS");
+  const headers = headerKeys(rows[0]);
   const required = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta"];
   if (required.some((key) => !headers.includes(normalize(key)))) throw new Error("SYTEX_EXPORT_HEADERS_MISSING");
   if (required.some((key) => headers.filter((header) => header === normalize(key)).length !== 1)) throw new Error("SYTEX_EXPORT_HEADERS_AMBIGUOUS");
@@ -63,7 +77,7 @@ export function parseSytexSupplyRows(rows: unknown[][]): SytexSupplyExport {
     answerCount++;
     const line = offset + 2, form = exactFormReference(get(row, "Formulario"));
     if (form) forms.add(form);
-    const editedAt = get(row, "Última edición el");
+    const editedAt = get(row, "Última edición el")?.replace(/^(\d{4}-\d{2}-\d{2}) /, "$1T") ?? null;
     if (editedAt && /^\d{4}-\d{2}-\d{2}T/.test(editedAt)) dates.push(editedAt);
     const group = get(row, "Grupo"), index = get(row, "Índice"), question = get(row, "Pregunta") ?? "";
     const field = role(question);
@@ -110,4 +124,69 @@ export function parseSytexSupplyRows(rows: unknown[][]): SytexSupplyExport {
 export async function parseSytexSupplyExport(bytes: Uint8Array): Promise<SytexSupplyExport> {
   const rows = await readSheet(Buffer.from(bytes), { trim: false });
   return parseSytexSupplyRows(rows);
+}
+
+export function parseSytexFormRows(rows: unknown[][]): SytexFormContext[] {
+  if (rows.length < 2) throw new Error("SYTEX_EXPORT_FORMS_EMPTY");
+  if (rows.length > MAX_ROWS + 1) throw new Error("SYTEX_EXPORT_TOO_MANY_ROWS");
+  const headers = headerKeys(rows[0]);
+  for (const key of ["Código", "Nombre", "Plantilla", "Proyecto"]) {
+    if (headers.filter(header => header === normalize(key)).length !== 1) throw new Error("SYTEX_EXPORT_FORM_HEADERS_INVALID");
+  }
+  const get = (row: unknown[], key: string) => text(row[headers.indexOf(normalize(key))]) ?? "";
+  const forms = new Map<string, SytexFormContext>();
+  for (const row of rows.slice(1)) {
+    if (!row.some(cell => cell !== null && cell !== "")) continue;
+    const code = exactFormReference(get(row, "Código")), project = get(row, "Proyecto");
+    if (!code || !project) throw new Error("SYTEX_EXPORT_FORM_PROJECT_MISSING");
+    const template = normalize(get(row, "Plantilla"));
+    const value = { code, project, type: template.includes("correctivo") ? "CORRECTIVO" : template.includes("preventivo") ? "PREVENTIVO" : "OTRO",
+      siteCode: get(row, "Códigos de sitios afectados"), siteName: get(row, "Nombres de sitios afectados"),
+      description: get(row, "Nombre"), technicians: [...new Set([get(row, "Asignado a"), get(row, "Usuario colaborador")].filter(Boolean))] };
+    const previous = forms.get(code);
+    if (previous && JSON.stringify(previous) !== JSON.stringify(value)) throw new Error("SYTEX_EXPORT_FORM_CONFLICT");
+    forms.set(code, value);
+  }
+  return [...forms.values()];
+}
+
+export async function parseSytexFormExport(bytes: Uint8Array): Promise<SytexFormContext[]> {
+  return parseSytexFormRows(await readSheet(Buffer.from(bytes), { trim: false }));
+}
+
+const ANSWER_COLUMNS = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Nombres de sitios afectados", "Estado", "Última edición el", "Última edición por"];
+
+/** Joins the exports of several projects: answer files feed the materials, form lists give each form its project. */
+export function parseSytexExportSheets(sheets: unknown[][][]): SytexSupplyExport {
+  const answers: unknown[][] = [ANSWER_COLUMNS];
+  const contexts = new Map<string, SytexFormContext>();
+  let answerSheets = 0;
+  for (const rows of sheets) {
+    if (!rows.length) throw new Error("SYTEX_EXPORT_EMPTY");
+    const headers = headerKeys(rows[0]);
+    if (headers.includes("pregunta") && headers.includes("respuesta")) {
+      const required = ANSWER_COLUMNS.slice(0, 5).map(normalize);
+      if (required.some((key) => !headers.includes(key))) throw new Error("SYTEX_EXPORT_HEADERS_MISSING");
+      if (required.some((key) => headers.filter((header) => header === key).length !== 1)) throw new Error("SYTEX_EXPORT_HEADERS_AMBIGUOUS");
+      const positions = ANSWER_COLUMNS.map((key) => headers.indexOf(normalize(key)));
+      if (answers.length + rows.length - 1 > MAX_ROWS + 1) throw new Error("SYTEX_EXPORT_TOO_MANY_ROWS");
+      for (const row of rows.slice(1)) answers.push(positions.map((position) => position < 0 ? null : row[position] ?? null));
+      answerSheets++;
+    } else if (headers.includes("codigo") && headers.includes("proyecto")) {
+      for (const form of parseSytexFormRows(rows)) {
+        const previous = contexts.get(form.code);
+        if (previous && JSON.stringify(previous) !== JSON.stringify(form)) throw new Error("SYTEX_EXPORT_FORM_CONFLICT");
+        contexts.set(form.code, form);
+      }
+    } else throw new Error("SYTEX_EXPORT_FILE_UNKNOWN");
+  }
+  if (!answerSheets) throw new Error("SYTEX_EXPORT_ANSWERS_REQUIRED");
+  const parsed = parseSytexSupplyRows(answers);
+  return contexts.size ? { ...parsed, formContexts: [...contexts.values()] } : parsed;
+}
+
+export async function parseSytexExportBundle(files: Uint8Array[]): Promise<SytexSupplyExport> {
+  const sheets: unknown[][][] = [];
+  for (const bytes of files) sheets.push(await readSheet(Buffer.from(bytes), { trim: false }));
+  return parseSytexExportSheets(sheets);
 }

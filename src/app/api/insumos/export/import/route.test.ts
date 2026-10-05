@@ -49,7 +49,7 @@ describe("protected Sytex XLSX import", () => {
   });
   it("rejects wrong file types and oversized uploads", async () => {
     expect((await POST(request("preview", "http://localhost:3000", "source.csv"))).status).toBe(400);
-    const large = request(); large.headers.set("content-length", String(9 * 1024 * 1024));
+    const large = request(); large.headers.set("content-length", String(41 * 1024 * 1024));
     expect((await POST(large)).status).toBe(413);
     expect(mocks.parse).not.toHaveBeenCalled();
   });
