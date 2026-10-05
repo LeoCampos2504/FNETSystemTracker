@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSytexExportSheets, parseSytexMaintenanceRows, parseSytexSupplyRows } from "./sytex-supply-export";
+import { parseSytexExportSheets, parseSytexFormRows, parseSytexMaintenanceRows, parseSytexSupplyRows } from "./sytex-supply-export";
 
 const headers = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Última edición el", "Última edición por"];
 const date = new Date("2026-10-02T18:00:00Z");
@@ -137,5 +137,18 @@ describe("form list links", () => {
       [head, ["FO-26-000001", "MPC-AA", "Mantenimiento Preventivo Civil", "NON - MPC", "https://claro.sytex.io/d/f/abc"], ["FO-26-000002", "MPC-GE", "Mantenimiento Preventivo Civil", "NON - MPC", "javascript:alert(1)"]],
     ]).formContexts;
     expect(forms?.map((form) => form.link)).toEqual(["https://claro.sytex.io/d/f/abc", undefined]);
+  });
+});
+
+describe('form list status and plan date',()=>{
+  it('reads status and plan date when the list has them, in either language', () => {
+    const forms = parseSytexFormRows([
+      ["Code", "Name", "Template", "Project", "Status", "Plan date"],
+      ["FO-26-1", "MPC-GE", "Preventivo", "NON - MPC", "Open", "2026-10-20 09:00:00"],
+      ["FO-26-2", "Reparar", "Correctivo", "NON - MCC", "", ""],
+    ]);
+    expect(forms[0]).toMatchObject({ status: "Open", planDate: "2026-10-20" });
+    expect(forms[1].status).toBeUndefined();
+    expect(forms[1].planDate).toBeUndefined();
   });
 });

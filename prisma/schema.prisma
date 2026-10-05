@@ -143,6 +143,8 @@ model sytex_supply_form_contexts {
   siteName    String @map("site_name")
   description String
   technicians Json
+  status      String   @default("")
+  planDate    DateTime? @map("plan_date") @db.Date
   import      sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_supply_form_contexts_import")
   @@unique([importId, code], map: "uq_sytex_supply_form_context")
   @@index([code], map: "idx_sytex_supply_form_context_code")

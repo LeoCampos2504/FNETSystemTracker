@@ -16,6 +16,7 @@ const ownedMigrations = [
   "20261005_add_visit_shifts",
   "20261005_add_site_maintenance",
   "20261005_add_form_links",
+  "20261005_add_form_status_plan_date",
 ];
 const ownedTables = new Set([
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
