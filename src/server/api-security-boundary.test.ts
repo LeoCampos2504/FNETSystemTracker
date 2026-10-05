@@ -19,12 +19,12 @@ function routeFiles(directory: string): string[] {
 }
 
 describe("API security boundaries", () => {
-  it("requires database-backed Admin authorization in every operational API route", () => {
+  it("requires database-backed authorization in every operational API route", () => {
     const protectedRoutes = routeFiles(apiRoot).filter((path) => !publicRoutes.has(relative(apiRoot, path).replaceAll("\\", "/")));
     expect(protectedRoutes.length).toBeGreaterThan(0);
     for (const path of protectedRoutes) {
       const source = readFileSync(path, "utf8");
-      expect(source, relative(apiRoot, path)).toContain("requireAdminSession()");
+      expect(source.includes("requireAdminSession()") || source.includes("requireOperationsSession()"), relative(apiRoot, path)).toBe(true);
     }
   });
 

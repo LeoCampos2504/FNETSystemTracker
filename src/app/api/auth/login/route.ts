@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
     const row = await getPrismaClient().app_users.findUnique({ where: { email: parsed.data.email } });
     const passwordMatches = await compare(parsed.data.password, row?.passwordHash ?? DUMMY_PASSWORD_HASH);
-    if (!row || !row.active || row.role !== "ADMIN" || !passwordMatches) {
+    if (!row || !row.active || !["ADMIN", "COORDINATOR"].includes(row.role) || !passwordMatches) {
       return json({ code: "INVALID_CREDENTIALS" }, 401);
     }
 

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { ReadOnlyResourcePage } from "./read-only-resource-page";
 import type { SupplyOverview, SupplyInvoice, SupplyHandoff, SupplyMovement, InvoiceLine } from "@/contracts/supply-control";
 import styles from "./supplies-control.module.css";
+import { SytexSupplyControl } from './sytex-supply-control';
+import operationalStyles from './operations.module.css';
 
 const messages: Record<string, string> = {
   UNAUTHENTICATED: "Ingresá con tu cuenta para trabajar con los datos reales.", FORBIDDEN: "Esta función requiere una cuenta administradora.",
@@ -37,11 +39,11 @@ const newLine = () => ({ description: "", quantity: "", unit: "unidad" });
 type Dialog = { type: "new" } | { type: "invoice"; id: string } | { type: "handoff"; id: string } | { type: "delivery"; line: InvoiceLine; invoiceId: string } | null;
 
 export function SuppliesControl() {
-  const [tab, setTab] = useState("facturas"), [data, setData] = useState<SupplyOverview | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [now, setNow] = useState(() => Date.now());
+  const [tab, setTab] = useState("control"), [data, setData] = useState<SupplyOverview | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [now, setNow] = useState(() => Date.now());
   const [search, setSearch] = useState(""), [technician, setTechnician] = useState(""), [invoiceFilter, setInvoiceFilter] = useState(""), [overdue, setOverdue] = useState(false);
   const [invoicePage, setInvoicePage] = useState(1), [handoffPage, setHandoffPage] = useState(1), [revision, setRevision] = useState(0), [dialog, setDialog] = useState<Dialog>(null);
   useEffect(() => {
-    if (tab === "sytex") return;
+    if (tab === "sytex" || tab === "control") return;
     let active = true;
     const params = new URLSearchParams({ search, technician, invoiceFilter, overdue: String(overdue), invoicePage: String(invoicePage), handoffPage: String(handoffPage) });
     const timer = setTimeout(() => { setLoading(true); setError(""); setNow(Date.now()); call<SupplyOverview>(`/api/supplies?${params}`).then((value) => { if (active) setData(value); }).catch((e) => { if (active) { setError(e.message); setData(null); } }).finally(() => { if (active) setLoading(false); }); }, 200);
@@ -49,10 +51,11 @@ export function SuppliesControl() {
   }, [search, technician, invoiceFilter, overdue, invoicePage, handoffPage, revision, tab]);
   const refreshed = () => setRevision((r) => r + 1);
   const counts = data?.counts;
+  if(tab==="control") return <section><nav className={operationalStyles.app}><button onClick={()=>setTab("facturas")}>Facturas y entregas internas</button> · <Link href="/coordinadores">Cuentas de coordinadores</Link></nav><SytexSupplyControl /></section>;
   return <section className={styles.app}>
     <header className={styles.heading}><div><p>OPERACIÓN · DATOS REALES</p><h1>Insumos y facturas</h1><span>Comprobantes, materiales en poder de cada técnico y consumo por formulario.</span></div><button onClick={refreshed} disabled={loading}>Actualizar</button></header>
-    <nav className={styles.tabs} aria-label="Secciones de Insumos">{[["facturas", "Facturas"], ["tecnicos", "Materiales por técnico"], ["sytex", "Sytex y Mendel"]].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}<a href="/compras">Importar compras Mendel ↗</a></nav>
-    {tab === "sytex" ? <ReadOnlyResourcePage resource="insumos" /> : <>
+    <nav className={styles.tabs} aria-label="Secciones de Insumos">{[["control", "Control Sytex / Intra"], ["facturas", "Facturas y entregas"], ["tecnicos", "Materiales por técnico"], ["sytex", "Fuente original"]].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}<a href="/coordinadores">Cuentas de coordinadores ↗</a></nav>
+    {tab === "control" ? <SytexSupplyControl /> : tab === "sytex" ? <ReadOnlyResourcePage resource="insumos" /> : <>
       <div className={styles.stats}>{[
         ["Facturas registradas", counts?.invoices, () => { setTab("facturas"); setInvoiceFilter(""); }],
         ["Falta comprobante", counts?.missingFiles, () => { setTab("facturas"); setInvoiceFilter("files"); setInvoicePage(1); }],

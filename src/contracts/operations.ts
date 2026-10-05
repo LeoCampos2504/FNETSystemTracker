@@ -1,0 +1,7 @@
+export type VisitStatus = 'PLANIFICADO' | 'EN_CURSO' | 'REALIZADO' | 'CON_PENDIENTES' | 'CANCELADO';
+export type Visit = { id:string; day:string; project:string; siteCode:string; siteName:string; taskType:string; taskCode:string; technicians:string[]; status:VisitStatus; outcome:string; version:number; updatedAt:string; pending:string[]; closed:boolean };
+export type SourceMaterial = { key:string; formulario:string; group:string; index:string; description:string; quantity:string|null; siteCode:string; siteName:string; technician:string; image:string|null; imageDeclared:boolean; projects:string[]; source:string; syncedAt:string; hash:string };
+export type MaterialReview = { project:string; classification:string; intraStatus:string; invoiceNumber:string; countedQuantity:string|null; intraQuantity:string|null; notes:string; version:number; sourceHash:string; updatedAt:string; updatedBy:string };
+export type Material = SourceMaterial & { review:MaterialReview|null; files:{id:string;fileName:string;mimeType:string}[]; changed:boolean; missing:boolean; difference:number|null };
+export type Favorite = { name:string; projects:string[] };
+export type OperationsCatalog = { projects:string[]; allProjects:string[]; favorites:Favorite[]; admin:boolean; tasks:{code:string;type:string;project:string;siteCode:string;siteName:string;description:string;technicians:string[]}[]; technicians:string[] };
