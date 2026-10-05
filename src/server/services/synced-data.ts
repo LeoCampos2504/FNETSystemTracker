@@ -38,7 +38,7 @@ export function taskStatus(value: string | null): TaskStatus {
   if (status.includes("ENVIAD") || status.includes("SENT")) return TaskStatus.SENT;
   if (status.includes("RECHAZ") || status.includes("REJECT")) return TaskStatus.REJECTED;
   if (status.includes("CANCEL")) return TaskStatus.CANCELLED;
-  if ((status.includes("APROBAD") || status.includes("APPROVED") || status.includes("COMPLET")) && (status.includes("PENDIENT") || status.includes("PENDING"))) return TaskStatus.APPROVED_WITH_PENDING;
+  if ((status.includes("APROBAD") || status.includes("APPROVED") || status.includes("COMPLET")) && (status.includes("PENDIENT") || status.includes("PENDING") || status.includes("SNAG"))) return TaskStatus.APPROVED_WITH_PENDING;
   if (status.includes("APROBAD") || status.includes("APPROVED") || status.includes("COMPLET")) return TaskStatus.APPROVED;
   if (status.includes("OPEN") || status.includes("ABIER")) return TaskStatus.OPEN;
   return TaskStatus.OPEN;
