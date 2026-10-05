@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSytexExportSheets, parseSytexFormRows, parseSytexMaintenanceRows, parseSytexSupplyRows } from "./sytex-supply-export";
+import { parseSytexExportSheets, parseSytexFormRows, parseSytexMaintenanceRows, parseSytexSupplyRows, parseSytexTaskRows } from "./sytex-supply-export";
 
 const headers = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Última edición el", "Última edición por"];
 const date = new Date("2026-10-02T18:00:00Z");
@@ -150,5 +150,24 @@ describe('form list status and plan date',()=>{
     expect(forms[0]).toMatchObject({ status: "Open", planDate: "2026-10-20" });
     expect(forms[1].status).toBeUndefined();
     expect(forms[1].planDate).toBeUndefined();
+  });
+});
+
+const answersHeadersForTasks = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Última edición el", "Última edición por"];
+describe("corrective tasks from the task export", () => {
+  const head = ["Code", "Task description", "Project", "Affected sites codes", "Affected sites names", "Task type", "Task template", "Status", "Assigned staff", "Link"];
+  const rows = [
+    head,
+    ["TA-26-412547", "Correctivo Civil Integral", "NON - MCCIntegral Mantenimiento Correctivo Civil O&M", "ST00213", "Salta 12", "Correctivo", "Correctivo Civil Integral", "Open", "Ana, Luis", "https://claro.sytex.io/o/1/w/task-1"],
+    ["TA-26-395721", "MPC-GE", "NON - MPC Mantenimiento Preventivo Civil O&M", "ST00001", "Sitio", "Preventivo", "MPC Grupo Electrógeno", "Open", "", ""],
+    ["XX-26-000001", "Otro", "NON - MCC", "ST1", "S", "Correctivo", "", "Open", "", ""],
+  ];
+  it("keeps corrective TA tasks with zone, site, status, crew and link, and drops preventive ones", () => {
+    expect(parseSytexTaskRows(rows)).toEqual([{ code: "TA-26-412547", project: "NON - MCCIntegral Mantenimiento Correctivo Civil O&M", type: "CORRECTIVO", siteCode: "ST00213", siteName: "Salta 12", description: "Correctivo Civil Integral", technicians: ["Ana", "Luis"], link: "https://claro.sytex.io/o/1/w/task-1", status: "Open" }]);
+    expect(parseSytexTaskRows([head])).toEqual([]);
+  });
+  it("joins the task list to the forms and answers of the same synchronization", () => {
+    const parsed = parseSytexExportSheets([[answersHeadersForTasks, ["FO-26-100001", "[#1] Insumo", "1.1.1", "Descripción", "Cable", "ST00213", "2026-10-02 10:00:00", "Ana"], ["FO-26-100001", "[#1] Insumo", "1.1.2", "Cantidad", 2, "ST00213", "2026-10-02 10:00:00", "Ana"]], rows]);
+    expect(parsed.formContexts?.map((form) => form.code)).toEqual(["TA-26-412547"]);
   });
 });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readSheet } from "read-excel-file/node";
 import { getPrismaClient } from "@/server/prisma";
-import { parseSytexExportSheets, parseSytexFormRows } from "@/server/sytex-supply-export";
+import { parseSytexExportSheets, parseSytexFormRows, parseSytexTaskRows } from "@/server/sytex-supply-export";
 import { saveSytexSupplyExport } from "@/server/services/sytex-supply-imports";
 
 /**
@@ -129,7 +129,7 @@ async function listProjects(config: Config, fetcher: Fetcher): Promise<{ id: num
 
 const RETRY_WAITS_MS = [5_000];
 /** One export. A busy or timed-out Sytex (429 or 5xx) is asked again after a pause before giving up. */
-async function sheet(config: Config, fetcher: Fetcher, kind: "formdata" | "entryanswerdata", projectId: number, window: string, waits = RETRY_WAITS_MS): Promise<unknown[][]> {
+async function sheet(config: Config, fetcher: Fetcher, kind: "formdata" | "entryanswerdata" | "taskdata", projectId: number, window: string, waits = RETRY_WAITS_MS): Promise<unknown[][]> {
   const path = `/api/${kind}/?org_id=${encodeURIComponent(config.organization)}&${window}&project=${projectId}`;
   for (let attempt = 0; ; attempt++) {
     try {
@@ -150,6 +150,9 @@ async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>, size =
 }
 
 const hasRows = (rows: unknown[][]) => rows.slice(1).some((row) => row.some((cell) => cell !== null && cell !== ""));
+/** Only corrective projects need their task list: a preventive task is already represented by its forms. */
+const projectColumn = (rows: unknown[][]) => rows[0]?.findIndex((cell) => /^(proyecto|project)$/i.test(String(cell ?? "").trim())) ?? -1;
+const hasCorrectiveForms = (rows: unknown[][]) => { const column = projectColumn(rows); return column >= 0 && rows.slice(1).some((row) => /correctiv|\bmcc/i.test(String(row[column] ?? ""))); };
 
 export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS, onProgress: (done: number, total: number) => void = () => undefined, quick = false) {
   const since = syncWindowStart(now);
@@ -163,17 +166,24 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   const formLists = await inBatches(requests, async (entry) => ({ ...entry, rows: await sheet(config, fetcher, "formdata", entry.project.id, entry.window, waits) }));
   const active = formLists.filter((entry) => hasRows(entry.rows)), activeProjects = new Set(active.map((entry) => entry.project.id)).size;
   if (!active.length) return { projects: 0, forms: 0, items: 0, changed: false, since };
+  // Corrective tasks (TA-…) come from their own list; the corrective forms found above say which projects have them.
+  const taskEntries = active.filter((entry) => hasCorrectiveForms(entry.rows));
   // Answer exports are the heavy ones: only a few at a time, and the screen is told how far they got.
   let done = 0;
-  onProgress(0, active.length);
-  const answers = (await inBatches(active, async (entry) => { const rows = await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); onProgress(++done, active.length); return rows; }, ANSWER_CONCURRENCY)).filter(hasRows);
+  onProgress(0, taskEntries.length + active.length);
+  const taskSheets = (await inBatches(taskEntries, async (entry) => { const rows = await sheet(config, fetcher, "taskdata", entry.project.id, entry.window, waits); onProgress(++done, taskEntries.length + active.length); return { entry, rows }; }, ANSWER_CONCURRENCY)).filter((task) => hasRows(task.rows));
+  const answers = (await inBatches(active, async (entry) => { const rows = await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); onProgress(++done, taskEntries.length + active.length); return rows; }, ANSWER_CONCURRENCY)).filter(hasRows);
   if (!answers.length) return { projects: activeProjects, forms: 0, items: 0, changed: false, since };
-  const parsed = parseSytexExportSheets([...answers, ...active.map((entry) => entry.rows)]);
+  const parsed = parseSytexExportSheets([...answers, ...active.map((entry) => entry.rows), ...taskSheets.map((task) => task.rows)]);
   // Without a plan date in the list, the month of the window it was asked in tells when the form is planned.
   const windowStart = new Map<string, string>();
   for (const entry of active) {
     const start = entry.window.match(/plan_date__gte=(\d{4}-\d{2}-\d{2})/)?.[1];
     if (start) for (const form of parseSytexFormRows(entry.rows)) if (!windowStart.has(form.code)) windowStart.set(form.code, start);
+  }
+  for (const { entry, rows } of taskSheets) {
+    const start = entry.window.match(/plan_date__gte=(\d{4}-\d{2}-\d{2})/)?.[1];
+    if (start) for (const task of parseSytexTaskRows(rows)) if (!windowStart.has(task.code)) windowStart.set(task.code, start);
   }
   for (const form of parsed.formContexts ?? []) if (!form.planDate && windowStart.has(form.code)) form.planDate = windowStart.get(form.code);
   const forms = parsed.formContexts?.length ?? 0;

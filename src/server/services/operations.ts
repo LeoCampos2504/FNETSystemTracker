@@ -108,7 +108,9 @@ export function yearlyMaintenance(facts:{kind:string;lastDate:Date;formCode:stri
 const FINISHED_FORM=/^(approved|aprobad|submitted|enviad|to review|para revisar|cancel|closed|cerrad|complet|finaliz)/i;
 const argentinaMonth=(date:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit'}).format(date);
 /** What is still worth scheduling at a site: preventives planned this month and correctives not yet done. */
-export function openForm(task:{type:string;status?:string;planDate?:string|null},now=new Date()):boolean{
+export function openForm(task:{code?:string;type:string;status?:string;planDate?:string|null},now=new Date()):boolean{
+  // A corrective is offered by its task (TA-…); its forms would only repeat it.
+  if(task.type==='CORRECTIVO'&&task.code?.startsWith('FO-'))return false;
   if(FINISHED_FORM.test((task.status??'').trim()))return false;
   if(task.type==='PREVENTIVO')return !task.planDate||task.planDate.slice(0,7)===argentinaMonth(now);
   return task.type==='CORRECTIVO';

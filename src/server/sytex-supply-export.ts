@@ -28,7 +28,7 @@ const HEADER_ALIASES: Record<string, string> = {
   "affected sites codes": "codigos de sitios afectados", "affected sites names": "nombres de sitios afectados",
   status: "estado", "last edition on": "ultima edicion el", "last edition by": "ultima edicion por",
   code: "codigo", name: "nombre", template: "plantilla", project: "proyecto",
-  "plan date": "fecha de plan", "planned date": "fecha de plan", "fecha plan": "fecha de plan", "assigned to": "asignado a", "collaborator user": "usuario colaborador", link: "enlace",
+  "plan date": "fecha de plan", "planned date": "fecha de plan", "fecha plan": "fecha de plan", "task description": "descripcion de la tarea", "task type": "tipo de tarea", "task template": "plantilla de la tarea", "assigned staff": "personal asignado", "start plan date": "fecha de inicio plan", "assigned to": "asignado a", "collaborator user": "usuario colaborador", link: "enlace",
 };
 function normalize(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " "); }
 function text(value: unknown): string | null {
@@ -157,6 +157,29 @@ export function parseSytexFormRows(rows: unknown[][]): SytexFormContext[] {
   return [...forms.values()];
 }
 
+/** Corrective tasks (TA-…) of the task export. Preventive work is already covered by its forms, so only corrective tasks are kept. */
+export function parseSytexTaskRows(rows: unknown[][]): SytexFormContext[] {
+  if (rows.length < 2) return [];
+  if (rows.length > MAX_ROWS + 1) throw new Error("SYTEX_EXPORT_TOO_MANY_ROWS");
+  const headers = headerKeys(rows[0]);
+  for (const key of ["Código", "Proyecto"]) if (headers.filter((header) => header === normalize(key)).length !== 1) throw new Error("SYTEX_EXPORT_TASK_HEADERS_INVALID");
+  const get = (row: unknown[], key: string) => text(row[headers.indexOf(normalize(key))]) ?? "";
+  const tasks = new Map<string, SytexFormContext>();
+  for (const row of rows.slice(1)) {
+    if (!row.some(cell => cell !== null && cell !== "")) continue;
+    const code = get(row, "Código").toUpperCase(), project = get(row, "Proyecto");
+    if (!/^TA-\d{2}-\d{6}$/.test(code) || !project) continue;
+    if (!/correctiv|\bmcc/.test(normalize(`${project} ${get(row, "Tipo de tarea")} ${get(row, "Plantilla de la tarea")}`))) continue;
+    tasks.set(code, { code, project, type: "CORRECTIVO", siteCode: get(row, "Códigos de sitios afectados"), siteName: get(row, "Nombres de sitios afectados"),
+      description: get(row, "Descripción de la tarea") || get(row, "Tipo de tarea") || code,
+      technicians: [...new Set(get(row, "Personal asignado").split(/[;,]/).map(name => name.trim()).filter(Boolean))],
+      ...(headers.includes("enlace") && imageUrl(get(row, "Enlace")) ? { link: get(row, "Enlace") } : {}),
+      ...(get(row, "Estado") ? { status: get(row, "Estado") } : {}),
+      ...(day(get(row, "Fecha de inicio plan")) ? { planDate: day(get(row, "Fecha de inicio plan")) as string } : {}) });
+  }
+  return [...tasks.values()];
+}
+
 export async function parseSytexFormExport(bytes: Uint8Array): Promise<SytexFormContext[]> {
   return parseSytexFormRows(await readSheet(Buffer.from(bytes), { trim: false }));
 }
@@ -179,6 +202,8 @@ export function parseSytexExportSheets(sheets: unknown[][][]): SytexSupplyExport
       if (answers.length + rows.length - 1 > MAX_ROWS + 1) throw new Error("SYTEX_EXPORT_TOO_MANY_ROWS");
       for (const row of rows.slice(1)) answers.push(positions.map((position) => position < 0 ? null : row[position] ?? null));
       answerSheets++;
+    } else if (headers.includes("descripcion de la tarea")) {
+      for (const task of parseSytexTaskRows(rows)) contexts.set(task.code, task);
     } else if (headers.includes("codigo") && headers.includes("proyecto")) {
       for (const form of parseSytexFormRows(rows)) {
         const previous = contexts.get(form.code);
