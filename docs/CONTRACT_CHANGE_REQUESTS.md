@@ -35,6 +35,12 @@ _(vacío — agregar acá)_
 
 ## Resueltos
 
+### [Resuelto 2026-10-05] Enlace a Sytex en `Task` (aditivo)
+- Quién lo pide: Eugenia (coordinación).
+- Contrato afectado: `src/contracts/task.ts` — se agrega `externalUrl?: string | null` a `Task`. Es opcional: mocks y `http-api` siguen siendo válidos.
+- Por qué: poder abrir la tarea en Sytex desde la lista de Tareas. El servidor ya devolvía el campo; solo faltaba declararlo.
+- Impacto: ninguno en `Api`, mocks ni Prisma.
+
 ### [Resuelto 2026-10-05] Tipos de guardia pasiva y fuera de horario (aditivo)
 - Quién lo pide: Eugenia (coordinación).
 - Contrato afectado: `src/contracts/operations.ts` — se agregan `GuardWeek`, `Holiday`, `OffHoursVisit`, `GuardOverview`. No se modifica ningún tipo existente ni `UserRole`.
