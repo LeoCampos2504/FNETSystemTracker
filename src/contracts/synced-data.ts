@@ -7,6 +7,8 @@ export interface PostgresQuote {
   id: string;
   code: string;
   status: QuoteStatus;
+  sourceStatus?: string | null;
+  syncedAt?: string;
   zoneId: string;
   projectId: string | null;
   supplier: string | null;

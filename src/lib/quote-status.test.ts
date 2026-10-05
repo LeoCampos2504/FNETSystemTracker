@@ -18,6 +18,9 @@ describe("quote status normalization", () => {
     ["Aprobada", QuoteStatus.COMPLETED],
     ["Aprobado", QuoteStatus.COMPLETED],
     ["Aprobada con pendientes", QuoteStatus.COMPLETED_WITH_PENDING],
+    ["No aprobada", QuoteStatus.OPEN],
+    ["Desaprobada", QuoteStatus.OPEN],
+    ["DISAPPROVED", QuoteStatus.OPEN],
   ])("maps %s to the operational state", (raw, expected) => {
     expect(normalizeQuoteStatus(raw)).toBe(expected);
   });

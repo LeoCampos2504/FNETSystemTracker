@@ -16,7 +16,7 @@ type ResourcePayload = { count: number; items: ResourceItem[]; mendelSummary?: M
 const resourceConfig: Record<ResourceKind, { title: string; description: string; columns: Array<[string, string]> }> = {
   correctivos: { title: "Correctivos", description: "Registros oficiales sincronizados desde Sytex.", columns: [["codigo", "Código"], ["description", "Descripción"], ["status", "Estado"], ["project", "Proyecto"], ["site", "Sitios afectados"]] },
   preventivos: { title: "Preventivos", description: "Registros oficiales sincronizados desde Sytex.", columns: [["codigo", "Código"], ["description", "Descripción"], ["status", "Estado"], ["project", "Proyecto"], ["site", "Sitios afectados"]] },
-  cotizaciones: { title: "Cotizaciones", description: "Cotizaciones oficiales; el vínculo se muestra solo si coincide el código de tarea.", columns: [["code", "Código"], ["status", "Estado"], ["taskCode", "Código de tarea"], ["relatedCorrectiveCode", "Correctivo relacionado"], ["total", "Total"]] },
+  cotizaciones: { title: "Cotizaciones", description: "Estado recibido de Sytex y fecha de sincronización. Si Sytex cambió después, n8n debe actualizar la fuente; consultar de nuevo solo vuelve a leer la base.", columns: [["code", "Código"], ["status", "Estado recibido"], ["taskCode", "Código de tarea"], ["relatedCorrectiveCode", "Correctivo relacionado"], ["syncedAt", "Sincronizada"], ["total", "Total"]] },
   insumos: { title: "Insumos", description: "Materiales informados en Sytex y compras de Mendel que referencian el mismo formulario.", columns: [["formulario", "Formulario"], ["group", "Grupo"], ["index", "Índice"], ["description", "Descripción"], ["quantity", "Cantidad informada"], ["site", "Sitio"], ["technician", "Técnico asignado"], ["lastEditedBy", "Última edición por"], ["image", "Imagen"], ["mendel", "Compras relacionadas"]] },
 };
 const PAGE_SIZE = 50;
@@ -29,7 +29,8 @@ function dateLabel(value: string | null): string {
 function displayValue(item: ResourceItem, key: string): string {
   const value = item[key];
   if (key === "description") return String(item.description ?? "Sin descripción informada");
-  if (key === "status") return String(value ?? "Sin estado");
+  if (key === "status") return String(item.sourceStatus ?? value ?? "Sin estado");
+  if (key === "syncedAt") return dateLabel(typeof value==="string"?value:null);
   if (key === "codigo") return String(item.taskCode ?? item.codigo ?? "—");
   if (key === "project") return String(item.zoneId ?? item.projectId ?? "Sin proyecto informado");
   if (key === "site") return [item.siteCode, item.siteName].filter(Boolean).join(" / ") || "Sin sitio informado";

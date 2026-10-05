@@ -16,6 +16,7 @@ function normalizedQuoteStatus(value: string | null | undefined): string {
  */
 export function normalizeQuoteStatus(value: string | null | undefined): QuoteStatus {
   const status = normalizedQuoteStatus(value);
+  if (status.includes("NO APROBAD") || status.includes("DESAPROBAD") || status.includes("DISAPPROVED") || status.includes("RECHAZ")) return QuoteStatus.OPEN;
   if ((status.includes("COMPLET") || status.includes("APROBAD") || status.includes("APPROVED")) && (status.includes("PENDIENT") || status.includes("PENDING"))) return QuoteStatus.COMPLETED_WITH_PENDING;
   if (status.includes("WAIT") || status.includes("ESPERA")) return QuoteStatus.WAITING;
   if (status.includes("IN PROGRESS") || status.includes("PROCESS") || status.includes("PROCESO")) return QuoteStatus.IN_PROGRESS;
