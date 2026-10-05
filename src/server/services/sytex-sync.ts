@@ -19,14 +19,14 @@ export type SytexSyncStatus = {
   configured: boolean; running: boolean;
   startedAt: string | null; finishedAt: string | null;
   result: { projects: number; forms: number; items: number; changed: boolean; since: string } | null;
-  error: string | null;
+  error: string | null; errorDetail: string | null;
 };
 type Config = { baseUrl: string; authorization: string; organization: string };
 /** What the service variables provide: an explicit header, or the user and key Sytex issues in the profile. */
 type Settings = { baseUrl: string; organization: string; candidates: string[] };
 type Fetcher = typeof fetch;
 
-const state: Omit<SytexSyncStatus, "configured"> = { running: false, startedAt: null, finishedAt: null, result: null, error: null };
+const state: Omit<SytexSyncStatus, "configured"> = { running: false, startedAt: null, finishedAt: null, result: null, error: null, errorDetail: null };
 
 export function sytexSettings(env: Record<string, string | undefined> = process.env): Settings | null {
   const explicit = env.SYTEX_AUTHORIZATION?.trim(), user = env.SYTEX_USER?.trim(), key = env.SYTEX_API_KEY?.trim();
@@ -44,14 +44,15 @@ let accepted: { key: string; authorization: string } | null = null;
 export async function sytexConfig(settings: Settings, fetcher: Fetcher = fetch): Promise<Config> {
   const key = JSON.stringify(settings);
   if (accepted?.key === key) return { baseUrl: settings.baseUrl, organization: settings.organization, authorization: accepted.authorization };
+  const refusals: string[] = [];
   for (const authorization of settings.candidates) {
     const config = { baseUrl: settings.baseUrl, organization: settings.organization, authorization };
     try { await request(config, fetcher, "/api/project/?q=MPC&limit=1", "application/json"); }
-    catch (error) { if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") continue; throw error; }
+    catch (error) { if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") { refusals.push(`${authorization.split(" ")[0]}: ${error.detail}`); continue; } throw error; }
     accepted = { key, authorization };
     return config;
   }
-  throw new SytexError("SYTEX_CREDENTIAL_REJECTED");
+  throw new SytexError("SYTEX_CREDENTIAL_REJECTED", refusals.join(" · "));
 }
 
 export function sytexSyncStatus(): SytexSyncStatus { return { configured: sytexSettings() !== null, ...state }; }
@@ -64,7 +65,7 @@ export function syncWindowStart(now = new Date()): string {
   return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
-class SytexError extends Error { constructor(public code: string) { super(code); } }
+class SytexError extends Error { constructor(public code: string, public detail = "") { super(code); } }
 
 async function request(config: Config, fetcher: Fetcher, path: string, accept: string): Promise<Response> {
   let response: Response;
@@ -74,7 +75,11 @@ async function request(config: Config, fetcher: Fetcher, path: string, accept: s
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: "error", cache: "no-store",
     });
   } catch { throw new SytexError("SYTEX_UNREACHABLE"); }
-  if (response.status === 401 || response.status === 403) throw new SytexError("SYTEX_CREDENTIAL_REJECTED");
+  if (response.status === 401 || response.status === 403) {
+    // Sytex explains the refusal in a short "detail" text; it never contains the credential.
+    const detail = await response.json().then((body: { detail?: unknown }) => typeof body?.detail === "string" ? body.detail.slice(0, 120) : "").catch(() => "");
+    throw new SytexError("SYTEX_CREDENTIAL_REJECTED", `${response.status}${detail ? " " + detail : ""}`);
+  }
   if (!response.ok) throw new SytexError("SYTEX_RESPONSE_" + response.status);
   return response;
 }
@@ -122,7 +127,7 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   // Identity of the content, not of the files: an unchanged Sytex produces no new rows.
   const identity = createHash("sha256").update(JSON.stringify([
     parsed.items.map((item) => [item.formulario, item.grupo, item.indice, item.description, item.quantity, item.provider, item.image, item.imageDeclared, item.siteCode, item.status]).sort(),
-    (parsed.formContexts ?? []).map((form) => [form.code, form.type, form.project, form.siteCode, form.siteName, form.description, form.technicians]).sort(),
+    (parsed.formContexts ?? []).map((form) => [form.code, form.type, form.project, form.siteCode, form.siteName, form.description, form.technicians, form.link ?? null]).sort(),
     (parsed.maintenance ?? []).map((fact) => [fact.siteCode, fact.kind, fact.formCode, fact.lastDate]).sort(),
   ])).digest("hex");
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
@@ -140,6 +145,9 @@ async function dropSupersededRows(importId: string) {
     db.$executeRaw`DELETE FROM sytex_supply_form_contexts prior USING sytex_supply_imports batch, sytex_supply_form_contexts fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
+    db.$executeRaw`DELETE FROM sytex_form_links prior USING sytex_supply_imports batch, sytex_form_links fresh
+      WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
+        AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
     db.$executeRaw`DELETE FROM sytex_site_maintenance prior USING sytex_supply_imports batch, sytex_site_maintenance fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.site_code = prior.site_code AND fresh.kind = prior.kind AND fresh.form_code = prior.form_code`,
@@ -150,10 +158,10 @@ async function dropSupersededRows(importId: string) {
 export function startSytexSync(userId: string): SytexSyncStatus {
   const settings = sytexSettings();
   if (!settings || state.running) return sytexSyncStatus();
-  state.running = true; state.startedAt = new Date().toISOString(); state.error = null;
+  state.running = true; state.startedAt = new Date().toISOString(); state.error = null; state.errorDetail = null;
   void sytexConfig(settings).then((config) => runSytexSync(userId, config))
     .then((result) => { state.result = result; })
-    .catch((error: unknown) => { state.error = error instanceof SytexError ? error.code : error instanceof Error && error.message.startsWith("SYTEX_") ? error.message : "SYTEX_SYNC_FAILED"; })
+    .catch((error: unknown) => { state.errorDetail = error instanceof SytexError && error.detail ? error.detail : null; state.error = error instanceof SytexError ? error.code : error instanceof Error && error.message.startsWith("SYTEX_") ? error.message : "SYTEX_SYNC_FAILED"; })
     .finally(() => { state.running = false; state.finishedAt = new Date().toISOString(); });
   return sytexSyncStatus();
 }

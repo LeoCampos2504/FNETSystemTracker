@@ -128,3 +128,14 @@ describe("yearly maintenance reported in the forms", () => {
     ])).toEqual([{ siteCode: "ST00001", kind: "FILTROS_AA", lastDate: "2026-01-14", formCode: "FO-26-000003", reportedAt: "2026-10-02T15:00:00" }]);
   });
 });
+
+describe("form list links", () => {
+  it("keeps the Sytex link of each form and drops unsafe ones", () => {
+    const head = ["Code", "Name", "Template", "Project", "Link"];
+    const forms = parseSytexExportSheets([
+      [headers, row("1.1", "Descripción", "Silicona"), row("1.2", "Cantidad", 2)],
+      [head, ["FO-26-000001", "MPC-AA", "Mantenimiento Preventivo Civil", "NON - MPC", "https://claro.sytex.io/d/f/abc"], ["FO-26-000002", "MPC-GE", "Mantenimiento Preventivo Civil", "NON - MPC", "javascript:alert(1)"]],
+    ]).formContexts;
+    expect(forms?.map((form) => form.link)).toEqual(["https://claro.sytex.io/d/f/abc", undefined]);
+  });
+});

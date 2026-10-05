@@ -17,7 +17,7 @@ beforeEach(()=>{
  execute=vi.fn(async(strings:TemplateStringsArray)=>strings.join('?').startsWith('UPDATE')?fake.updateCount:1);
  fake.db={
   $queryRaw:query,$executeRaw:execute,$transaction:async(run:(tx:unknown)=>unknown)=>run(fake.db),
-  sytex_supply_form_contexts:{findMany:async()=>[]},sytex_site_maintenance:{findMany:async()=>[]},
+  sytex_supply_form_contexts:{findMany:async()=>[]},sytex_site_maintenance:{findMany:async()=>[]},sytex_form_links:{findMany:async()=>[]},
   preventivos:{findMany:async()=>['NON','BAM'].map((p,i)=>({codigo:'FO-26-'+(i+1),proyecto:p+' - mantenimiento',codigos_sitios_afectados:'ST1',nombres_sitios_afectados:'Sitio',nombre:'Mantenimiento',asignado_a:'Test',usuario_colaborador:null}))},
   correctivos:{findMany:async()=>[]},cotizaciones:{findMany:async()=>[{proyecto:'CEF - Compras'},{proyecto:'NON - Generadores'}]},insumos:{findMany:async()=>[source('FO-26-1'),source('FO-26-2')]},sytex_supply_import_items:{findMany:async()=>[]},
  };

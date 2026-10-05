@@ -14,7 +14,7 @@ export async function saveSytexSupplyExport(parsed: SytexSupplyExport, fileHash:
         answerCount: parsed.answerCount, formCount: parsed.formCount,
         sourceEditedFrom: parsed.sourceEditedFrom, sourceEditedThrough: parsed.sourceEditedThrough,
         items: { create: parsed.items },
-        ...(parsed.formContexts ? { forms: { create: parsed.formContexts } } : {}),
+        ...(parsed.formContexts ? { forms: { create: parsed.formContexts.map((form) => ({ code: form.code, type: form.type, project: form.project, siteCode: form.siteCode, siteName: form.siteName, description: form.description, technicians: form.technicians })) }, links: { create: parsed.formContexts.flatMap((form) => form.link ? [{ code: form.code, link: form.link }] : []) } } : {}),
         ...(parsed.maintenance ? { maintenance: { create: parsed.maintenance.map((fact) => ({ ...fact, lastDate: new Date(fact.lastDate + "T00:00:00Z") })) } } : {}),
       },
       select: { id: true },
