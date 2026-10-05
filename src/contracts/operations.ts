@@ -5,6 +5,6 @@ export type SourceMaterial = { key:string; formulario:string; group:string; inde
 export type MaterialReview = { project:string; classification:string; intraStatus:string; invoiceNumber:string; countedQuantity:string|null; intraQuantity:string|null; notes:string; version:number; sourceHash:string; updatedAt:string; updatedBy:string };
 export type Material = SourceMaterial & { review:MaterialReview|null; files:{id:string;fileName:string;mimeType:string}[]; changed:boolean; missing:boolean; difference:number|null };
 export type Favorite = { name:string; projects:string[] };
-export type OperationsCatalog = { projects:string[]; allProjects:string[]; favorites:Favorite[]; admin:boolean; tasks:{code:string;type:string;project:string;siteCode:string;siteName:string;description:string;technicians:string[]}[]; technicians:string[] };
+export type OperationsCatalog = { projects:string[]; allProjects:string[]; favorites:Favorite[]; admin:boolean; tasks:{code:string;type:string;project:string;siteCode:string;siteName:string;description:string;technicians:string[];status?:string;planDate?:string|null}[]; technicians:string[] };
 export type SiteMaintenance = { kind:'SERVICE_GE'|'FILTROS_AA'; lastDate:string; dueDate:string; due:boolean; formCode:string };
 export type SiteContext = { maintenance:SiteMaintenance[]; forms:OperationsCatalog['tasks']; pending:string[]; previous:{day:string;project:string;taskType:string;status:VisitStatus;outcome:string}[] };

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readSheet } from "read-excel-file/node";
 import { getPrismaClient } from "@/server/prisma";
-import { parseSytexExportSheets } from "@/server/sytex-supply-export";
+import { parseSytexExportSheets, parseSytexFormRows } from "@/server/sytex-supply-export";
 import { saveSytexSupplyExport } from "@/server/services/sytex-supply-imports";
 
 /**
@@ -164,13 +164,20 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   const answers = (await inBatches(active, async (entry) => { const rows = await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); onProgress(++done, active.length); return rows; }, ANSWER_CONCURRENCY)).filter(hasRows);
   if (!answers.length) return { projects: activeProjects, forms: 0, items: 0, changed: false, since };
   const parsed = parseSytexExportSheets([...answers, ...active.map((entry) => entry.rows)]);
+  // Without a plan date in the list, the month of the window it was asked in tells when the form is planned.
+  const windowStart = new Map<string, string>();
+  for (const entry of active) {
+    const start = entry.window.match(/plan_date__gte=(\d{4}-\d{2}-\d{2})/)?.[1];
+    if (start) for (const form of parseSytexFormRows(entry.rows)) if (!windowStart.has(form.code)) windowStart.set(form.code, start);
+  }
+  for (const form of parsed.formContexts ?? []) if (!form.planDate && windowStart.has(form.code)) form.planDate = windowStart.get(form.code);
   const forms = parsed.formContexts?.length ?? 0;
   if (parsed.errors.length) throw new SytexError("SYTEX_EXPORT_HAS_CONFLICTS");
   if (!parsed.items.length) return { projects: activeProjects, forms, items: 0, changed: false, since };
   // Identity of the content, not of the files: an unchanged Sytex produces no new rows.
   const identity = createHash("sha256").update(JSON.stringify([
     parsed.items.map((item) => [item.formulario, item.grupo, item.indice, item.description, item.quantity, item.provider, item.image, item.imageDeclared, item.siteCode, item.status]).sort(),
-    (parsed.formContexts ?? []).map((form) => [form.code, form.type, form.project, form.siteCode, form.siteName, form.description, form.technicians, form.link ?? null]).sort(),
+    (parsed.formContexts ?? []).map((form) => [form.code, form.type, form.project, form.siteCode, form.siteName, form.description, form.technicians, form.link ?? null, form.status ?? null, form.planDate ?? null]).sort(),
     (parsed.maintenance ?? []).map((fact) => [fact.siteCode, fact.kind, fact.formCode, fact.lastDate]).sort(),
   ])).digest("hex");
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
@@ -189,6 +196,9 @@ async function dropSupersededRows(importId: string) {
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
     db.$executeRaw`DELETE FROM sytex_form_links prior USING sytex_supply_imports batch, sytex_form_links fresh
+      WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
+        AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
+    db.$executeRaw`DELETE FROM sytex_form_states prior USING sytex_supply_imports batch, sytex_form_states fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
     db.$executeRaw`DELETE FROM sytex_site_maintenance prior USING sytex_supply_imports batch, sytex_site_maintenance fresh

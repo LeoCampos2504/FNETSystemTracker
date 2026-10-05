@@ -17,19 +17,21 @@ export async function operationsActor(user:User):Promise<OperationsActor> {
   // Coordination is shared: an account is limited only when the Admin assigned it specific projects.
   return {user,allowed:rows[0]?.projects.length?rows[0].projects:null};
 }
-type OfficialTask={codigo:string;proyecto:string|null;codigos_sitios_afectados:string|null;nombres_sitios_afectados:string|null;nombre:string|null;asignado_a:string|null;usuario_colaborador:string|null};
+type OfficialTask={estado:string|null;fecha_plan:Date|null;codigo:string;proyecto:string|null;codigos_sitios_afectados:string|null;nombres_sitios_afectados:string|null;nombre:string|null;asignado_a:string|null;usuario_colaborador:string|null};
 export async function catalog(actor:OperationsActor):Promise<OperationsCatalog> {
   const db=getPrismaClient();
-  const [preventivos,correctivos,cotizaciones,prefs,contexts]=await Promise.all([
-    db.preventivos.findMany({select:{codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
-    db.correctivos.findMany({select:{codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
+  const [preventivos,correctivos,cotizaciones,prefs,contexts,states]=await Promise.all([
+    db.preventivos.findMany({select:{estado:true,fecha_plan:true,codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
+    db.correctivos.findMany({select:{estado:true,fecha_plan:true,codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
     db.cotizaciones.findMany({select:{proyecto:true},distinct:['proyecto']}),
     db.$queryRaw<{favorites:Favorite[]}[]>`SELECT favorites FROM ops_preferences WHERE user_id=${actor.user.id}::uuid`,
     db.sytex_supply_form_contexts.findMany({include:{import:{select:{importedAt:true}}},orderBy:[{import:{importedAt:'asc'}},{id:'asc'}]}),
+    db.sytex_form_states.findMany({include:{import:{select:{importedAt:true}}},orderBy:[{import:{importedAt:'asc'}},{id:'asc'}]}),
   ]);
-  const map=(rows:OfficialTask[],type:string)=>rows.map(r=>({code:r.codigo,type,project:projectKey(r.proyecto),siteCode:r.codigos_sitios_afectados??'',siteName:r.nombres_sitios_afectados??'',description:r.nombre??'',technicians:[r.asignado_a,r.usuario_colaborador].filter((t):t is string=>!!t)}));
+  const map=(rows:OfficialTask[],type:string)=>rows.map(r=>({code:r.codigo,type,project:projectKey(r.proyecto),siteCode:r.codigos_sitios_afectados??'',siteName:r.nombres_sitios_afectados??'',description:r.nombre??'',status:r.estado??'',planDate:r.fecha_plan?.toISOString().slice(0,10)??null,technicians:[r.asignado_a,r.usuario_colaborador].filter((t):t is string=>!!t)}));
   const latest=new Map<string,(typeof contexts)[number]>();for(const row of contexts)latest.set(row.code,row);
-  const fresh=[...latest.values()].map(r=>({code:r.code,type:r.type,project:projectKey(r.project),siteCode:r.siteCode,siteName:r.siteName,description:r.description,technicians:Array.isArray(r.technicians)?r.technicians.filter((t):t is string=>typeof t==='string'):[]}));
+  const stateByCode=new Map(states.map(r=>[r.code,r]));
+  const fresh=[...latest.values()].map(r=>({code:r.code,type:r.type,project:projectKey(r.project),siteCode:r.siteCode,siteName:r.siteName,description:r.description,status:stateByCode.get(r.code)?.status??'',planDate:stateByCode.get(r.code)?.planDate?.toISOString().slice(0,10)??null,technicians:Array.isArray(r.technicians)?r.technicians.filter((t):t is string=>typeof t==='string'):[]}));
   const all=[...map(preventivos,'PREVENTIVO'),...map(correctivos,'CORRECTIVO')].filter(t=>!latest.has(t.code)).concat(fresh);
   const allProjects=[...new Set([...all.map(r=>r.project),...cotizaciones.map(r=>projectKey(r.proyecto))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const projects=allProjects.filter(p=>allowedProject(p,actor.allowed));
@@ -101,12 +103,20 @@ export function yearlyMaintenance(facts:{kind:string;lastDate:Date;formCode:stri
   return [...latest.values()].filter(fact=>fact.kind==='SERVICE_GE'||fact.kind==='FILTROS_AA').map(fact=>{const due=new Date(fact.lastDate);due.setUTCFullYear(due.getUTCFullYear()+1);
     return {kind:fact.kind as SiteMaintenance['kind'],lastDate:fact.lastDate.toISOString().slice(0,10),dueDate:due.toISOString().slice(0,10),due:due.toISOString().slice(0,10)<=today.toISOString().slice(0,10),formCode:fact.formCode};});
 }
+const FINISHED_FORM=/^(approved|aprobad|submitted|enviad|to review|para revisar|cancel|closed|cerrad|complet|finaliz)/i;
+const argentinaMonth=(date:Date)=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit'}).format(date);
+/** What is still worth scheduling at a site: preventives planned this month and correctives not yet done. */
+export function openForm(task:{type:string;status?:string;planDate?:string|null},now=new Date()):boolean{
+  if(FINISHED_FORM.test((task.status??'').trim()))return false;
+  if(task.type==='PREVENTIVO')return !task.planDate||task.planDate.slice(0,7)===argentinaMonth(now);
+  return task.type==='CORRECTIVO';
+}
 /** Everything a coordinator needs after typing only the site: its forms, what Sytex still lists as pending and what earlier visits left open. */
 export async function siteContext(actor:OperationsActor,site:string):Promise<SiteContext>{
   const code=site.trim().toUpperCase();if(!code)return {maintenance:[],forms:[],pending:[],previous:[]};
   const c=await catalog(actor),db=getPrismaClient();
   const [pending,facts,rows]=await Promise.all([getPendingBySites([code]),db.sytex_site_maintenance.findMany({where:{siteCode:code},select:{kind:true,lastDate:true,formCode:true,reportedAt:true}}),db.$queryRaw<{day:Date;project:string;task_type:string;status:Visit['status'];outcome:string}[]>`SELECT day,project,task_type,status,outcome FROM ops_visits WHERE upper(site_code)=${code} AND status IN ('CON_PENDIENTES','CANCELADO') ORDER BY day DESC LIMIT 10`]);
-  return {maintenance:yearlyMaintenance(facts),forms:c.tasks.filter(t=>t.siteCode.trim().toUpperCase()===code),pending:(pending[code]??[]).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · ')),previous:rows.filter(r=>allowedProject(r.project,actor.allowed)).map(r=>({day:r.day.toISOString().slice(0,10),project:r.project,taskType:r.task_type,status:r.status,outcome:r.outcome}))};
+  return {maintenance:yearlyMaintenance(facts),forms:c.tasks.filter(t=>t.siteCode.trim().toUpperCase()===code&&openForm(t)),pending:(pending[code]??[]).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · ')),previous:rows.filter(r=>allowedProject(r.project,actor.allowed)).map(r=>({day:r.day.toISOString().slice(0,10),project:r.project,taskType:r.task_type,status:r.status,outcome:r.outcome}))};
 }
 export async function closeDay(actor:OperationsActor,day:string,requested:string[]){
   const result=await visits(actor,day,requested);

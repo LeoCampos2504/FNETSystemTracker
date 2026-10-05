@@ -4,7 +4,7 @@ import type { OperationsActor,ReviewInput,VisitInput } from './operations';
 const fake=vi.hoisted(()=>({db:{} as Record<string,unknown>,reviews:[] as unknown[],closed:false,updateCount:1}));
 vi.mock('@/server/prisma',()=>({getPrismaClient:()=>fake.db}));
 vi.mock('./operational-data',()=>({getPendingBySites:async()=>({})}));
-import { addVisit,catalog,closeDay,materials,operationsActor,saveReview,updateVisit,yearlyMaintenance } from './operations';
+import { addVisit,catalog,closeDay,materials,openForm,operationsActor,saveReview,updateVisit,yearlyMaintenance } from './operations';
 const user={id:'00000000-0000-4000-8000-000000000001',name:'Test',email:'test@example.invalid',role:UserRole.COORDINATOR,active:true,technicianId:null,coordinatorId:null};
 const non='NON - mantenimiento',bam='BAM - mantenimiento';
 const actor:OperationsActor={user,allowed:[non]};
@@ -17,7 +17,7 @@ beforeEach(()=>{
  execute=vi.fn(async(strings:TemplateStringsArray)=>strings.join('?').startsWith('UPDATE')?fake.updateCount:1);
  fake.db={
   $queryRaw:query,$executeRaw:execute,$transaction:async(run:(tx:unknown)=>unknown)=>run(fake.db),
-  sytex_supply_form_contexts:{findMany:async()=>[]},sytex_site_maintenance:{findMany:async()=>[]},sytex_form_links:{findMany:async()=>[]},
+  sytex_supply_form_contexts:{findMany:async()=>[]},sytex_site_maintenance:{findMany:async()=>[]},sytex_form_states:{findMany:async()=>[]},sytex_form_links:{findMany:async()=>[]},
   preventivos:{findMany:async()=>['NON','BAM'].map((p,i)=>({codigo:'FO-26-'+(i+1),proyecto:p+' - mantenimiento',codigos_sitios_afectados:'ST1',nombres_sitios_afectados:'Sitio',nombre:'Mantenimiento',asignado_a:'Test',usuario_colaborador:null}))},
   correctivos:{findMany:async()=>[]},cotizaciones:{findMany:async()=>[{proyecto:'CEF - Compras'},{proyecto:'NON - Generadores'}]},insumos:{findMany:async()=>[source('FO-26-1'),source('FO-26-2')]},sytex_supply_import_items:{findMany:async()=>[]},
  };
@@ -43,4 +43,22 @@ describe('coordinator operation safeguards',()=>{
  it('does not update an inaccessible visit',async()=>{query.mockImplementation(async(strings:TemplateStringsArray)=>strings.join('?').includes('ops_visits')?[{project:bam}]:[]);await expect(updateVisit(actor,{id:visit.requestKey,version:0,technicians:['Test'],status:'REALIZADO',outcome:''})).rejects.toThrow('FORBIDDEN_PROJECT');});
  it('counts one year from the most recently reported service or filter change',()=>{const facts=[{kind:'SERVICE_GE',lastDate:new Date('2025-03-10'),formCode:'FO-26-1',reportedAt:'2026-09-01T10:00:00'},{kind:'SERVICE_GE',lastDate:new Date('2026-09-20'),formCode:'FO-26-2',reportedAt:'2026-09-20T10:00:00'},{kind:'FILTROS_AA',lastDate:new Date('2025-10-01'),formCode:'FO-26-3',reportedAt:'2026-09-02T10:00:00'}];
   expect(yearlyMaintenance(facts,new Date('2026-10-05'))).toEqual([{kind:'SERVICE_GE',lastDate:'2026-09-20',dueDate:'2027-09-20',due:false,formCode:'FO-26-2'},{kind:'FILTROS_AA',lastDate:'2025-10-01',dueDate:'2026-10-01',due:true,formCode:'FO-26-3'}]);});
+});
+
+describe('forms offered when a site is typed',()=>{
+ const now=new Date('2026-10-05T15:00:00Z');
+ it('keeps only preventives planned this month and correctives not yet done',()=>{
+  expect(openForm({type:'PREVENTIVO',status:'Open',planDate:'2026-10-20'},now)).toBe(true);
+  expect(openForm({type:'PREVENTIVO',status:'Open',planDate:'2026-09-20'},now)).toBe(false);
+  expect(openForm({type:'PREVENTIVO',status:'Open',planDate:null},now)).toBe(true);
+  expect(openForm({type:'CORRECTIVO',status:'In progress',planDate:'2026-07-01'},now)).toBe(true);
+  expect(openForm({type:'CORRECTIVO',status:'Rejected'},now)).toBe(true);
+  expect(openForm({type:'CORRECTIVO',status:'Approved'},now)).toBe(false);
+  expect(openForm({type:'PREVENTIVO',status:'Aprobado',planDate:'2026-10-02'},now)).toBe(false);
+  expect(openForm({type:'CORRECTIVO',status:'Cancelled'},now)).toBe(false);
+  expect(openForm({type:'OTRO',status:'Open'},now)).toBe(false);
+ });
+ it('uses the Argentina month at the turn of the month',()=>{
+  expect(openForm({type:'PREVENTIVO',status:'Open',planDate:'2026-09-15'},new Date('2026-10-01T01:00:00Z'))).toBe(true);
+ });
 });

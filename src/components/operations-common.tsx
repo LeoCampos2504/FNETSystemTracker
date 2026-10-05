@@ -53,6 +53,8 @@ export function projectZone(project:string){
  const type=/\bMPC\b|preventiv/i.test(rest)?'PREVENTIVO':/\bMCC|correctiv/i.test(rest)?'CORRECTIVO':'OTRO';
  return {zone,type};
 }
+/** The Sytex project of a zone and kind of visit; when none matches the kind, any project of the zone. */
+export const pickProject=(projects:string[],zone:string,type:string)=>projects.find(p=>{const z=projectZone(p);return z.zone===zone&&z.type===type;})??projects.find(p=>projectZone(p).zone===zone)??projects[0]??'';
 export const projectLabel=(project:string)=>{const z=projectZone(project);return z.zone+' · '+typeLabels[z.type];};
 export function ZoneFilter({state,extraProjects=[]}:{state:ReturnType<typeof useCatalog>;extraProjects?:string[]}){
  const chosen=useZoneSelection();
