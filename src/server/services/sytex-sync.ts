@@ -23,20 +23,22 @@ export function configuredProjectIds(env: Record<string, string | undefined> = p
   return custom.length ? [...new Set(custom)] : KNOWN_PROJECT_IDS;
 }
 const CONCURRENCY = 4;
-const REQUEST_TIMEOUT_MS = 180_000;
+const ANSWER_CONCURRENCY = 2;
+const REQUEST_TIMEOUT_MS = 120_000;
 
 export type SytexSyncStatus = {
   configured: boolean; running: boolean;
   startedAt: string | null; finishedAt: string | null;
   result: { projects: number; forms: number; items: number; changed: boolean; since: string } | null;
   error: string | null; errorDetail: string | null;
+  progress: { done: number; total: number } | null;
 };
 type Config = { baseUrl: string; authorization: string; organization: string };
 /** What the service variables provide: an explicit header, or the user and key Sytex issues in the profile. */
 type Settings = { baseUrl: string; organization: string; candidates: string[] };
 type Fetcher = typeof fetch;
 
-const state: Omit<SytexSyncStatus, "configured"> = { running: false, startedAt: null, finishedAt: null, result: null, error: null, errorDetail: null };
+const state: Omit<SytexSyncStatus, "configured"> = { running: false, startedAt: null, finishedAt: null, result: null, error: null, errorDetail: null, progress: null };
 
 export function sytexSettings(env: Record<string, string | undefined> = process.env): Settings | null {
   const explicit = env.SYTEX_AUTHORIZATION?.trim(), user = env.SYTEX_USER?.trim(), key = env.SYTEX_API_KEY?.trim();
@@ -122,7 +124,7 @@ async function listProjects(config: Config, fetcher: Fetcher): Promise<{ id: num
   return [...found].map(([id, name]) => ({ id, name }));
 }
 
-const RETRY_WAITS_MS = [4_000, 15_000];
+const RETRY_WAITS_MS = [5_000];
 /** One export. A busy or timed-out Sytex (429 or 5xx) is asked again after a pause before giving up. */
 async function sheet(config: Config, fetcher: Fetcher, kind: "formdata" | "entryanswerdata", projectId: number, window: string, waits = RETRY_WAITS_MS): Promise<unknown[][]> {
   const path = `/api/${kind}/?org_id=${encodeURIComponent(config.organization)}&${window}&project=${projectId}`;
@@ -138,15 +140,15 @@ async function sheet(config: Config, fetcher: Fetcher, kind: "formdata" | "entry
   }
 }
 
-async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>): Promise<R[]> {
+async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>, size = CONCURRENCY): Promise<R[]> {
   const results: R[] = [];
-  for (let start = 0; start < items.length; start += CONCURRENCY) results.push(...await Promise.all(items.slice(start, start + CONCURRENCY).map(work)));
+  for (let start = 0; start < items.length; start += size) results.push(...await Promise.all(items.slice(start, start + size).map(work)));
   return results;
 }
 
 const hasRows = (rows: unknown[][]) => rows.slice(1).some((row) => row.some((cell) => cell !== null && cell !== ""));
 
-export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS) {
+export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS, onProgress: (done: number, total: number) => void = () => undefined) {
   const since = syncWindowStart(now);
   const projects = await listProjects(config, fetcher).catch((error: unknown) => {
     if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") return configuredProjectIds().map((id) => ({ id, name: "" }));
@@ -156,9 +158,10 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   const formLists = await inBatches(requests, async (entry) => ({ ...entry, rows: await sheet(config, fetcher, "formdata", entry.project.id, entry.window, waits) }));
   const active = formLists.filter((entry) => hasRows(entry.rows)), activeProjects = new Set(active.map((entry) => entry.project.id)).size;
   if (!active.length) return { projects: 0, forms: 0, items: 0, changed: false, since };
-  // Answer exports are the heavy ones: one at a time, so Sytex is never asked for several at once.
-  const answers: unknown[][][] = [];
-  for (const entry of active) { const rows = await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); if (hasRows(rows)) answers.push(rows); }
+  // Answer exports are the heavy ones: only a few at a time, and the screen is told how far they got.
+  let done = 0;
+  onProgress(0, active.length);
+  const answers = (await inBatches(active, async (entry) => { const rows = await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); onProgress(++done, active.length); return rows; }, ANSWER_CONCURRENCY)).filter(hasRows);
   if (!answers.length) return { projects: activeProjects, forms: 0, items: 0, changed: false, since };
   const parsed = parseSytexExportSheets([...answers, ...active.map((entry) => entry.rows)]);
   const forms = parsed.formContexts?.length ?? 0;
@@ -198,10 +201,10 @@ async function dropSupersededRows(importId: string) {
 export function startSytexSync(userId: string): SytexSyncStatus {
   const settings = sytexSettings();
   if (!settings || state.running) return sytexSyncStatus();
-  state.running = true; state.startedAt = new Date().toISOString(); state.error = null; state.errorDetail = null;
-  void sytexConfig(settings).then((config) => runSytexSync(userId, config))
+  state.running = true; state.startedAt = new Date().toISOString(); state.error = null; state.errorDetail = null; state.progress = null;
+  void sytexConfig(settings).then((config) => runSytexSync(userId, config, fetch, new Date(), RETRY_WAITS_MS, (done, total) => { state.progress = { done, total }; }))
     .then((result) => { state.result = result; })
     .catch((error: unknown) => { state.errorDetail = error instanceof SytexError && error.detail ? error.detail : null; state.error = error instanceof SytexError ? error.code : error instanceof Error && error.message.startsWith("SYTEX_") ? error.message : "SYTEX_SYNC_FAILED"; })
-    .finally(() => { state.running = false; state.finishedAt = new Date().toISOString(); });
+    .finally(() => { state.progress = null; state.running = false; state.finishedAt = new Date().toISOString(); });
   return sytexSyncStatus();
 }
