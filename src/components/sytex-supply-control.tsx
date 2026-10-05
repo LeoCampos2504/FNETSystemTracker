@@ -1,18 +1,39 @@
 "use client";
-import { useEffect,useState,type FormEvent } from 'react';
+import { useEffect,useRef,useState,type FormEvent } from 'react';
 import type { Material } from '@/contracts/operations';
 import { Feedback,opCall,operationsUrl,projectLabel,useCatalog,useOperation,ZoneFilter } from './operations-common';
 import s from './operations.module.css';
 const classifications:Record<string,string>={PENDIENTE:'Por definir',INCLUIDO:'Incluido',NO_INCLUIDO:'No incluido'};
 const intra:Record<string,string>={PENDIENTE:'Pendiente de descarga',PARCIAL:'Descarga parcial',DESCARGADO:'Descargado en Intra',NO_CORRESPONDE:'No corresponde'};
+type SyncStatus={configured:boolean;running:boolean;finishedAt:string|null;result:{projects:number;forms:number;items:number;changed:boolean;since:string}|null;error:string|null};
+const SYNC_EVERY_MS=5*60*1000;
+const syncErrors:Record<string,string>={SYTEX_CREDENTIAL_REJECTED:'Sytex rechazó la clave configurada. Revisá la variable SYTEX_AUTHORIZATION.',SYTEX_UNREACHABLE:'No se pudo conectar con Sytex. Se reintenta en unos minutos.',SYTEX_EXPORT_HAS_CONFLICTS:'Sytex devolvió respuestas contradictorias para un mismo insumo; no se guardó esa consulta.'};
+function syncText(sync:SyncStatus){
+ if(!sync.configured)return 'Sytex en directo sin configurar: se muestran los datos de la última carga manual.';
+ if(sync.running)return 'Consultando Sytex…';
+ if(sync.error)return syncErrors[sync.error]??'La última consulta a Sytex falló. Se reintenta en unos minutos.';
+ if(!sync.finishedAt||!sync.result)return 'Sytex en directo configurado: primera consulta en curso.';
+ return 'Sytex en directo · última consulta '+new Date(sync.finishedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' · '+sync.result.items+' insumos en '+sync.result.projects+' proyectos desde el '+sync.result.since.split('-').reverse().join('/')+'.';
+}
 export function SytexSupplyControl(){
- const zones=useCatalog(),[items,setItems]=useState<Material[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[revision,setRevision]=useState(0),[search,setSearch]=useState(''),[pending,setPending]=useState(false),[page,setPage]=useState(1),[selected,setSelected]=useState<Material|null>(null);
+ const zones=useCatalog(),[items,setItems]=useState<Material[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[revision,setRevision]=useState(0),[search,setSearch]=useState(''),[pending,setPending]=useState(false),[page,setPage]=useState(1),[selected,setSelected]=useState<Material|null>(null),[syncRequest,setSyncRequest]=useState(0);
  const filter=zones.projects.join('|');
+ const [sync,setSync]=useState<SyncStatus|null>(null),wasRunning=useRef(false);
+ // Live data: ask Sytex again when the screen opens and every five minutes while it stays open.
+ useEffect(()=>{let active=true,timer:ReturnType<typeof setTimeout>;
+  const call=(start:boolean)=>fetch('/api/sytex/sync',{method:start?'POST':'GET',cache:'no-store'}).then(r=>r.ok?r.json() as Promise<SyncStatus>:null).catch(()=>null);
+  const tick=async(start:boolean)=>{const before=await call(false);if(!active||!before)return;
+   const due=before.configured&&!before.running&&(start||!before.finishedAt||Date.now()-Date.parse(before.finishedAt)>SYNC_EVERY_MS);
+   const current=due?await call(true)??before:before;if(!active)return;
+   if(wasRunning.current&&!current.running&&current.result?.changed)setRevision(v=>v+1);wasRunning.current=current.running;setSync(current);
+   timer=setTimeout(()=>void tick(false),current.running?5000:60000);};
+  void tick(syncRequest>0);return()=>{active=false;clearTimeout(timer);};},[syncRequest]);
  useEffect(()=>{if(!zones.data)return;let active=true;const timer=setTimeout(()=>{setLoading(true);opCall<{items:Material[]}>(operationsUrl('materials',zones.projects)).then(d=>{if(active){setItems(d.items);setError('');setPage(1);}}).catch(e=>{if(active){setError(e.message);setItems([]);}}).finally(()=>{if(active)setLoading(false);});},0);return()=>{active=false;clearTimeout(timer);};},[filter,revision,zones.data]); // eslint-disable-line react-hooks/exhaustive-deps
  const term=search.toLocaleLowerCase(),filtered=items.filter(r=>(!pending||r.missing)&&[r.formulario,r.description,r.siteCode,r.siteName,r.technician,r.review?.invoiceNumber].join(' ').toLocaleLowerCase().includes(term));
  const status=(r:Material)=>r.changed?{text:'Cambió en Sytex',tone:s.badgeWait}:!r.missing?{text:r.review?.intraStatus==='NO_CORRESPONDE'?'No corresponde':'Descargado',tone:r.review?.intraStatus==='NO_CORRESPONDE'?s.badgeOff:s.badgeOk}:r.review?.intraStatus==='PARCIAL'?{text:'Descarga parcial',tone:s.badgeWait}:{text:'Pendiente',tone:s.badgeWait};
- return <section className={s.app}><header className={s.heading}><div><span className={s.kicker}>SYTEX · CONTEO Y DESCARGA EN INTRA</span><h1>Insumos por zona</h1></div><button onClick={()=>setRevision(v=>v+1)} disabled={loading}>Actualizar datos</button></header>
+ return <section className={s.app}><header className={s.heading}><div><span className={s.kicker}>SYTEX · CONTEO Y DESCARGA EN INTRA</span><h1>Insumos por zona</h1></div><button onClick={()=>{setSyncRequest(v=>v+1);setRevision(v=>v+1);}} disabled={loading||sync?.running}>{sync?.running?'Consultando Sytex…':'Actualizar datos'}</button></header>
  <ZoneFilter state={zones}/><Feedback error={error||zones.error}/>
+ {sync&&<p className={s.note} role="status">{syncText(sync)}</p>}
  <div className={s.stats}><div>Insumos<strong>{items.length}</strong></div><div>Pendientes de descarga<strong>{items.filter(r=>r.missing).length}</strong></div><div>Sin definir si es incluido<strong>{items.filter(r=>!r.review||r.review.classification==='PENDIENTE').length}</strong></div><div>Cambiaron en Sytex<strong>{items.filter(r=>r.changed).length}</strong></div></div>
  <div className={s.toolbar}><input aria-label="Buscar insumo" placeholder="Buscar formulario, material, sitio, técnico o factura…" size={44} value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/><button aria-pressed={pending} onClick={()=>{setPending(v=>!v);setPage(1);}}>Solo pendientes</button>{zones.data&&<a className={s.button} href={operationsUrl('materials',zones.projects,undefined,true)}>Descargar Excel</a>}</div>
  {loading?<p role="status">Consultando insumos…</p>:<><div className={s.tableWrap}><table className={s.compact}><thead><tr>{['Formulario','Zona','Insumo','Sitio','Cantidad','Incluido','Intra','Factura',''].map((t,i)=><th key={i}>{t}</th>)}</tr></thead><tbody>{filtered.slice((page-1)*50,page*50).map(r=>{const st=status(r),zone=r.review?.project??(r.projects.length===1?r.projects[0]:'');return <tr key={r.key}><td className={s.nowrap}><strong>{r.formulario}</strong></td><td className={s.nowrap}>{zone?projectLabel(zone):'Sin zona'}</td><td><strong>{r.description||'Sin descripción'}</strong></td><td>{r.siteCode}<small>{r.siteName}</small></td><td className={s.nowrap}>{r.quantity??'—'}{r.review&&<small>Contado {r.review.countedQuantity??'—'} · Intra {r.review.intraQuantity??'—'}</small>}</td><td className={s.nowrap}>{classifications[r.review?.classification??'PENDIENTE']}</td><td><span className={s.badge+' '+st.tone}>{st.text}</span></td><td>{r.review?.invoiceNumber||'—'}{r.files.length>0&&<small>{r.files.length} comprobante(s)</small>}{r.image&&<small><a href={r.image} target="_blank" rel="noopener noreferrer">Foto ↗</a></small>}</td><td><button onClick={()=>setSelected(r)}>Revisar</button></td></tr>;})}</tbody></table></div>{!filtered.length&&<p>No hay insumos con este filtro.</p>}<div className={s.pager}><button disabled={page<=1} onClick={()=>setPage(v=>v-1)}>Anterior</button><span>{filtered.length} registros · página {page} de {Math.max(1,Math.ceil(filtered.length/50))}</span><button disabled={page*50>=filtered.length} onClick={()=>setPage(v=>v+1)}>Siguiente</button></div></>}
