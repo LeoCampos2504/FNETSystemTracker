@@ -38,6 +38,9 @@ type Config = { baseUrl: string; authorization: string; organization: string };
 type Settings = { baseUrl: string; organization: string; candidates: string[] };
 type Fetcher = typeof fetch;
 
+/** When the closed month was last downloaded; routine passes skip it until then. */
+const FULL_EVERY_MS = 12 * 60 * 60 * 1000;
+let lastFullAt = 0;
 const state: Omit<SytexSyncStatus, "configured"> = { running: false, startedAt: null, finishedAt: null, result: null, error: null, errorDetail: null, progress: null };
 
 export function sytexSettings(env: Record<string, string | undefined> = process.env): Settings | null {
@@ -148,13 +151,15 @@ async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>, size =
 
 const hasRows = (rows: unknown[][]) => rows.slice(1).some((row) => row.some((cell) => cell !== null && cell !== ""));
 
-export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS, onProgress: (done: number, total: number) => void = () => undefined) {
+export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS, onProgress: (done: number, total: number) => void = () => undefined, quick = false) {
   const since = syncWindowStart(now);
+  // A quick pass asks only for the current month; the closed month is saved by a full pass and stays untouched.
+  const windows = quick ? syncWindows(now).slice(1) : syncWindows(now);
   const projects = await listProjects(config, fetcher).catch((error: unknown) => {
     if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") return configuredProjectIds().map((id) => ({ id, name: "" }));
     throw error;
   });
-  const requests = projects.flatMap((project) => syncWindows(now).map((window) => ({ project, window })));
+  const requests = projects.flatMap((project) => windows.map((window) => ({ project, window })));
   const formLists = await inBatches(requests, async (entry) => ({ ...entry, rows: await sheet(config, fetcher, "formdata", entry.project.id, entry.window, waits) }));
   const active = formLists.filter((entry) => hasRows(entry.rows)), activeProjects = new Set(active.map((entry) => entry.project.id)).size;
   if (!active.length) return { projects: 0, forms: 0, items: 0, changed: false, since };
@@ -212,8 +217,9 @@ export function startSytexSync(userId: string): SytexSyncStatus {
   const settings = sytexSettings();
   if (!settings || state.running) return sytexSyncStatus();
   state.running = true; state.startedAt = new Date().toISOString(); state.error = null; state.errorDetail = null; state.progress = null;
-  void sytexConfig(settings).then((config) => runSytexSync(userId, config, fetch, new Date(), RETRY_WAITS_MS, (done, total) => { state.progress = { done, total }; }))
-    .then((result) => { state.result = result; })
+  const quick = Date.now() - lastFullAt < FULL_EVERY_MS, startedFull = Date.now();
+  void sytexConfig(settings).then((config) => runSytexSync(userId, config, fetch, new Date(), RETRY_WAITS_MS, (done, total) => { state.progress = { done, total }; }, quick))
+    .then((result) => { state.result = result; if (!quick) lastFullAt = startedFull; })
     .catch((error: unknown) => { state.errorDetail = error instanceof SytexError && error.detail ? error.detail : null; state.error = error instanceof SytexError ? error.code : error instanceof Error && error.message.startsWith("SYTEX_") ? error.message : "SYTEX_SYNC_FAILED"; })
     .finally(() => { state.progress = null; state.running = false; state.finishedAt = new Date().toISOString(); });
   return sytexSyncStatus();

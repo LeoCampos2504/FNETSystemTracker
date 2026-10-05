@@ -94,6 +94,14 @@ describe("direct Sytex synchronization", () => {
     const down = (async (input: string | URL | Request, init?: RequestInit) => String(input).includes("/api/entryanswerdata/") ? new Response("", { status: 504 }) : sytex({ ...projects, "plan_date__gte=2026-10-01&project=7": nonForms })(input, init)) as typeof fetch;
     await expect(runSytexSync("user-id", config, down, new Date("2026-10-05T15:00:00Z"), [0])).rejects.toThrow("SYTEX_RESPONSE_504");
   });
+  it("asks only for the current month in a quick pass", async () => {
+    const asked: string[] = [];
+    const spy = (async (input: string | URL | Request, init?: RequestInit) => { asked.push(String(input)); return sytex({ ...projects, "/api/entryanswerdata/": nonAnswers, "plan_date__gte=2026-10-01&project=7": nonForms })(input, init); }) as typeof fetch;
+    expect(await runSytexSync("user-id", config, spy, new Date("2026-10-05T15:00:00Z"), [0], () => undefined, true)).toMatchObject({ items: 1, since: "2026-09-01" });
+    const exports = asked.filter((url) => url.includes("/api/formdata/") && !url.includes("2999"));
+    expect(exports.length).toBeGreaterThan(0);
+    expect(exports.every((url) => url.includes("plan_date__gte=2026-10-01") && !url.includes("plan_date__lte"))).toBe(true);
+  });
   it("saves nothing while no form has materials", async () => {
     const result = await runSytexSync("user-id", config, sytex({ ...projects, "/api/entryanswerdata/": [answerHeaders], "project=7": nonForms }));
     expect(result).toMatchObject({ projects: 1, items: 0, changed: false });
