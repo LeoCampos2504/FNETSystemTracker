@@ -7,7 +7,7 @@ const classifications:Record<string,string>={PENDIENTE:'Por definir',INCLUIDO:'I
 const intra:Record<string,string>={PENDIENTE:'Pendiente de descarga',PARCIAL:'Descarga parcial',DESCARGADO:'Descargado en Intra',NO_CORRESPONDE:'No corresponde'};
 type SyncStatus={configured:boolean;running:boolean;finishedAt:string|null;result:{projects:number;forms:number;items:number;changed:boolean;since:string}|null;error:string|null};
 const SYNC_EVERY_MS=5*60*1000;
-const syncErrors:Record<string,string>={SYTEX_CREDENTIAL_REJECTED:'Sytex rechazó la clave configurada. Revisá la variable SYTEX_AUTHORIZATION.',SYTEX_UNREACHABLE:'No se pudo conectar con Sytex. Se reintenta en unos minutos.',SYTEX_EXPORT_HAS_CONFLICTS:'Sytex devolvió respuestas contradictorias para un mismo insumo; no se guardó esa consulta.'};
+const syncErrors:Record<string,string>={SYTEX_CREDENTIAL_REJECTED:'Sytex rechazó el usuario o la clave configurados. Revisá las variables SYTEX_USER y SYTEX_API_KEY.',SYTEX_UNREACHABLE:'No se pudo conectar con Sytex. Se reintenta en unos minutos.',SYTEX_EXPORT_HAS_CONFLICTS:'Sytex devolvió respuestas contradictorias para un mismo insumo; no se guardó esa consulta.'};
 function syncText(sync:SyncStatus){
  if(!sync.configured)return 'Sytex en directo sin configurar: se muestran los datos de la última carga manual.';
  if(sync.running)return 'Consultando Sytex…';

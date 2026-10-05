@@ -5,7 +5,7 @@ vi.mock("@/server/prisma", () => ({ getPrismaClient: () => ({ $executeRaw: mocks
 vi.mock("@/server/services/sytex-supply-imports", () => ({ saveSytexSupplyExport: mocks.save }));
 // Each fake response carries its rows as JSON instead of a real workbook.
 vi.mock("read-excel-file/node", () => ({ readSheet: async (bytes: Buffer) => JSON.parse(bytes.toString("utf8")) }));
-import { runSytexSync, syncWindowStart, sytexConfig } from "./sytex-sync";
+import { runSytexSync, syncWindowStart, sytexConfig, sytexSettings } from "./sytex-sync";
 
 const config = { baseUrl: "https://sytex.example.invalid", authorization: "Token secret", organization: "1" };
 const formHeaders = ["Código", "Nombre", "Plantilla", "Proyecto", "Códigos de sitios afectados", "Nombres de sitios afectados", "Asignado a", "Usuario colaborador"];
@@ -31,9 +31,24 @@ describe("direct Sytex synchronization", () => {
     expect(syncWindowStart(new Date("2026-01-01T02:00:00Z"))).toBe("2025-11-01");
   });
   it("is disabled without a credential and never uses an insecure address", () => {
-    expect(sytexConfig({})).toBeNull();
-    expect(sytexConfig({ SYTEX_AUTHORIZATION: "Token x", SYTEX_BASE_URL: "http://sytex.example.invalid" })).toBeNull();
-    expect(sytexConfig({ SYTEX_AUTHORIZATION: " Token x " })).toEqual({ baseUrl: "https://claro.sytex.io", authorization: "Token x", organization: "1" });
+    expect(sytexSettings({})).toBeNull();
+    expect(sytexSettings({ SYTEX_USER: "persona@example.invalid" })).toBeNull();
+    expect(sytexSettings({ SYTEX_AUTHORIZATION: "Token x", SYTEX_BASE_URL: "http://sytex.example.invalid" })).toBeNull();
+    expect(sytexSettings({ SYTEX_AUTHORIZATION: " Token x " })).toEqual({ baseUrl: "https://claro.sytex.io", organization: "1", candidates: ["Token x"] });
+  });
+  it("offers the profile key as user and key first, then as a token", () => {
+    expect(sytexSettings({ SYTEX_USER: "persona@example.invalid", SYTEX_API_KEY: "clave" })?.candidates).toEqual(["Basic " + Buffer.from("persona@example.invalid:clave").toString("base64"), "Token clave"]);
+    expect(sytexSettings({ SYTEX_API_KEY: "clave" })?.candidates).toEqual(["Token clave"]);
+  });
+  it("keeps the form of the credential that Sytex accepts and fails clearly when none works", async () => {
+    const settings = { baseUrl: "https://sytex.example.invalid", organization: "1", candidates: ["Basic uno", "Token dos"] };
+    const seen: string[] = [];
+    const picky = (async (_input: string | URL | Request, init?: RequestInit) => { const value = (init?.headers as Record<string, string>).Authorization; seen.push(value); return new Response("{}", { status: value === "Token dos" ? 200 : 401 }); }) as typeof fetch;
+    expect((await sytexConfig(settings, picky)).authorization).toBe("Token dos");
+    expect((await sytexConfig(settings, picky)).authorization).toBe("Token dos");
+    expect(seen).toEqual(["Basic uno", "Token dos"]);
+    const closed = (async () => new Response("{}", { status: 401 })) as typeof fetch;
+    await expect(sytexConfig({ ...settings, candidates: ["Token otro"] }, closed)).rejects.toThrow("SYTEX_CREDENTIAL_REJECTED");
   });
   it("downloads answers only for projects with forms and stores every project in one batch", async () => {
     const calls: { url: string; headers: Record<string, string> }[] = [];
