@@ -76,6 +76,13 @@ export function syncWindowStart(now = new Date()): string {
   return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+/** Sytex exports one month at a time, like the spreadsheet did: the closed month, then the current one with no end. */
+export function syncWindows(now = new Date()): string[] {
+  const start = syncWindowStart(now), [year, month] = start.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate(), next = new Date(Date.UTC(year, month, 1));
+  return [`plan_date__gte=${start}&plan_date__lte=${start.slice(0, 8)}${String(lastDay).padStart(2, "0")}`, `plan_date__gte=${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`];
+}
+
 class SytexError extends Error { constructor(public code: string, public detail = "") { super(code); } }
 
 async function request(config: Config, fetcher: Fetcher, path: string, accept: string): Promise<Response> {
@@ -115,9 +122,20 @@ async function listProjects(config: Config, fetcher: Fetcher): Promise<{ id: num
   return [...found].map(([id, name]) => ({ id, name }));
 }
 
-async function sheet(config: Config, fetcher: Fetcher, kind: "formdata" | "entryanswerdata", projectId: number, since: string): Promise<unknown[][]> {
-  const response = await request(config, fetcher, `/api/${kind}/?org_id=${encodeURIComponent(config.organization)}&plan_date__gte=${since}&project=${projectId}`, "*/*");
-  return readSheet(Buffer.from(await response.arrayBuffer()), { trim: false });
+const RETRY_WAITS_MS = [4_000, 15_000];
+/** One export. A busy or timed-out Sytex (429 or 5xx) is asked again after a pause before giving up. */
+async function sheet(config: Config, fetcher: Fetcher, kind: "formdata" | "entryanswerdata", projectId: number, window: string, waits = RETRY_WAITS_MS): Promise<unknown[][]> {
+  const path = `/api/${kind}/?org_id=${encodeURIComponent(config.organization)}&${window}&project=${projectId}`;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const response = await request(config, fetcher, path, "*/*");
+      return await readSheet(Buffer.from(await response.arrayBuffer()), { trim: false });
+    } catch (error) {
+      const retryable = error instanceof SytexError && (error.code === "SYTEX_UNREACHABLE" || /^SYTEX_RESPONSE_(429|5\d\d)$/.test(error.code));
+      if (!retryable || attempt >= waits.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, waits[attempt]));
+    }
+  }
 }
 
 async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>): Promise<R[]> {
@@ -128,21 +146,24 @@ async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>): Promi
 
 const hasRows = (rows: unknown[][]) => rows.slice(1).some((row) => row.some((cell) => cell !== null && cell !== ""));
 
-export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date()) {
+export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS) {
   const since = syncWindowStart(now);
   const projects = await listProjects(config, fetcher).catch((error: unknown) => {
     if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") return configuredProjectIds().map((id) => ({ id, name: "" }));
     throw error;
   });
-  const formLists = await inBatches(projects, async (project) => ({ project, rows: await sheet(config, fetcher, "formdata", project.id, since) }));
-  const active = formLists.filter((entry) => hasRows(entry.rows));
+  const requests = projects.flatMap((project) => syncWindows(now).map((window) => ({ project, window })));
+  const formLists = await inBatches(requests, async (entry) => ({ ...entry, rows: await sheet(config, fetcher, "formdata", entry.project.id, entry.window, waits) }));
+  const active = formLists.filter((entry) => hasRows(entry.rows)), activeProjects = new Set(active.map((entry) => entry.project.id)).size;
   if (!active.length) return { projects: 0, forms: 0, items: 0, changed: false, since };
-  const answers = (await inBatches(active, (entry) => sheet(config, fetcher, "entryanswerdata", entry.project.id, since))).filter(hasRows);
-  if (!answers.length) return { projects: active.length, forms: 0, items: 0, changed: false, since };
+  // Answer exports are the heavy ones: one at a time, so Sytex is never asked for several at once.
+  const answers: unknown[][][] = [];
+  for (const entry of active) { const rows = await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); if (hasRows(rows)) answers.push(rows); }
+  if (!answers.length) return { projects: activeProjects, forms: 0, items: 0, changed: false, since };
   const parsed = parseSytexExportSheets([...answers, ...active.map((entry) => entry.rows)]);
   const forms = parsed.formContexts?.length ?? 0;
   if (parsed.errors.length) throw new SytexError("SYTEX_EXPORT_HAS_CONFLICTS");
-  if (!parsed.items.length) return { projects: active.length, forms, items: 0, changed: false, since };
+  if (!parsed.items.length) return { projects: activeProjects, forms, items: 0, changed: false, since };
   // Identity of the content, not of the files: an unchanged Sytex produces no new rows.
   const identity = createHash("sha256").update(JSON.stringify([
     parsed.items.map((item) => [item.formulario, item.grupo, item.indice, item.description, item.quantity, item.provider, item.image, item.imageDeclared, item.siteCode, item.status]).sort(),
@@ -151,7 +172,7 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   ])).digest("hex");
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
   if (!saved.alreadyImported) await dropSupersededRows(saved.importId);
-  return { projects: active.length, forms, items: parsed.items.length, changed: !saved.alreadyImported, since };
+  return { projects: activeProjects, forms, items: parsed.items.length, changed: !saved.alreadyImported, since };
 }
 
 /** Earlier synchronizations keep only what the newest one no longer covers (forms outside its date window). */

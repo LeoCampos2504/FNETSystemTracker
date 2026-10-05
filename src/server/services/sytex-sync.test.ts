@@ -5,7 +5,7 @@ vi.mock("@/server/prisma", () => ({ getPrismaClient: () => ({ $executeRaw: mocks
 vi.mock("@/server/services/sytex-supply-imports", () => ({ saveSytexSupplyExport: mocks.save }));
 // Each fake response carries its rows as JSON instead of a real workbook.
 vi.mock("read-excel-file/node", () => ({ readSheet: async (bytes: Buffer) => JSON.parse(bytes.toString("utf8")) }));
-import { configuredProjectIds, runSytexSync, syncWindowStart, sytexConfig, sytexSettings } from "./sytex-sync";
+import { configuredProjectIds, runSytexSync, syncWindowStart, syncWindows, sytexConfig, sytexSettings } from "./sytex-sync";
 
 const config = { baseUrl: "https://sytex.example.invalid", authorization: "Token secret", organization: "1" };
 const formHeaders = ["Código", "Nombre", "Plantilla", "Proyecto", "Códigos de sitios afectados", "Nombres de sitios afectados", "Asignado a", "Usuario colaborador"];
@@ -52,9 +52,10 @@ describe("direct Sytex synchronization", () => {
   });
   it("downloads answers only for projects with forms and stores every project in one batch", async () => {
     const calls: { url: string; headers: Record<string, string> }[] = [];
-    const result = await runSytexSync("user-id", config, sytex({ ...projects, "/api/formdata/?org_id=1&plan_date__gte=2026-09-01&project=7": nonForms, "/api/entryanswerdata/?org_id=1&plan_date__gte=2026-09-01&project=7": nonAnswers }, calls), new Date("2026-10-05T15:00:00Z"));
+    const result = await runSytexSync("user-id", config, sytex({ ...projects, "/api/formdata/?org_id=1&plan_date__gte=2026-10-01&project=7": nonForms, "/api/entryanswerdata/?org_id=1&plan_date__gte=2026-10-01&project=7": nonAnswers }, calls), new Date("2026-10-05T15:00:00Z"));
     expect(result).toEqual({ projects: 1, forms: 1, items: 1, changed: true, since: "2026-09-01" });
-    expect(calls.filter((call) => call.url.includes("/api/entryanswerdata/")).map((call) => call.url)).toEqual(["https://sytex.example.invalid/api/entryanswerdata/?org_id=1&plan_date__gte=2026-09-01&project=7"]);
+    expect(calls.filter((call) => call.url.includes("/api/entryanswerdata/")).map((call) => call.url)).toEqual(["https://sytex.example.invalid/api/entryanswerdata/?org_id=1&plan_date__gte=2026-10-01&project=7"]);
+    expect(calls.filter((call) => call.url.includes("/api/formdata/") && call.url.includes("project=7")).map((call) => call.url.split("?")[1])).toEqual(["org_id=1&plan_date__gte=2026-09-01&plan_date__lte=2026-09-30&project=7", "org_id=1&plan_date__gte=2026-10-01&project=7"]);
     expect(calls.every((call) => call.headers.Authorization === "Token secret" && call.headers.Organization === "1")).toBe(true);
     const [parsed, identity, name, user] = mocks.save.mock.calls[0];
     expect(parsed.items[0]).toMatchObject({ formulario: "FO-26-000001", description: "Precintos", quantity: "40" });
@@ -79,8 +80,19 @@ describe("direct Sytex synchronization", () => {
     const calls: { url: string; headers: Record<string, string> }[] = [];
     const result = await runSytexSync("user-id", config, sytex({ "/api/project/": new Response("{}", { status: 401 }), "/api/entryanswerdata/": nonAnswers, "project=8677": nonForms }, calls));
     expect(result).toMatchObject({ projects: 1, items: 1 });
-    expect(calls.filter((call) => call.url.includes("/api/formdata/")).length).toBe(configuredProjectIds().length);
+    expect(calls.filter((call) => call.url.includes("/api/formdata/")).length).toBe(configuredProjectIds().length * 2);
     expect(configuredProjectIds({ SYTEX_PROJECT_IDS: "8677, 2346;8677 x" })).toEqual([8677, 2346]);
+  });
+  it("asks month by month and retries an export that Sytex could not serve at first", async () => {
+    expect(syncWindows(new Date("2026-03-10T15:00:00Z"))).toEqual(["plan_date__gte=2026-02-01&plan_date__lte=2026-02-28", "plan_date__gte=2026-03-01"]);
+    let failures = 1;
+    const flaky = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).includes("/api/entryanswerdata/") && failures-- > 0) return new Response("", { status: 504 });
+      return sytex({ ...projects, "/api/entryanswerdata/": nonAnswers, "plan_date__gte=2026-10-01&project=7": nonForms })(input, init);
+    }) as typeof fetch;
+    expect(await runSytexSync("user-id", config, flaky, new Date("2026-10-05T15:00:00Z"), [0, 0])).toMatchObject({ projects: 1, items: 1 });
+    const down = (async (input: string | URL | Request, init?: RequestInit) => String(input).includes("/api/entryanswerdata/") ? new Response("", { status: 504 }) : sytex({ ...projects, "plan_date__gte=2026-10-01&project=7": nonForms })(input, init)) as typeof fetch;
+    await expect(runSytexSync("user-id", config, down, new Date("2026-10-05T15:00:00Z"), [0])).rejects.toThrow("SYTEX_RESPONSE_504");
   });
   it("saves nothing while no form has materials", async () => {
     const result = await runSytexSync("user-id", config, sytex({ ...projects, "/api/entryanswerdata/": [answerHeaders], "project=7": nonForms }));

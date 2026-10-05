@@ -13,7 +13,7 @@ const syncErrors:Record<string,string>={SYTEX_CREDENTIAL_REJECTED:'Sytex rechaz�
 function syncText(sync:SyncStatus){
  if(!sync.configured)return 'Sytex en directo sin configurar: se muestran los datos de la última carga manual.';
  if(sync.running)return 'Consultando Sytex…';
- if(sync.error)return (syncErrors[sync.error]??'La última consulta a Sytex falló. Se reintenta en unos minutos.')+(sync.errorDetail?' Respuesta de Sytex: '+sync.errorDetail:'');
+ if(sync.error)return (syncErrors[sync.error]??(sync.error.startsWith('SYTEX_RESPONSE_')?'Sytex respondió con error '+sync.error.slice(15)+'. Se reintenta en unos minutos.':'La última consulta a Sytex falló. Se reintenta en unos minutos.'))+(sync.errorDetail?' Detalle: '+sync.errorDetail:'');
  if(!sync.finishedAt||!sync.result)return 'Sytex en directo configurado: primera consulta en curso.';
  return 'Sytex en directo · última consulta '+new Date(sync.finishedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' · '+sync.result.items+' insumos en '+sync.result.projects+' proyectos desde el '+sync.result.since.split('-').reverse().join('/')+'.';
 }
