@@ -8,6 +8,7 @@ describe("Railway application database preparation", () => {
       "app_login_attempts", "app_sessions", "app_users", "mendel_form_references",
       "mendel_import_batches", "mendel_transactions", "task_assignment_history", "task_assignments",
       "sytex_supply_import_items", "sytex_supply_imports",
+      "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
     ].sort());
     for (const { sql } of migrations) {
       expect(sql).not.toMatch(/^\s*(?:ALTER|DROP|TRUNCATE|DELETE|UPDATE)\b/im);

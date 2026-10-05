@@ -154,6 +154,125 @@ model sytex_supply_import_items {
   @@map("sytex_supply_import_items")
 }
 
+model supply_invoices {
+  id String @id @default(uuid()) @db.Uuid
+  requestKey String @unique @map("request_key") @db.Uuid
+  requestHash String @map("request_hash") @db.VarChar(64)
+  supplier String
+  supplierKey String @map("supplier_key")
+  documentType String @map("document_type")
+  number String
+  numberKey String @map("number_key")
+  invoiceDate DateTime @map("invoice_date") @db.Date
+  amount Decimal @db.Decimal(18, 2)
+  currency String @db.VarChar(3)
+  mendelTransactionId String? @map("mendel_transaction_id") @db.VarChar(80)
+  downloadedAt DateTime? @map("downloaded_at") @db.Timestamptz(6)
+  uploadedAt DateTime? @map("uploaded_at") @db.Timestamptz(6)
+  intraReference String? @map("intra_reference")
+  version Int @default(0)
+  createdBy String @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lines supply_invoice_lines[]
+  attachments supply_invoice_attachments[]
+  events supply_invoice_events[]
+  @@unique([supplierKey, documentType, numberKey], map: "uq_supply_invoice_identity")
+  @@index([createdAt], map: "idx_supply_invoice_date")
+}
+
+model supply_invoice_lines {
+  id String @id @default(uuid()) @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+  position Int
+  description String
+  quantity Decimal @db.Decimal(18, 3)
+  availableQuantity Decimal @map("available_quantity") @db.Decimal(18, 3)
+  unit String
+  version Int @default(0)
+  invoice supply_invoices @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  handoffs supply_handoffs[]
+  @@unique([invoiceId, position], map: "uq_supply_invoice_line")
+}
+
+model supply_invoice_attachments {
+  id String @id @default(uuid()) @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+  fileName String @map("file_name")
+  mimeType String @map("mime_type")
+  byteCount Int @map("byte_count")
+  fileHash String @map("file_hash") @db.VarChar(64)
+  content Bytes @db.ByteA
+  removedAt DateTime? @map("removed_at") @db.Timestamptz(6)
+  createdBy String @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoice supply_invoices @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  @@unique([invoiceId, fileHash], map: "uq_supply_invoice_file")
+}
+
+model supply_invoice_events {
+  id String @id @default(uuid()) @db.Uuid
+  invoiceId String @map("invoice_id") @db.Uuid
+  type String
+  detail Json
+  actorId String @map("actor_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  invoice supply_invoices @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  @@index([invoiceId, createdAt], map: "idx_supply_invoice_event")
+}
+
+model supply_handoffs {
+  id String @id @default(uuid()) @db.Uuid
+  lineId String @map("line_id") @db.Uuid
+  requestKey String @map("request_key") @db.Uuid
+  requestHash String @map("request_hash") @db.VarChar(64)
+  technician String
+  site String?
+  quantityGiven Decimal @map("quantity_given") @db.Decimal(18, 3)
+  remaining Decimal @db.Decimal(18, 3)
+  assignedAt DateTime @map("assigned_at") @db.Timestamptz(6)
+  dueAt DateTime @map("due_at") @db.Timestamptz(6)
+  status String @default("ACTIVE")
+  version Int @default(0)
+  createdBy String @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  line supply_invoice_lines @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  movements supply_movements[]
+  @@unique([lineId, requestKey], map: "uq_supply_handoff_request")
+  @@index([status, dueAt], map: "idx_supply_handoff_due")
+}
+
+model supply_movements {
+  id String @id @default(uuid()) @db.Uuid
+  handoffId String @map("handoff_id") @db.Uuid
+  requestKey String @map("request_key") @db.Uuid
+  requestHash String @map("request_hash") @db.VarChar(64)
+  type String
+  quantity Decimal @db.Decimal(18, 3)
+  notes String?
+  usedAt DateTime @map("used_at") @db.Timestamptz(6)
+  actorId String @map("actor_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  reversalOf String? @unique @map("reversal_of") @db.Uuid
+  original supply_movements? @relation("SupplyReversal", fields: [reversalOf], references: [id], onDelete: Restrict)
+  reversedBy supply_movements? @relation("SupplyReversal")
+  handoff supply_handoffs @relation(fields: [handoffId], references: [id], onDelete: Restrict)
+  allocations supply_consumption_forms[]
+  @@unique([handoffId, requestKey], map: "uq_supply_movement_request")
+  @@index([handoffId, createdAt], map: "idx_supply_movement_history")
+}
+
+model supply_consumption_forms {
+  id String @id @default(uuid()) @db.Uuid
+  movementId String @map("movement_id") @db.Uuid
+  formCode String @map("form_code") @db.VarChar(20)
+  quantity Decimal @db.Decimal(18, 3)
+  verification String
+  movement supply_movements @relation(fields: [movementId], references: [id], onDelete: Restrict)
+  @@unique([movementId, formCode], map: "uq_supply_consumption_form")
+  @@index([formCode], map: "idx_supply_consumption_form")
+}
+
 model correctivos {
   id                              BigInt    @id @default(autoincrement())
   codigo                          String    @unique

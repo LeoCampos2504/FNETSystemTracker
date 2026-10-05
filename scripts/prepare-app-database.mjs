@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { importInitialSupplySources } from "./import-initial-supply-sources.mjs";
 
 const ownedMigrations = [
   "20260916_add_fnet_task_assignments",
@@ -9,12 +10,14 @@ const ownedMigrations = [
   "20260925_add_mendel_transactions",
   "20261004_add_mendel_form_references",
   "20261004_add_sytex_supply_imports",
+  "20261004_add_supply_control",
 ];
 const ownedTables = new Set([
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
   "app_login_attempts", "mendel_transactions", "mendel_import_batches",
   "mendel_form_references",
   "sytex_supply_imports", "sytex_supply_import_items",
+  "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
 ]);
 
 export function readAppMigrations() {
@@ -74,6 +77,7 @@ async function main() {
   try {
     await client.connect();
     await prepareAppDatabase(client);
+    await importInitialSupplySources(client);
   } finally {
     await client.end();
   }

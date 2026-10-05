@@ -4,9 +4,8 @@ import { httpApi } from "./http-api";
 
 /**
  * Single entry point the frontend depends on. Controlled by
- * NEXT_PUBLIC_USE_MOCK_API (defaults to mock so the app runs with zero
- * backend/services). Never import mock-api/http-api directly from UI code.
+ * NEXT_PUBLIC_USE_MOCK_API (real data by default; mock requires explicit true). Never import mock-api/http-api directly from UI code.
  */
-export const api: Api = process.env.NEXT_PUBLIC_USE_MOCK_API === "false" ? httpApi : mockApi;
+export const api: Api = process.env.NEXT_PUBLIC_USE_MOCK_API === "true" ? mockApi : httpApi;
 
 export type { Api } from "@/contracts";
