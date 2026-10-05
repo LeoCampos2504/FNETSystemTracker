@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSytexExportSheets, parseSytexSupplyRows } from "./sytex-supply-export";
+import { parseSytexExportSheets, parseSytexMaintenanceRows, parseSytexSupplyRows } from "./sytex-supply-export";
 
 const headers = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Última edición el", "Última edición por"];
 const date = new Date("2026-10-02T18:00:00Z");
@@ -105,5 +105,26 @@ describe("Sytex exports of several projects", () => {
       [formsEn, ["FO-26-000001", "A", "Preventivo", "NON - MPC", "", "", "", ""]],
       [formsEn, ["FO-26-000001", "A", "Preventivo", "BAS - MPC", "", "", "", ""]],
     ])).toThrow("SYTEX_EXPORT_FORM_CONFLICT");
+  });
+});
+
+describe("yearly maintenance reported in the forms", () => {
+  const head = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Nombres de sitios afectados", "Estado", "Última edición el", "Última edición por"];
+  const line = (form: string, group: string, question: string, answer: unknown, site = "ST00001", edited = "2026-10-02T15:00:00") => [form, group, "1.1", question, answer, site, "Sitio", "Enviado", edited, "Técnico"];
+  it("takes the last service date, or the form date when the service is done in it", () => {
+    expect(parseSytexMaintenanceRows([head,
+      line("FO-26-000001", "SERVICE ANUAL", "Indique la fecha del último service anual", new Date("2025-11-03T00:00:00Z")),
+      line("FO-26-000001", "SERVICE ANUAL", "Va a realizar Service anual?", "No"),
+      line("FO-26-000002", "SERVICE ANUAL", "Indique la fecha del último service anual", "2025-09-10", "ST00002"),
+      line("FO-26-000002", "SERVICE ANUAL", "Va a realizar Service anual?", "Si", "ST00002"),
+    ]).map((fact) => [fact.siteCode, fact.kind, fact.lastDate])).toEqual([["ST00001", "SERVICE_GE", "2025-11-03"], ["ST00002", "SERVICE_GE", "2026-10-02"]]);
+  });
+  it("uses the oldest filter replacement among the air conditioners of a form and ignores empty answers", () => {
+    expect(parseSytexMaintenanceRows([head,
+      line("FO-26-000003", "[#1] Aire Acondicionado", "Fecha de reemplazo de los filtros.", "2026-06-09"),
+      line("FO-26-000003", "[#2] Aire Acondicionado", "Fecha de reemplazo de los filtros.", "2026-01-14"),
+      line("FO-26-000003", "[#3] Aire Acondicionado", "Fecha de reemplazo de los filtros.", null),
+      line("FO-26-000003", "General", "Fecha de visita", "2026-10-01"),
+    ])).toEqual([{ siteCode: "ST00001", kind: "FILTROS_AA", lastDate: "2026-01-14", formCode: "FO-26-000003", reportedAt: "2026-10-02T15:00:00" }]);
   });
 });

@@ -126,6 +126,7 @@ model sytex_supply_imports {
   importedAt          DateTime  @default(now()) @map("imported_at") @db.Timestamptz(6)
   items               sytex_supply_import_items[]
   forms               sytex_supply_form_contexts[]
+  maintenance         sytex_site_maintenance[]
 
   @@index([importedAt], map: "idx_sytex_supply_imports_date")
   @@map("sytex_supply_imports")
@@ -145,6 +146,20 @@ model sytex_supply_form_contexts {
   @@unique([importId, code], map: "uq_sytex_supply_form_context")
   @@index([code], map: "idx_sytex_supply_form_context_code")
   @@map("sytex_supply_form_contexts")
+}
+
+model sytex_site_maintenance {
+  id         String   @id @default(uuid()) @db.Uuid
+  importId   String   @map("import_id") @db.Uuid
+  siteCode   String   @map("site_code")
+  kind       String
+  lastDate   DateTime @map("last_date") @db.Date
+  formCode   String   @map("form_code")
+  reportedAt String   @map("reported_at")
+  import     sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_site_maintenance_import")
+  @@unique([importId, siteCode, kind, formCode], map: "uq_sytex_site_maintenance")
+  @@index([siteCode, kind], map: "idx_sytex_site_maintenance_site")
+  @@map("sytex_site_maintenance")
 }
 
 model sytex_supply_import_items {

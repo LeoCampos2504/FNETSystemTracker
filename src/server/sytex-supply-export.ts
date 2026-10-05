@@ -16,7 +16,11 @@ export type SytexSupplyExport = {
   answerCount: number; formCount: number; items: SytexExportItem[];
   errors: Issue[]; warnings: Issue[]; sourceEditedFrom: string | null; sourceEditedThrough: string | null;
   formContexts?: SytexFormContext[];
+  maintenance?: SytexMaintenanceFact[];
 };
+/** Last date a yearly job was done at a site, as the technicians report it in the preventive forms. */
+export type SytexMaintenanceKind = "SERVICE_GE" | "FILTROS_AA";
+export type SytexMaintenanceFact = { siteCode: string; kind: SytexMaintenanceKind; lastDate: string; formCode: string; reportedAt: string };
 const MAX_ROWS = 300_000;
 // Sytex exports use the language of the session that downloaded them; both spellings are the same export.
 const HEADER_ALIASES: Record<string, string> = {
@@ -181,12 +185,40 @@ export function parseSytexExportSheets(sheets: unknown[][][]): SytexSupplyExport
     } else throw new Error("SYTEX_EXPORT_FILE_UNKNOWN");
   }
   if (!answerSheets) throw new Error("SYTEX_EXPORT_ANSWERS_REQUIRED");
-  const parsed = parseSytexSupplyRows(answers);
-  return contexts.size ? { ...parsed, formContexts: [...contexts.values()] } : parsed;
+  const parsed = parseSytexSupplyRows(answers), maintenance = parseSytexMaintenanceRows(answers);
+  return { ...parsed, ...(contexts.size ? { formContexts: [...contexts.values()] } : {}), ...(maintenance.length ? { maintenance } : {}) };
 }
 
 export async function parseSytexExportBundle(files: Uint8Array[]): Promise<SytexSupplyExport> {
   const sheets: unknown[][][] = [];
   for (const bytes of files) sheets.push(await readSheet(Buffer.from(bytes), { trim: false }));
   return parseSytexExportSheets(sheets);
+}
+
+const day = (value: string | null) => value?.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
+
+/**
+ * Reads, from rows in ANSWER_COLUMNS order, when the generator's yearly service and the air
+ * conditioner filters were last done. One fact per site, kind and form: with several units in
+ * a form the oldest date counts, because that unit is the first one due.
+ */
+export function parseSytexMaintenanceRows(rows: unknown[][]): SytexMaintenanceFact[] {
+  const facts = new Map<string, SytexMaintenanceFact>();
+  for (const row of rows.slice(1)) {
+    const formCode = exactFormReference(text(row[0])), siteCode = text(row[5])?.toUpperCase(), answer = text(row[4]);
+    if (!formCode || !siteCode || !answer || siteCode.includes(",")) continue;
+    const group = normalize((text(row[1]) ?? "").replace(/^\[#\d+\]\s*/, "")), question = normalize(text(row[3]) ?? "");
+    const reportedAt = text(row[8])?.replace(" ", "T") ?? "";
+    let kind: SytexMaintenanceKind, lastDate: string | null;
+    if (group === "service anual" && question.includes("fecha del ultimo service anual")) { kind = "SERVICE_GE"; lastDate = day(answer); }
+    else if (group === "service anual" && question.startsWith("va a realizar service anual") && normalize(answer) === "si") { kind = "SERVICE_GE"; lastDate = day(reportedAt); }
+    else if (group.startsWith("aire acondicionado") && question.includes("fecha de reemplazo de los filtros")) { kind = "FILTROS_AA"; lastDate = day(answer); }
+    else continue;
+    if (!lastDate) continue;
+    const key = JSON.stringify([siteCode, kind, formCode]), previous = facts.get(key);
+    // A service done in this very form is newer than the "last service" date written in it.
+    const serviceNow = kind === "SERVICE_GE" && question.startsWith("va a realizar");
+    if (!previous || serviceNow || (kind === "FILTROS_AA" && lastDate < previous.lastDate)) facts.set(key, { siteCode, kind, lastDate: serviceNow && previous && previous.lastDate > lastDate ? previous.lastDate : lastDate, formCode, reportedAt: reportedAt > (previous?.reportedAt ?? "") ? reportedAt : previous?.reportedAt ?? reportedAt });
+  }
+  return [...facts.values()];
 }

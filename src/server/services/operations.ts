@@ -1,7 +1,7 @@
 import { createHash,randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { User } from '@/contracts';
-import type { Favorite, Material, MaterialReview, OperationsCatalog, SiteContext, SourceMaterial, Visit, VisitShift } from '@/contracts/operations';
+import type { Favorite, Material, MaterialReview, OperationsCatalog, SiteContext, SiteMaintenance, SourceMaterial, Visit, VisitShift } from '@/contracts/operations';
 import { allowedProject, materialAlert, mergeMaterials, projectKey, safeImage, selectProjects, sourceHash, sourceIdentity } from '@/server/operations-domain';
 import { getPrismaClient } from '@/server/prisma';
 import { getPendingBySites } from './operational-data';
@@ -94,12 +94,19 @@ export async function visits(actor:OperationsActor,day:string,requested:string[]
   for(const v of live)v.pending=(pending[v.siteCode]??[]).filter(p=>taskProjects.get(p.formulario)===v.project).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · '));
   return {items:[...live,...days.flatMap(d=>d.snapshot.map(v=>({...v,closed:true})))],projects,closed:days.map(d=>({project:d.project,closedAt:d.closed_at.toISOString()}))};
 }
+/** The most recent report of each yearly job decides when it is due again: one year after its date. */
+export function yearlyMaintenance(facts:{kind:string;lastDate:Date;formCode:string;reportedAt:string}[],today=new Date()):SiteMaintenance[]{
+  const latest=new Map<string,(typeof facts)[number]>();
+  for(const fact of facts){const prior=latest.get(fact.kind);if(!prior||fact.reportedAt>prior.reportedAt||(fact.reportedAt===prior.reportedAt&&fact.lastDate>prior.lastDate))latest.set(fact.kind,fact);}
+  return [...latest.values()].filter(fact=>fact.kind==='SERVICE_GE'||fact.kind==='FILTROS_AA').map(fact=>{const due=new Date(fact.lastDate);due.setUTCFullYear(due.getUTCFullYear()+1);
+    return {kind:fact.kind as SiteMaintenance['kind'],lastDate:fact.lastDate.toISOString().slice(0,10),dueDate:due.toISOString().slice(0,10),due:due.toISOString().slice(0,10)<=today.toISOString().slice(0,10),formCode:fact.formCode};});
+}
 /** Everything a coordinator needs after typing only the site: its forms, what Sytex still lists as pending and what earlier visits left open. */
 export async function siteContext(actor:OperationsActor,site:string):Promise<SiteContext>{
-  const code=site.trim().toUpperCase();if(!code)return {forms:[],pending:[],previous:[]};
+  const code=site.trim().toUpperCase();if(!code)return {maintenance:[],forms:[],pending:[],previous:[]};
   const c=await catalog(actor),db=getPrismaClient();
-  const [pending,rows]=await Promise.all([getPendingBySites([code]),db.$queryRaw<{day:Date;project:string;task_type:string;status:Visit['status'];outcome:string}[]>`SELECT day,project,task_type,status,outcome FROM ops_visits WHERE upper(site_code)=${code} AND status IN ('CON_PENDIENTES','CANCELADO') ORDER BY day DESC LIMIT 10`]);
-  return {forms:c.tasks.filter(t=>t.siteCode.trim().toUpperCase()===code),pending:(pending[code]??[]).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · ')),previous:rows.filter(r=>allowedProject(r.project,actor.allowed)).map(r=>({day:r.day.toISOString().slice(0,10),project:r.project,taskType:r.task_type,status:r.status,outcome:r.outcome}))};
+  const [pending,facts,rows]=await Promise.all([getPendingBySites([code]),db.sytex_site_maintenance.findMany({where:{siteCode:code},select:{kind:true,lastDate:true,formCode:true,reportedAt:true}}),db.$queryRaw<{day:Date;project:string;task_type:string;status:Visit['status'];outcome:string}[]>`SELECT day,project,task_type,status,outcome FROM ops_visits WHERE upper(site_code)=${code} AND status IN ('CON_PENDIENTES','CANCELADO') ORDER BY day DESC LIMIT 10`]);
+  return {maintenance:yearlyMaintenance(facts),forms:c.tasks.filter(t=>t.siteCode.trim().toUpperCase()===code),pending:(pending[code]??[]).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · ')),previous:rows.filter(r=>allowedProject(r.project,actor.allowed)).map(r=>({day:r.day.toISOString().slice(0,10),project:r.project,taskType:r.task_type,status:r.status,outcome:r.outcome}))};
 }
 export async function closeDay(actor:OperationsActor,day:string,requested:string[]){
   const result=await visits(actor,day,requested);
