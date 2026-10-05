@@ -14,8 +14,8 @@ export async function operationsActor(user:User):Promise<OperationsActor> {
   if(user.role==='ADMIN')return {user,allowed:null};
   if(user.role!=='COORDINATOR')fail('FORBIDDEN',403);
   const rows=await getPrismaClient().$queryRaw<{projects:string[]}[]>`SELECT projects FROM ops_user_access WHERE user_id=${user.id}::uuid`;
-  if(!rows[0]?.projects.length)fail('PROJECT_ACCESS_REQUIRED',403);
-  return {user,allowed:rows[0].projects};
+  // Coordination is shared: an account is limited only when the Admin assigned it specific projects.
+  return {user,allowed:rows[0]?.projects.length?rows[0].projects:null};
 }
 type OfficialTask={codigo:string;proyecto:string|null;codigos_sitios_afectados:string|null;nombres_sitios_afectados:string|null;nombre:string|null;asignado_a:string|null;usuario_colaborador:string|null};
 export async function catalog(actor:OperationsActor):Promise<OperationsCatalog> {
@@ -34,7 +34,7 @@ export async function catalog(actor:OperationsActor):Promise<OperationsCatalog> 
   const allProjects=[...new Set([...all.map(r=>r.project),...cotizaciones.map(r=>projectKey(r.proyecto))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const projects=allProjects.filter(p=>allowedProject(p,actor.allowed));
   const tasks=all.filter(t=>allowedProject(t.project,actor.allowed));
-  return {projects,allProjects,favorites:(prefs[0]?.favorites??[]).filter(f=>!f.projects.length||f.projects.some(p=>projects.includes(p))).map(f=>({...f,projects:f.projects.filter(p=>projects.includes(p))})),admin:actor.allowed===null,tasks,technicians:[...new Set(tasks.flatMap(t=>t.technicians))].sort()};
+  return {projects,allProjects,favorites:(prefs[0]?.favorites??[]).filter(f=>!f.projects.length||f.projects.some(p=>projects.includes(p))).map(f=>({...f,projects:f.projects.filter(p=>projects.includes(p))})),admin:actor.user.role==='ADMIN',tasks,technicians:[...new Set(tasks.flatMap(t=>t.technicians))].sort()};
 }
 export async function saveFavorite(actor:OperationsActor,favorite:Favorite) {
   const c=await catalog(actor); selectProjects(favorite.projects,c.projects);

@@ -26,7 +26,8 @@ async function review():Promise<ReviewInput>{const row=(await materials(actor))[
 describe('coordinator operation safeguards',()=>{
  it('lists real complete projects from Sytex without fixed zone seeds',async()=>{const c=await catalog({...actor,allowed:null});expect(c.projects).toEqual([bam,'CEF - Compras','NON - Generadores',non]);expect(c.projects).not.toContain('BAS');expect(c.projects).not.toContain('NON');});
  it('drops obsolete favorites without turning their selection into all projects',async()=>{query.mockImplementation(async(strings:TemplateStringsArray)=>strings.join('?').includes('ops_preferences')?[{favorites:[{name:'Viejo',projects:['NON']},{name:'Válido',projects:[non]}]}]:[]);expect((await catalog(actor)).favorites).toEqual([{name:'Válido',projects:[non]}]);});
- it('requires project assignment for coordinator access',async()=>{await expect(operationsActor(user)).rejects.toThrow('PROJECT_ACCESS_REQUIRED');});
+ it('lets a coordinator without assigned projects work on every zone, without admin rights',async()=>{const shared=await operationsActor(user);expect(shared.allowed).toBeNull();expect((await catalog(shared)).admin).toBe(false);});
+ it('keeps a coordinator with assigned projects limited to them',async()=>{query.mockImplementation(async(strings:TemplateStringsArray)=>strings.join('?').includes('ops_user_access')?[{projects:[non]}]:[]);expect((await operationsActor(user)).allowed).toEqual([non]);});
  it('exposes only material from assigned projects',async()=>{const rows=await materials(actor);expect(rows).toHaveLength(1);expect(rows[0].formulario).toBe('FO-26-1');});
  it('does not share supplies between projects that start with the same zone code',async()=>{expect(await materials({...actor,allowed:['NON - Generadores']})).toEqual([]);});
  it('rejects filters outside account permissions',async()=>{await expect(materials(actor,[bam])).rejects.toThrow('FORBIDDEN_PROJECT');});
