@@ -31,7 +31,7 @@ export function parseInitialSupplySources(encoded) {
 }
 // One-time infrastructure import. No HTTP endpoint, no authentication bypass, no credentials emitted.
 // Only application-owned source snapshots/purchase tables are written; internal inventory remains empty until confirmed.
-export async function importInitialSupplySources(client, encoded = process.env.FNET_INITIAL_SOURCES_GZIP, report = console.log) {
+export async function importInitialSupplySources(client, encoded = process.env.FNET_INITIAL_SOURCES_GZIP || [process.env.FNET_INITIAL_SOURCES_GZIP_1 ?? "", process.env.FNET_INITIAL_SOURCES_GZIP_2 ?? ""].join(""), report = console.log) {
  if (!encoded) return;
  const payload = parseInitialSupplySources(encoded);
  await client.query('BEGIN');
