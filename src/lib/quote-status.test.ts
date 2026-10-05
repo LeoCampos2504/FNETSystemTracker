@@ -15,6 +15,9 @@ describe("quote status normalization", () => {
     ["COMPLETED_WITH_PENDING", QuoteStatus.COMPLETED_WITH_PENDING],
     ["COMPLETADA", QuoteStatus.COMPLETED],
     ["COMPLETED", QuoteStatus.COMPLETED],
+    ["Aprobada", QuoteStatus.COMPLETED],
+    ["Aprobado", QuoteStatus.COMPLETED],
+    ["Aprobada con pendientes", QuoteStatus.COMPLETED_WITH_PENDING],
   ])("maps %s to the operational state", (raw, expected) => {
     expect(normalizeQuoteStatus(raw)).toBe(expected);
   });

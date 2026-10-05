@@ -33,6 +33,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("login through Railway public HTTPS ingress", () => {
+  it("authenticates coordinators without giving them administrator rights", async () => {
+    mocks.findUser.mockResolvedValue({...admin,role:"COORDINATOR"});
+    const response=await POST(request());
+    expect(response.status).toBe(200);
+    expect((await response.json()).user.role).toBe("COORDINATOR");
+  });
   it("authenticates the Admin despite the internal HTTP request URL", async () => {
     const response = await POST(request());
     expect(response.status).toBe(200);

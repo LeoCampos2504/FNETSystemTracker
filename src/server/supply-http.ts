@@ -9,6 +9,8 @@ export function supplyFailure(error: unknown) {
   const message = error instanceof Error ? error.message : "";
   if (["DUPLICATE_FORM", "INSUFFICIENT_REMAINING", "EXHAUSTED_REQUIRES_ALL_REMAINING"].includes(message)) return NextResponse.json({ code: message }, { status: 422, headers: privateHeaders });
   if (error && typeof error === "object" && "code" in error && ["P2002", "P2034"].includes(String(error.code))) return NextResponse.json({ code: "CONCURRENT_OR_DUPLICATE_RECORD" }, { status: 409, headers: privateHeaders });
+  if (error instanceof Error && error.message === 'FORBIDDEN_PROJECT') return NextResponse.json({code:'FORBIDDEN_PROJECT'},{status:403,headers:privateHeaders});
+  if (error && typeof error === 'object' && 'meta' in error && (error.meta as {code?:string})?.code === '23505') return NextResponse.json({code:'CONCURRENT_OR_DUPLICATE_RECORD'},{status:409,headers:privateHeaders});
   console.error("Supply operation failed", error instanceof Error ? error.name : "UnknownError");
   return NextResponse.json({ code: "SUPPLY_DATABASE_UNAVAILABLE" }, { status: 503, headers: privateHeaders });
 }

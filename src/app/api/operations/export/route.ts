@@ -1,0 +1,15 @@
+import { NextResponse } from 'next/server';
+import { requireOperationsSession } from '@/server/operations-http';
+import { materials,visits } from '@/server/services/operations';
+import { operationalWorkbook,type ExcelCell } from '@/server/operations-xlsx';
+import { privateHeaders,supplyFailure } from '@/server/supply-http';
+import { daySchema } from '@/server/operations-input';
+export const dynamic='force-dynamic';
+export async function GET(request:Request){const a=await requireOperationsSession();if(!a.ok)return a.response;
+ try{const p=new URL(request.url).searchParams,projects=p.getAll('project'),kind=p.get('kind'),day=kind==='visits'?daySchema.parse(p.get('day')):'';
+  let rows:ExcelCell[][],name:string;
+  if(kind==='visits'){const result=await visits(a.actor,day,projects);name='Jornada';rows=[['Día','Proyecto / zona','Sitio','Nombre','Tipo','Código tarea','Técnicos','Estado','Resultado de jornada','Pendientes del sitio','Jornada cerrada','Última modificación'],...result.items.map(v=>[v.day,v.project,v.siteCode,v.siteName,v.taskType,v.taskCode,v.technicians.join(' / '),v.status,v.outcome,v.pending.join('\n'),v.closed?'Sí':'No',v.updatedAt])];}
+  else{const result=await materials(a.actor,projects);name='Control de insumos';rows=[['Proyecto / zona','Formulario','Grupo','Índice','Descripción','Cantidad Sytex','Conteo revisado','Cantidad descargada Intra','Diferencia','Incluido / no incluido','Estado de descarga Intra','Número factura','Comprobantes adjuntos','Sitio','Nombre sitio','Técnico','Foto Sytex','Foto declarada','Fuente','Fecha fuente','Cambió desde la revisión','Falta revisar / descargar','Observaciones','Última revisión'],...result.map(r=>[r.review?.project??r.projects.join(' / '),r.formulario,r.group,r.index,r.description,r.quantity===null?null:Number(r.quantity),r.review?.countedQuantity==null?null:Number(r.review.countedQuantity),r.review?.intraQuantity==null?null:Number(r.review.intraQuantity),r.difference,r.review?.classification??'PENDIENTE',r.changed?'REVISAR_CAMBIO_DE_FUENTE':r.review?.intraStatus??'PENDIENTE',r.review?.invoiceNumber??'',r.files.length,r.siteCode,r.siteName,r.technician,r.image??'',r.imageDeclared?'Sí':'No',r.source,r.syncedAt,r.changed?'Sí':'No',r.missing?'Sí':'No',r.review?.notes??'',r.review?.updatedAt??''])];}
+  const bytes=operationalWorkbook([{name,rows},{name:'Datos del reporte',rows:[['Campo','Valor'],['Generado por',a.actor.user.name],['Fecha de generación',new Date().toISOString()],['Filtro',projects.join(' / ')||'Todas las zonas autorizadas'],['Origen','Sytex / PostgreSQL y control manual FNET'],['Intra','Estados declarados manualmente, sin conexión automática'],['Jornadas cerradas','Conservan una fotografía de las visitas y pendientes al cierre']]}]);
+  return new NextResponse(new Uint8Array(bytes),{headers:{...privateHeaders,'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename="FNET-${kind==='visits'?'jornada-'+day:'insumos'}.xlsx"`}});
+ }catch(e){return supplyFailure(e);}}

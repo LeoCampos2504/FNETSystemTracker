@@ -18,6 +18,8 @@ import { LiveDashboardView as LiveDashboard } from "@/components/live-dashboard"
 import { RoleExperienceSummary } from "@/components/role-experience-summary";
 import { GuardPlanningView, TechnicianOperationsSummary } from "@/components/guard-planning-view";
 import { SuppliesControl } from "@/components/supplies-control";
+import { DailySchedule } from "@/components/daily-schedule";
+import { CoordinatorWorkspace } from "@/components/coordinator-workspace";
 import { SuppliesControlDemo } from "@/components/supplies-control-demo";
 import { filterCrewsForScope, filterTasksForScope, filterVehiclesForScope, filterZonesForScope, roleLabel, scopeLabel as formatScopeLabel } from "@/lib/scope";
 
@@ -156,7 +158,7 @@ function LiveScheduleView({ visibleTasks, pendingBySite }: { visibleTasks: Task[
 }
 
 function ScheduleView({ visibleTasks, visibleCrews, scheduledIds, onSchedule, role, pendingBySite }: { visibleTasks: Task[]; visibleCrews: typeof mockCrews; scheduledIds: string[]; onSchedule: (task: Task) => void; role: UserRole; pendingBySite: Record<string, PendingVisit[]> }) {
-  if (!useMockData) return <LiveScheduleView visibleTasks={visibleTasks} pendingBySite={pendingBySite} />;
+  if (!useMockData) return <DailySchedule />;
   const todayVisible = visibleTasks.filter((task) => task.scheduledDate === today); const scheduledTasks = todayVisible.filter((task) => scheduledIds.includes(task.id) || task.criticality === TaskCriticality.URGENT);
   return <><div className="page-heading"><div><p className="eyebrow">Planificación de campo</p><h1>Cronograma diario</h1><p className="page-subtitle">{role === UserRole.TECHNICIAN ? "Tu agenda y ruta asignada para hoy." : "Asigná el trabajo de hoy y mantené a cada cuadrilla en movimiento."}</p></div><div className="heading-actions"><button className="button secondary"><Map size={16} /> Ver mapa</button>{role !== UserRole.TECHNICIAN && <button className="button primary"><Plus size={16} /> Crear bloque</button>}</div></div><div className="schedule-toolbar panel"><div className="date-control"><CalendarDays size={17} /><strong>{formatDay(today)}</strong><ChevronDown size={15} /></div><div className="toolbar-divider" /><button className="filter-chip active">{role === UserRole.ADMIN ? "Todas las zonas" : roleScopeLabel(role)}</button>{role !== UserRole.TECHNICIAN && <><button className="filter-chip">Correctivos <span>6</span></button><button className="filter-chip">Preventivos <span>6</span></button></>}<span className="toolbar-spacer" /><span className="schedule-sync"><span className="signal-dot" /> Cambios guardados</span></div><div className="schedule-layout"><section className="panel schedule-list-panel"><div className="panel-heading"><div><p className="eyebrow">{todayVisible.length} tareas disponibles</p><h2>Trabajo de la jornada</h2></div><button className="icon-button"><Filter size={16} /></button></div><div className="schedule-legend"><span><i className="legend-dot urgent" /> Urgente</span><span><i className="legend-dot corrective" /> Correctivo</span><span><i className="legend-dot preventive" /> Preventivo</span></div><div className="task-list schedule-task-list">{todayVisible.map((task) => <TaskRow key={task.id} task={task} pending={pendingBySite[task.siteCode] ?? []} onSchedule={role === UserRole.TECHNICIAN ? undefined : onSchedule} scheduled={scheduledIds.includes(task.id)} />)}</div></section><aside className="schedule-side"><div className="panel crew-panel"><div className="panel-heading"><div><p className="eyebrow">Asignación</p><h2>{role === UserRole.TECHNICIAN ? "Mi cuadrilla" : "Cuadrillas activas"}</h2></div><span className="counter-pill">{visibleCrews.length}</span></div>{visibleCrews.map((crew) => <div className="crew-card" key={crew.zoneId}><div className="crew-card-top"><div><strong>{zoneName(crew.zoneId)}</strong><small>Cuadrilla {crew.zoneId.slice(-2).toUpperCase()}</small></div><span className="crew-status"><span className="status-dot" /> Activa</span></div><div className="crew-members"><span className="avatar avatar-purple">{initials(technicianName(crew.primaryId))}</span><span className="avatar avatar-orange">{initials(technicianName(crew.collaboratorId))}</span><span>{shortName(technicianName(crew.primaryId))} + {shortName(technicianName(crew.collaboratorId))}</span></div><div className="crew-progress"><span style={{ width: `${crew.progressPercent}%` }} /></div></div>)}</div><div className="panel route-panel"><div className="panel-heading"><div><p className="eyebrow">Orden sugerido</p><h2>Mapa del día</h2></div><MapPin size={17} className="panel-heading-icon" /></div><MiniMap tasks={scheduledTasks} compact /><div className="route-note"><Zap size={14} /> Nearest-neighbor desde ubicación actual</div></div></aside></div></>;
 }
@@ -203,14 +205,14 @@ export default function Home() {
     void fetch("/api/auth/logout", { method: "POST" });
   }, [authLoading, loggedIn]);
   useEffect(() => {
-    if (useMockData || !loggedIn) return;
+    if (useMockData || !loggedIn || role !== UserRole.ADMIN) return;
     let cancelled = false;
     void fetch("/api/synced-data", { cache: "no-store" }).then(async (response) => {
       if (!response.ok) throw new Error("database_unavailable");
       return response.json() as Promise<SyncedData>;
     }).then((data) => { if (!cancelled) { setLiveData(data); setLiveState("ready"); } }).catch(() => { if (!cancelled) { setLiveData(null); setLiveState("error"); } }).finally(() => { if (!cancelled) setSyncing(false); });
     return () => { cancelled = true; };
-  }, [reloadToken, loggedIn]);
+  }, [reloadToken, loggedIn, role]);
   const activeScope = useMemo(() => mockScopeForRole(role), [role]);
   const visibleTasks = useMemo(() => filterTasksForScope(useMockData ? mockTasks : liveData?.tasks ?? [], activeScope), [activeScope, liveData]);
   const visibleZones = useMemo(() => useMockData ? filterZonesForScope(mockZones, activeScope) : [], [activeScope]);
@@ -220,6 +222,7 @@ export default function Home() {
   const refresh = () => { if (useMockData) { setSyncing(true); window.setTimeout(() => { setSyncing(false); setToast("Datos demo actualizados"); }, 850); } else { setSyncing(true); setReloadToken((token) => token + 1); } };
   if (authLoading) return <main className="auth-loading"><span className="signal-dot" /> Verificando sesión segura…</main>;
   if (!loggedIn) return useMockData ? <LoginScreen onLogin={(nextRole) => { setRole(nextRole); setLoggedIn(true); setToast("Sesión demo iniciada"); }} /> : <RealLoginScreen onLogin={(user) => { setRole(user.role); setLoggedIn(true); setToast(`Bienvenida, ${user.name}`); }} />;
+  if (!useMockData && role === UserRole.COORDINATOR) return <CoordinatorWorkspace onLogout={() => setLoggedIn(false)} />;
   const currentMeta = viewMeta[activeView];
   const roleNavigation = navigation.filter(({ key }) => role !== UserRole.TECHNICIAN || key !== "quotes");
   const dataSource = useMockData ? "mock" : "postgresql";
