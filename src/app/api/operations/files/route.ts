@@ -16,7 +16,8 @@ export async function POST(request:Request){const a=await requireOperationsSessi
  const row=(await materials(a.actor)).find(r=>r.key===key);if(!row?.review)throw new SupplyError('SAVE_REVIEW_FIRST',422);
  const bytes=new Uint8Array(await file.arrayBuffer()),meta=inspectFile(bytes,file.name);
  const result=await getPrismaClient().$transaction(async tx=>{
-  await tx.$queryRaw`SELECT source_key FROM ops_supply_reviews WHERE source_key=${key} FOR UPDATE`;
+  const [current]=await tx.$queryRaw<{project:string}[]>`SELECT project FROM ops_supply_reviews WHERE source_key=${key} FOR UPDATE`;
+  if(!current||(a.actor.allowed!==null&&!a.actor.allowed.includes(current.project)))throw new SupplyError('FORBIDDEN_PROJECT',403);
   const existing=await tx.$queryRaw<{id:string;file_hash:string;byte_count:number}[]>`SELECT id,file_hash,byte_count FROM ops_review_files WHERE source_key=${key}`;
   const duplicate=existing.find(f=>f.file_hash===meta.fileHash);if(duplicate)return {id:duplicate.id,alreadySaved:true};
   if(existing.length>=6||existing.reduce((t,f)=>t+f.byte_count,0)+bytes.length>24*1024*1024)throw new SupplyError('INVOICE_FILE_LIMIT',422);

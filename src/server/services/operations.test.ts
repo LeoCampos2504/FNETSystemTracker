@@ -1,0 +1,38 @@
+import { beforeEach,describe,it,expect,vi } from 'vitest';
+import { UserRole } from '@/contracts';
+import type { OperationsActor,ReviewInput,VisitInput } from './operations';
+const fake=vi.hoisted(()=>({db:{} as Record<string,unknown>,reviews:[] as unknown[],closed:false,updateCount:1}));
+vi.mock('@/server/prisma',()=>({getPrismaClient:()=>fake.db}));
+vi.mock('./operational-data',()=>({getPendingBySites:async()=>({})}));
+import { addVisit,closeDay,materials,operationsActor,saveReview,updateVisit } from './operations';
+const user={id:'00000000-0000-4000-8000-000000000001',name:'Test',email:'test@example.invalid',role:UserRole.COORDINATOR,active:true,technicianId:null,coordinatorId:null};
+const actor:OperationsActor={user,allowed:['NON']};
+const source=(formulario:string)=>({formulario,grupo:'[#1] Insumo',indice:'1.24A',descripcion:'Cable',cantidad:{toString:()=> '2'},codigo_sitio:'ST1',nombre_sitio:'Sitio',imagen:null,sincronizado_el:new Date('2026-10-04')});
+const visit:VisitInput={requestKey:'00000000-0000-4000-8000-000000000002',day:'2026-10-04',project:'NON',siteCode:'ST1',siteName:'Sitio',taskType:'PREVENTIVO',taskCode:'FO-26-1',technicians:['Test'],status:'PLANIFICADO',outcome:''};
+let query:ReturnType<typeof vi.fn>,execute:ReturnType<typeof vi.fn>;
+beforeEach(()=>{
+ fake.reviews=[];fake.closed=false;fake.updateCount=1;
+ query=vi.fn(async(strings:TemplateStringsArray)=>{const sql=strings.join('?');if(sql.includes('ops_supply_reviews'))return fake.reviews;if(sql.includes('ops_days')&&fake.closed)return [{day:new Date('2026-10-04')}];return [];});
+ execute=vi.fn(async(strings:TemplateStringsArray)=>strings.join('?').startsWith('UPDATE')?fake.updateCount:1);
+ fake.db={
+  $queryRaw:query,$executeRaw:execute,$transaction:async(run:(tx:unknown)=>unknown)=>run(fake.db),
+  preventivos:{findMany:async()=>['NON','BAM'].map((p,i)=>({codigo:'FO-26-'+(i+1),proyecto:p+' - mantenimiento',codigos_sitios_afectados:'ST1',nombres_sitios_afectados:'Sitio',nombre:'Mantenimiento',asignado_a:'Test',usuario_colaborador:null}))},
+  correctivos:{findMany:async()=>[]},insumos:{findMany:async()=>[source('FO-26-1'),source('FO-26-2')]},sytex_supply_import_items:{findMany:async()=>[]},
+ };
+});
+async function review():Promise<ReviewInput>{const row=(await materials(actor))[0];return {key:row.key,project:'NON',classification:'INCLUIDO',intraStatus:'DESCARGADO',invoiceNumber:'',countedQuantity:'2',intraQuantity:'2',notes:'',version:0,sourceHash:row.hash};}
+describe('coordinator operation safeguards',()=>{
+ it('requires project assignment for coordinator access',async()=>{await expect(operationsActor(user)).rejects.toThrow('PROJECT_ACCESS_REQUIRED');});
+ it('exposes only material from assigned projects',async()=>{const rows=await materials(actor);expect(rows).toHaveLength(1);expect(rows[0].formulario).toBe('FO-26-1');});
+ it('rejects filters outside account permissions',async()=>{await expect(materials(actor,['BAM'])).rejects.toThrow('FORBIDDEN_PROJECT');});
+ it('does not confirm an incomplete Intra count',async()=>{await expect(saveReview(actor,{...await review(),intraQuantity:'1'})).rejects.toThrow('QUANTITIES_DO_NOT_MATCH');expect(execute).not.toHaveBeenCalled();});
+ it('does not decide inclusion without evidence',async()=>{await expect(saveReview(actor,{...await review(),classification:'PENDIENTE'})).rejects.toThrow('CLASSIFICATION_REQUIRED');});
+ it('requires an invoice number for non-included downloaded supplies',async()=>{await expect(saveReview(actor,{...await review(),classification:'NO_INCLUIDO'})).rejects.toThrow('INVOICE_NUMBER_REQUIRED');});
+ it('rejects changed source snapshots',async()=>{await expect(saveReview(actor,{...await review(),sourceHash:'wrong'})).rejects.toThrow('SOURCE_CHANGED');});
+ it('rejects stale review writes',async()=>{fake.updateCount=0;await expect(saveReview(actor,await review())).rejects.toThrow('STALE_VERSION');});
+ it('saves a balanced classified review with an audit event',async()=>{expect(await saveReview(actor,await review())).toEqual({saved:true});expect(execute.mock.calls.some(([strings])=>strings.join('?').includes('ops_events'))).toBe(true);});
+ it('cannot add sites to another project or a closed day',async()=>{await expect(addVisit(actor,{...visit,project:'BAM'})).rejects.toThrow('FORBIDDEN_PROJECT');fake.closed=true;await expect(addVisit(actor,visit)).rejects.toThrow('DAY_CLOSED');});
+ it('does not link a task to a different site',async()=>{await expect(addVisit(actor,{...visit,siteCode:'ST2'})).rejects.toThrow('TASK_SITE_MISMATCH');});
+ it('cannot close a day without visits',async()=>{await expect(closeDay(actor,'2026-10-04',[])).rejects.toThrow('NO_OPEN_DAY_WITH_VISITS');});
+ it('does not update an inaccessible visit',async()=>{query.mockImplementation(async(strings:TemplateStringsArray)=>strings.join('?').includes('ops_visits')?[{project:'BAM'}]:[]);await expect(updateVisit(actor,{id:visit.requestKey,version:0,technicians:['Test'],status:'REALIZADO',outcome:''})).rejects.toThrow('FORBIDDEN_PROJECT');});
+});

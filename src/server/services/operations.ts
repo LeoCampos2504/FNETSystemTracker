@@ -9,7 +9,7 @@ import { SupplyError } from './supply-control';
 
 export type OperationsActor={user:User;allowed:string[]|null};
 type Db=Prisma.TransactionClient;
-const fail=(code:string,status=409):never=>{throw new SupplyError(code,status);};
+function fail(code:string,status=409):never{throw new SupplyError(code,status);}
 export async function operationsActor(user:User):Promise<OperationsActor> {
   if(user.role==='ADMIN')return {user,allowed:null};
   if(user.role!=='COORDINATOR')fail('FORBIDDEN',403);
