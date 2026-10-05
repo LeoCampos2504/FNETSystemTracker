@@ -4,7 +4,7 @@
 
 La sección **Control Sytex / Intra** reúne las filas de la sincronización oficial y los exports ya importados. Un formulario, grupo e índice identifica cada registro; repetir una carga no suma cantidades.
 
-Seleccionar una o varias zonas/proyectos y guardar un favorito lo conserva por cuenta. El Excel incluye todos los insumos del filtro de zonas, incluso los que quedan fuera de la búsqueda de pantalla o la página actual.
+El desplegable obtiene los nombres completos de proyectos desde correctivos, preventivos y cotizaciones sincronizados de Sytex. No utiliza una lista fija de NON, CEF, BAS o BAM ni une proyectos distintos por su prefijo. Buscar, seleccionar varios proyectos y guardar un favorito lo conserva por cuenta. El Excel incluye todos los insumos del filtro, incluso los que quedan fuera de la búsqueda de pantalla o la página actual. Un proyecto que aún no llegó a la sincronización no se inventa como opción.
 
 El detalle permite registrar inclusión por definir/incluido/no incluido, número y archivo de factura, cantidad contada y descargada, estado de Intra y observaciones. La inclusión no se decide automáticamente. “Descargado” exige cantidades coincidentes; un no incluido también exige número de factura. Un cambio posterior en Sytex vuelve a marcar el registro para revisión.
 
