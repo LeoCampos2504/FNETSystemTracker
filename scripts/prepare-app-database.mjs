@@ -17,6 +17,7 @@ const ownedMigrations = [
   "20261005_add_site_maintenance",
   "20261005_add_form_links",
   "20261005_add_form_states",
+  "20261005_add_guard_duty",
 ];
 const ownedTables = new Set([
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
@@ -26,6 +27,7 @@ const ownedTables = new Set([
   "sytex_supply_form_contexts", "sytex_site_maintenance", "sytex_form_links", "sytex_form_states",
   "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
   "ops_user_access", "ops_preferences", "ops_days", "ops_visits", "ops_visit_shifts", "ops_supply_reviews", "ops_review_files", "ops_events",
+  "ops_guard_weeks", "ops_holidays", "ops_visit_hours", "ops_ctic_users",
 ]);
 
 export function readAppMigrations() {

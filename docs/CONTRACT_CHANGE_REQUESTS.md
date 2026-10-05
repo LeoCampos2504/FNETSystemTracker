@@ -35,4 +35,9 @@ _(vacío — agregar acá)_
 
 ## Resueltos
 
-_(vacío)_
+### [Resuelto 2026-10-05] Tipos de guardia pasiva y fuera de horario (aditivo)
+- Quién lo pide: Eugenia (coordinación).
+- Contrato afectado: `src/contracts/operations.ts` — se agregan `GuardWeek`, `Holiday`, `OffHoursVisit`, `GuardOverview`. No se modifica ningún tipo existente ni `UserRole`.
+- Por qué: cargar la guardia pasiva semanal por técnico, sacar el Excel de fin de mes y dar una vista de solo lectura a CTIC.
+- Decisión: CTIC **no** es un valor nuevo de `UserRole` (eso exigiría tocar `app_users` y a Leo/Gino). Es una marca en la tabla propia `ops_ctic_users` sobre una cuenta de coordinación; el servidor le niega todas las rutas de operaciones salvo la lectura de `/api/operations/guard`.
+- Impacto: tablas nuevas `ops_guard_weeks`, `ops_holidays`, `ops_visit_hours`, `ops_ctic_users`; sin cambios en `Api`, mocks ni Prisma.

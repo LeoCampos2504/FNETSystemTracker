@@ -7,15 +7,17 @@ import { getPrismaClient } from '@/server/prisma';
 import { getPendingBySites } from './operational-data';
 import { SupplyError } from './supply-control';
 
-export type OperationsActor={user:User;allowed:string[]|null};
+/** ctic: an account that only sees the guard technicians and the off-hours tasks, never the coordination panels. */
+export type OperationsActor={user:User;allowed:string[]|null;ctic?:boolean};
 type Db=Prisma.TransactionClient;
-function fail(code:string,status=409):never{throw new SupplyError(code,status);}
+export function fail(code:string,status=409):never{throw new SupplyError(code,status);}
 export async function operationsActor(user:User):Promise<OperationsActor> {
   if(user.role==='ADMIN')return {user,allowed:null};
   if(user.role!=='COORDINATOR')fail('FORBIDDEN',403);
   const rows=await getPrismaClient().$queryRaw<{projects:string[]}[]>`SELECT projects FROM ops_user_access WHERE user_id=${user.id}::uuid`;
   // Coordination is shared: an account is limited only when the Admin assigned it specific projects.
-  return {user,allowed:rows[0]?.projects.length?rows[0].projects:null};
+  const ctic=await getPrismaClient().$queryRaw<{user_id:string}[]>`SELECT user_id FROM ops_ctic_users WHERE user_id=${user.id}::uuid`;
+  return {user,allowed:rows[0]?.projects.length?rows[0].projects:null,ctic:ctic.length>0};
 }
 type OfficialTask={estado:string|null;fecha_plan:Date|null;codigo:string;proyecto:string|null;codigos_sitios_afectados:string|null;nombres_sitios_afectados:string|null;nombre:string|null;asignado_a:string|null;usuario_colaborador:string|null};
 export async function catalog(actor:OperationsActor):Promise<OperationsCatalog> {
