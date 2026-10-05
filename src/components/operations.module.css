@@ -5,3 +5,5 @@
 .app table.compact{min-width:860px}.compact td{padding:12px 14px;min-width:0}.compact td:first-child{min-width:0}.compact th{padding:12px 14px}.compact small{margin-top:3px}.app .compact button{white-space:nowrap;min-height:36px;padding:7px 12px}.nowrap{white-space:nowrap}
 .badge{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;white-space:nowrap}.badgeOk{background:#e9f8f1;color:#1f7a5c}.badgeWait{background:#fff4dc;color:#96600d}.badgeOff{background:#eef0f6;color:#5d6880}
 @media(max-width:650px){.zoneFilter label{min-width:0;flex:1}}
+.more{margin:6px 0 16px}.more summary{cursor:pointer;color:#6751e8;font-size:14px}.dialog{width:620px}
+.zoneFilter label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#6c7790}.zoneFilter select{font:inherit;font-weight:600;border:1px solid #dce0eb;border-radius:9px;padding:9px 13px;background:#fff;color:#34435d;min-height:42px}

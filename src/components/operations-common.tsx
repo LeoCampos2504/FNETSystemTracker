@@ -1,5 +1,5 @@
 "use client";
-import { useEffect,useRef,useState } from 'react';
+import { useEffect,useMemo,useRef,useState,useSyncExternalStore } from 'react';
 import type { OperationsCatalog } from '@/contracts/operations';
 import s from './operations.module.css';
 const errors:Record<string,string>={
@@ -17,10 +17,20 @@ export async function opCall<T>(url:string,body?:unknown):Promise<T>{
 export const operationsUrl=(kind:string,projects:string[],day?:string,exported=false)=>{const p=new URLSearchParams({kind});projects.forEach(v=>p.append('project',v));if(day)p.set('day',day);return '/api/operations'+(exported?'/export':'')+'?'+p.toString();};
 export const operationToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 export const splitTechnicians=(v:string)=>v.split(/[,;\n]/).map(t=>t.trim()).filter(Boolean);
+export type ZoneSelection={zone:string;type:string};
+// One zone/type choice for every panel: changing it in one screen changes it in all of them.
+let selection:ZoneSelection={zone:'',type:''};
+const listeners=new Set<()=>void>();
+const subscribe=(listener:()=>void)=>{listeners.add(listener);return()=>{listeners.delete(listener);};};
+export function setZoneSelection(next:ZoneSelection){selection=next;listeners.forEach(listener=>listener());}
+export function useZoneSelection(){return useSyncExternalStore(subscribe,()=>selection,()=>selection);}
+export const matchesZone=(project:string|null|undefined,chosen:ZoneSelection)=>{if(!chosen.zone&&!chosen.type)return true;if(!project)return false;const z=projectZone(project);return (!chosen.zone||z.zone===chosen.zone)&&(!chosen.type||z.type===chosen.type);};
 export function useCatalog(){
- const [data,setData]=useState<OperationsCatalog|null>(null),[projects,setProjects]=useState<string[]>([]),[error,setError]=useState('');
- useEffect(()=>{let active=true;opCall<OperationsCatalog>('/api/operations').then(c=>{if(active){setData(c);}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[]);
- return {data,setData,projects,setProjects,error};
+ const [data,setData]=useState<OperationsCatalog|null>(null),[error,setError]=useState(''),chosen=useZoneSelection();
+ useEffect(()=>{let active=true;opCall<OperationsCatalog>('/api/operations').then(c=>{if(active)setData(c);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[]);
+ // An empty list means "every project this account can see".
+ const projects=useMemo(()=>chosen.zone||chosen.type?(data?.projects??[]).filter(p=>matchesZone(p,chosen)):[],[data,chosen]);
+ return {data,setData,projects,error};
 }
 export function useOperation(){
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[success,setSuccess]=useState(''),locked=useRef(false);
@@ -44,13 +54,15 @@ export function projectZone(project:string){
  return {zone,type};
 }
 export const projectLabel=(project:string)=>{const z=projectZone(project);return z.zone+' · '+typeLabels[z.type];};
-export function ZoneFilter({state}:{state:ReturnType<typeof useCatalog>}){
- const [zone,setZone]=useState(''),[type,setType]=useState('');
+export function ZoneFilter({state,extraProjects=[]}:{state:ReturnType<typeof useCatalog>;extraProjects?:string[]}){
+ const chosen=useZoneSelection();
  if(!state.data)return <Feedback error={state.error}/>;
- const all=state.data.projects.map(p=>({project:p,...projectZone(p)}));
+ const all=[...new Set([...state.data.projects,...extraProjects])].map(p=>projectZone(p));
  const zones=[...new Set(all.map(p=>p.zone))].sort((a,b)=>a.localeCompare(b,'es'));
  const typesFor=(z:string)=>['PREVENTIVO','CORRECTIVO','OTRO'].filter(t=>all.some(p=>(!z||p.zone===z)&&p.type===t));
- const apply=(z:string,t:string)=>{const kept=typesFor(z).includes(t)?t:'';setZone(z);setType(kept);state.setProjects(z||kept?all.filter(p=>(!z||p.zone===z)&&(!kept||p.type===kept)).map(p=>p.project):[]);};
- return <div className={s.zoneFilter}><label>Zona<select aria-label="Zona" value={zone} onChange={e=>apply(e.target.value,type)}><option value="">Todas las zonas</option>{zones.map(z=><option key={z} value={z}>{z}</option>)}</select></label>
- <label>Tipo<select aria-label="Tipo de mantenimiento" value={type} onChange={e=>apply(zone,e.target.value)}><option value="">Preventivos y correctivos</option>{typesFor(zone).map(t=><option key={t} value={t}>{typeLabels[t]}</option>)}</select></label></div>;
+ const apply=(z:string,t:string)=>setZoneSelection({zone:z,type:typesFor(z).includes(t)?t:''});
+ return <div className={s.zoneFilter}><label>Zona<select aria-label="Zona" value={zones.includes(chosen.zone)?chosen.zone:''} onChange={e=>apply(e.target.value,chosen.type)}><option value="">Todas las zonas</option>{zones.map(z=><option key={z} value={z}>{z}</option>)}</select></label>
+ <label>Tipo<select aria-label="Tipo de mantenimiento" value={typesFor(chosen.zone).includes(chosen.type)?chosen.type:''} onChange={e=>apply(chosen.zone,e.target.value)}><option value="">Preventivos y correctivos</option>{typesFor(chosen.zone).map(t=><option key={t} value={t}>{typeLabels[t]}</option>)}</select></label></div>;
 }
+/** The same filter for the panels that read the synchronized tables (dashboard, tasks, quotations). */
+export function GlobalZoneFilter({extraProjects}:{extraProjects:string[]}){const state=useCatalog();return <ZoneFilter state={state} extraProjects={extraProjects}/>;}

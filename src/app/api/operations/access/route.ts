@@ -9,7 +9,7 @@ import { SupplyError } from '@/server/services/supply-control';
 export const dynamic='force-dynamic';
 const schema=z.discriminatedUnion('action',[
  z.object({action:z.literal('grant'),userId:z.string().uuid(),projects:z.array(z.string().trim().min(1).max(200)).max(100)}).strict(),
- z.object({action:z.literal('create'),email:z.string().trim().email().max(320).transform(s=>s.toLowerCase()),name:z.string().trim().min(1).max(200),password:z.string().min(15).max(72).refine(s=>Buffer.byteLength(s,'utf8')<=72),projects:z.array(z.string().trim().min(1).max(200)).min(1).max(100)}).strict(),
+ z.object({action:z.literal('create'),email:z.string().trim().email().max(320).transform(s=>s.toLowerCase()),name:z.string().trim().min(1).max(200),password:z.string().min(15).max(72).refine(s=>Buffer.byteLength(s,'utf8')<=72),projects:z.array(z.string().trim().min(1).max(200)).max(100).default([])}).strict(),
 ]);
 export async function GET(){const a=await requireAdminSession();if(!a.ok)return a.response;
  try{const db=getPrismaClient(),users=await db.app_users.findMany({where:{role:'COORDINATOR'},select:{id:true,name:true,email:true,active:true}}),grants=await db.$queryRaw<{user_id:string;projects:string[]}[]>`SELECT user_id,projects FROM ops_user_access`;
