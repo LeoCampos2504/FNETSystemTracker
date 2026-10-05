@@ -90,9 +90,9 @@ function mapTask(row: {
 }
 
 type FormTaskInput = { code: string; type: string; project: string; siteCode: string; description: string; technicians: unknown; status: string; planDate: Date | null; link: string | null; syncedAt: Date };
-/** A form that came from the direct Sytex synchronization, shown as a task of its zone. Only preventive and corrective forms are tasks. */
+/** A form or corrective task from the direct Sytex synchronization, shown as a task of its zone. A corrective is shown by its task (TA-…), not by its forms. */
 export function formTask(row: FormTaskInput) {
-  const type = row.type === "CORRECTIVO" ? TaskType.CORRECTIVE : row.type === "PREVENTIVO" ? TaskType.PREVENTIVE : null;
+  const type = row.type === "CORRECTIVO" && row.code.startsWith("TA-") ? TaskType.CORRECTIVE : row.type === "PREVENTIVO" ? TaskType.PREVENTIVE : null;
   if (!type) return null;
   const technicians = Array.isArray(row.technicians) ? row.technicians.filter((name): name is string => typeof name === "string" && name.trim() !== "") : [];
   const priority = "Sin prioridad informada", siteCode = siteLabel(row.siteCode);

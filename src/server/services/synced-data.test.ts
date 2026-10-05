@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TaskStatus } from "@/contracts";
+import { TaskStatus, TaskType } from "@/contracts";
 import { formTask, taskStatus } from "./synced-data";
 
 describe("task status normalization", () => {
@@ -28,5 +28,7 @@ describe("tasks built from the direct Sytex synchronization", () => {
   it("shows a form without status or date as open and undated, and skips other kinds of form", () => {
     expect(formTask({ ...base, status: "", planDate: null, technicians: [], siteCode: "" })).toMatchObject({ status: TaskStatus.OPEN, scheduledDate: "sin-fecha", siteCode: "Sin sitio informado", assignments: [] });
     expect(formTask({ ...base, type: "OTRO" })).toBeNull();
+    expect(formTask({ ...base, type: "CORRECTIVO", code: "FO-26-610441" })).toBeNull();
+    expect(formTask({ ...base, type: "CORRECTIVO", code: "TA-26-412547" })).toMatchObject({ taskCode: "TA-26-412547", type: TaskType.CORRECTIVE });
   });
 });

@@ -57,6 +57,8 @@ describe('forms offered when a site is typed',()=>{
   expect(openForm({type:'PREVENTIVO',status:'Aprobado',planDate:'2026-10-02'},now)).toBe(false);
   expect(openForm({type:'CORRECTIVO',status:'Cancelled'},now)).toBe(false);
   expect(openForm({type:'OTRO',status:'Open'},now)).toBe(false);
+  expect(openForm({code:'TA-26-100001',type:'CORRECTIVO',status:'Open'},now)).toBe(true);
+  expect(openForm({code:'FO-26-100002',type:'CORRECTIVO',status:'Open'},now)).toBe(false);
  });
  it('uses the Argentina month at the turn of the month',()=>{
   expect(openForm({type:'PREVENTIVO',status:'Open',planDate:'2026-09-15'},new Date('2026-10-01T01:00:00Z'))).toBe(true);
