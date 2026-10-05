@@ -23,6 +23,8 @@ export interface Task extends ExternalSyncFields {
   priority: string;
   criticality: TaskCriticality;
   status: TaskStatus;
+  /** Link to open the task in its source system (Sytex), when known. */
+  externalUrl?: string | null;
   /** Day the coordinator scheduled the task for. */
   scheduledDate: string;
   /** Actual/planned start timestamp, when known. */

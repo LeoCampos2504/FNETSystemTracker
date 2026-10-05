@@ -423,3 +423,5 @@ a { color: inherit; text-decoration: none; }
 .mendel-pagination{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:12px 20px;border-top:1px solid #efedf4;color:#77758a;font-size:13px}.mendel-pagination .button{padding:8px 12px}
 
 .table-toolbar { gap: 10px; flex-wrap: wrap; justify-content: flex-start; }.table-toolbar select { height: 36px; padding: 0 10px; border: 1px solid #e3e4ee; border-radius: 9px; background: #fff; color: #3d4155; font: inherit; font-size: 13px; }
+
+a.table-action { display: inline-flex; align-items: center; gap: 3px; color: var(--purple); font-weight: 600; text-decoration: none; }a.table-action:hover { text-decoration: underline; }
