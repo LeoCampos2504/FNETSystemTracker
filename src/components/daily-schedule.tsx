@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useState,type FormEvent } from 'react';
 import type { OperationsCatalog,Visit,VisitStatus } from '@/contracts/operations';
-import { Feedback,opCall,operationsUrl,operationToday,splitTechnicians,useCatalog,useOperation,ZoneFavorites } from './operations-common';
+import { Feedback,opCall,operationsUrl,operationToday,splitTechnicians,useCatalog,useOperation,ZoneFilter } from './operations-common';
 import s from './operations.module.css';
 const statuses:Record<VisitStatus,string>={PLANIFICADO:'Planificado',EN_CURSO:'En curso',REALIZADO:'Realizado',CON_PENDIENTES:'Realizado con pendientes',CANCELADO:'Cancelado / no realizado'};
 type DayData={items:Visit[];closed:{project:string;closedAt:string}[]};
@@ -11,7 +11,7 @@ export function DailySchedule(){
  useEffect(()=>{if(!zones.data)return;let active=true;const timer=setTimeout(()=>{setLoading(true);opCall<DayData>(operationsUrl('visits',zones.projects,day)).then(d=>{if(active){setData(d);setError('');}}).catch(e=>{if(active){setError(e.message);setData(null);}}).finally(()=>{if(active)setLoading(false);});},0);return()=>{active=false;clearTimeout(timer);};},[day,filter,revision,zones.data]); // eslint-disable-line react-hooks/exhaustive-deps
  const refreshed=()=>setRevision(v=>v+1);
  return <section className={s.app}><header className={s.heading}><div><div className={s.kicker}>OPERACIÓN DIARIA · TODOS LOS PROYECTOS</div><h1>Cronograma de coordinadores</h1><p className={s.note}>Planificá sitios y técnicos, sumá correctivos y dejá registrado el resultado de cada jornada.</p></div><button onClick={refreshed}>Actualizar</button></header>
- <ZoneFavorites state={zones}/><Feedback error={error||zones.error}/><Feedback {...op}/>
+ <ZoneFilter state={zones}/><Feedback error={error||zones.error}/><Feedback {...op}/>
  <div className={s.toolbar}><label>Día de trabajo<input type="date" value={day} onChange={e=>{if(e.target.value)setDay(e.target.value);}}/></label><button className={s.primary} disabled={!zones.data} onClick={()=>setDialog('new')}>+ Programar sitio / correctivo</button>
  <button disabled={loading||!data?.items.some(v=>!v.closed)||op.busy} onClick={()=>{if(window.confirm('¿Cerrar la jornada de los proyectos visibles? El resultado quedará guardado y no podrá editarse.'))void op.run(async()=>{await opCall('/api/operations',{action:'close',day,projects:zones.projects});refreshed();op.setSuccess('Jornada cerrada y guardada en el historial. Podés descargar su Excel.');});}}>Cerrar jornada</button>
  {zones.data&&<a className={s.button} href={operationsUrl('visits',zones.projects,day,true)}>Descargar Excel del día</a>}

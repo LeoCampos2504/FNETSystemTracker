@@ -3,7 +3,7 @@ import { useEffect,useRef,useState } from 'react';
 import type { OperationsCatalog } from '@/contracts/operations';
 import s from './operations.module.css';
 const errors:Record<string,string>={
- UNAUTHENTICATED:'Ingresá con tu cuenta para continuar.',FORBIDDEN:'Tu cuenta no tiene permiso para esta acción.',PROJECT_ACCESS_REQUIRED:'El administrador debe habilitar tu cuenta para los proyectos correspondientes. Después podrás guardar tus zonas como favorito.',FORBIDDEN_PROJECT:'La zona seleccionada no está habilitada para tu cuenta.',
+ UNAUTHENTICATED:'Ingresá con tu cuenta para continuar.',FORBIDDEN:'Tu cuenta no tiene permiso para esta acción.',FORBIDDEN_PROJECT:'La zona seleccionada no está habilitada para tu cuenta.',
  INPUT_INVALID:'Revisá los campos. Las cantidades admiten hasta tres decimales separados con punto.',SUPPLY_DATABASE_UNAVAILABLE:'No se pudo consultar la base. Reintentá; no se confirmó ningún cambio.',STALE_VERSION:'Otra persona modificó el registro. Actualizá y volvé a abrirlo.',SOURCE_CHANGED:'Sytex cambió desde que abriste el registro. Actualizá para revisar la cantidad nueva.',
  DAY_CLOSED:'La jornada ya está cerrada y se conserva como historial.',UNFINISHED_VISITS:'Antes de cerrar, indicá el resultado de las visitas planificadas o en curso.',NO_OPEN_DAY_WITH_VISITS:'No hay visitas abiertas para cerrar con este filtro.',FUTURE_DAY_CANNOT_CLOSE:'Una jornada futura todavía no se puede cerrar.',
  QUANTITIES_DO_NOT_MATCH:'Para confirmar la descarga deben coincidir la cantidad de Sytex, el conteo y la cantidad en Intra.',CLASSIFICATION_REQUIRED:'Definí primero si el insumo está incluido o no.',INVOICE_NUMBER_REQUIRED:'Indicá el número de factura del insumo no incluido.',REASON_REQUIRED:'Explicá en observaciones por qué no corresponde descargarlo.',
@@ -19,7 +19,7 @@ export const operationToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Ameri
 export const splitTechnicians=(v:string)=>v.split(/[,;\n]/).map(t=>t.trim()).filter(Boolean);
 export function useCatalog(){
  const [data,setData]=useState<OperationsCatalog|null>(null),[projects,setProjects]=useState<string[]>([]),[error,setError]=useState('');
- useEffect(()=>{let active=true;opCall<OperationsCatalog>('/api/operations').then(c=>{if(active){setData(c);setProjects(c.favorites.at(-1)?.projects??[]);}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[]);
+ useEffect(()=>{let active=true;opCall<OperationsCatalog>('/api/operations').then(c=>{if(active){setData(c);}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[]);
  return {data,setData,projects,setProjects,error};
 }
 export function useOperation(){
@@ -36,12 +36,21 @@ export function ProjectPicker({options,selected,onChange,label='Agregar proyecto
  {query&&!available.length&&<p className={s.note}>No hay más proyectos disponibles con esa búsqueda.</p>}
  <div className={s.projectChips}>{selected.map(p=><button key={p} type="button" aria-label={'Quitar '+p} onClick={()=>onChange(selected.filter(v=>v!==p))}>{p} ×</button>)}</div></div>;
 }
-export function ZoneFavorites({state}:{state:ReturnType<typeof useCatalog>}){
- const [name,setName]=useState('Mis zonas'),op=useOperation();
+const typeLabels:Record<string,string>={PREVENTIVO:'Preventivo',CORRECTIVO:'Correctivo',OTRO:'Otros'};
+/** "NON - MPC Mantenimiento Preventivo Civil O&M" → zona NON, tipo PREVENTIVO. */
+export function projectZone(project:string){
+ const cut=project.indexOf(' - '),zone=(cut>0?project.slice(0,cut):project).trim().toUpperCase(),rest=cut>0?project.slice(cut+3):'';
+ const type=/\bMPC\b|preventiv/i.test(rest)?'PREVENTIVO':/\bMCC|correctiv/i.test(rest)?'CORRECTIVO':'OTRO';
+ return {zone,type};
+}
+export const projectLabel=(project:string)=>{const z=projectZone(project);return z.zone+' · '+typeLabels[z.type];};
+export function ZoneFilter({state}:{state:ReturnType<typeof useCatalog>}){
+ const [zone,setZone]=useState(''),[type,setType]=useState('');
  if(!state.data)return <Feedback error={state.error}/>;
- return <details className={s.zones}><summary>Proyectos de Sytex · {state.projects.length?state.projects.length+' seleccionado(s)':'Todos los proyectos habilitados'}</summary>
- <p className={s.note}>Lista automática de proyectos completos de Sytex sincronizados en la base. Proyectos distintos no se agrupan por NON, BAS u otra sigla. Seleccioná varios y guardá el favorito para cronograma e insumos.</p>
- <button type="button" onClick={()=>state.setProjects([])}>Todos los proyectos</button>
- <ProjectPicker options={state.data.projects} selected={state.projects} onChange={state.setProjects}/>
- <div className={s.favorites}><input aria-label="Nombre del filtro favorito" maxLength={60} value={name} onChange={e=>setName(e.target.value)}/><button disabled={op.busy||!name.trim()} onClick={()=>op.run(async()=>{await opCall('/api/operations',{action:'favorite',name:name.trim(),projects:state.projects});const c=await opCall<OperationsCatalog>('/api/operations');state.setData(c);op.setSuccess('Filtro guardado.');})}>Guardar favorito</button>{state.data.favorites.map(f=><button key={f.name} onClick={()=>{state.setProjects(f.projects);setName(f.name);}}>{f.name}</button>)}</div><Feedback {...op}/></details>;
+ const all=state.data.projects.map(p=>({project:p,...projectZone(p)}));
+ const zones=[...new Set(all.map(p=>p.zone))].sort((a,b)=>a.localeCompare(b,'es'));
+ const typesFor=(z:string)=>['PREVENTIVO','CORRECTIVO','OTRO'].filter(t=>all.some(p=>(!z||p.zone===z)&&p.type===t));
+ const apply=(z:string,t:string)=>{const kept=typesFor(z).includes(t)?t:'';setZone(z);setType(kept);state.setProjects(z||kept?all.filter(p=>(!z||p.zone===z)&&(!kept||p.type===kept)).map(p=>p.project):[]);};
+ return <div className={s.zoneFilter}><label>Zona<select aria-label="Zona" value={zone} onChange={e=>apply(e.target.value,type)}><option value="">Todas las zonas</option>{zones.map(z=><option key={z} value={z}>{z}</option>)}</select></label>
+ <label>Tipo<select aria-label="Tipo de mantenimiento" value={type} onChange={e=>apply(zone,e.target.value)}><option value="">Preventivos y correctivos</option>{typesFor(zone).map(t=><option key={t} value={t}>{typeLabels[t]}</option>)}</select></label></div>;
 }
