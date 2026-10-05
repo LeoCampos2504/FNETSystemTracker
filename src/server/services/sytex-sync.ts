@@ -198,6 +198,9 @@ async function dropSupersededRows(importId: string) {
     db.$executeRaw`DELETE FROM sytex_form_links prior USING sytex_supply_imports batch, sytex_form_links fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
+    db.$executeRaw`DELETE FROM sytex_form_states prior USING sytex_supply_imports batch, sytex_form_states fresh
+      WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
+        AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
     db.$executeRaw`DELETE FROM sytex_site_maintenance prior USING sytex_supply_imports batch, sytex_site_maintenance fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.site_code = prior.site_code AND fresh.kind = prior.kind AND fresh.form_code = prior.form_code`,

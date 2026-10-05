@@ -144,8 +144,8 @@ describe('form list status and plan date',()=>{
   it('reads status and plan date when the list has them, in either language', () => {
     const forms = parseSytexFormRows([
       ["Code", "Name", "Template", "Project", "Status", "Plan date"],
-      ["FO-26-1", "MPC-GE", "Preventivo", "NON - MPC", "Open", "2026-10-20 09:00:00"],
-      ["FO-26-2", "Reparar", "Correctivo", "NON - MCC", "", ""],
+      ["FO-26-100001", "MPC-GE", "Preventivo", "NON - MPC", "Open", "2026-10-20 09:00:00"],
+      ["FO-26-100002", "Reparar", "Correctivo", "NON - MCC", "", ""],
     ]);
     expect(forms[0]).toMatchObject({ status: "Open", planDate: "2026-10-20" });
     expect(forms[1].status).toBeUndefined();

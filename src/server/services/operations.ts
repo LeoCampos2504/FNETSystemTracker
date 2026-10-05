@@ -20,16 +20,18 @@ export async function operationsActor(user:User):Promise<OperationsActor> {
 type OfficialTask={estado:string|null;fecha_plan:Date|null;codigo:string;proyecto:string|null;codigos_sitios_afectados:string|null;nombres_sitios_afectados:string|null;nombre:string|null;asignado_a:string|null;usuario_colaborador:string|null};
 export async function catalog(actor:OperationsActor):Promise<OperationsCatalog> {
   const db=getPrismaClient();
-  const [preventivos,correctivos,cotizaciones,prefs,contexts]=await Promise.all([
+  const [preventivos,correctivos,cotizaciones,prefs,contexts,states]=await Promise.all([
     db.preventivos.findMany({select:{estado:true,fecha_plan:true,codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
     db.correctivos.findMany({select:{estado:true,fecha_plan:true,codigo:true,proyecto:true,codigos_sitios_afectados:true,nombres_sitios_afectados:true,nombre:true,asignado_a:true,usuario_colaborador:true}}),
     db.cotizaciones.findMany({select:{proyecto:true},distinct:['proyecto']}),
     db.$queryRaw<{favorites:Favorite[]}[]>`SELECT favorites FROM ops_preferences WHERE user_id=${actor.user.id}::uuid`,
     db.sytex_supply_form_contexts.findMany({include:{import:{select:{importedAt:true}}},orderBy:[{import:{importedAt:'asc'}},{id:'asc'}]}),
+    db.sytex_form_states.findMany({include:{import:{select:{importedAt:true}}},orderBy:[{import:{importedAt:'asc'}},{id:'asc'}]}),
   ]);
   const map=(rows:OfficialTask[],type:string)=>rows.map(r=>({code:r.codigo,type,project:projectKey(r.proyecto),siteCode:r.codigos_sitios_afectados??'',siteName:r.nombres_sitios_afectados??'',description:r.nombre??'',status:r.estado??'',planDate:r.fecha_plan?.toISOString().slice(0,10)??null,technicians:[r.asignado_a,r.usuario_colaborador].filter((t):t is string=>!!t)}));
   const latest=new Map<string,(typeof contexts)[number]>();for(const row of contexts)latest.set(row.code,row);
-  const fresh=[...latest.values()].map(r=>({code:r.code,type:r.type,project:projectKey(r.project),siteCode:r.siteCode,siteName:r.siteName,description:r.description,status:r.status,planDate:r.planDate?.toISOString().slice(0,10)??null,technicians:Array.isArray(r.technicians)?r.technicians.filter((t):t is string=>typeof t==='string'):[]}));
+  const stateByCode=new Map(states.map(r=>[r.code,r]));
+  const fresh=[...latest.values()].map(r=>({code:r.code,type:r.type,project:projectKey(r.project),siteCode:r.siteCode,siteName:r.siteName,description:r.description,status:stateByCode.get(r.code)?.status??'',planDate:stateByCode.get(r.code)?.planDate?.toISOString().slice(0,10)??null,technicians:Array.isArray(r.technicians)?r.technicians.filter((t):t is string=>typeof t==='string'):[]}));
   const all=[...map(preventivos,'PREVENTIVO'),...map(correctivos,'CORRECTIVO')].filter(t=>!latest.has(t.code)).concat(fresh);
   const allProjects=[...new Set([...all.map(r=>r.project),...cotizaciones.map(r=>projectKey(r.proyecto))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
   const projects=allProjects.filter(p=>allowedProject(p,actor.allowed));

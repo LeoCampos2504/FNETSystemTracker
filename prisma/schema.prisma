@@ -128,6 +128,7 @@ model sytex_supply_imports {
   forms               sytex_supply_form_contexts[]
   maintenance         sytex_site_maintenance[]
   links               sytex_form_links[]
+  states              sytex_form_states[]
 
   @@index([importedAt], map: "idx_sytex_supply_imports_date")
   @@map("sytex_supply_imports")
@@ -143,12 +144,22 @@ model sytex_supply_form_contexts {
   siteName    String @map("site_name")
   description String
   technicians Json
-  status      String   @default("")
-  planDate    DateTime? @map("plan_date") @db.Date
   import      sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_supply_form_contexts_import")
   @@unique([importId, code], map: "uq_sytex_supply_form_context")
   @@index([code], map: "idx_sytex_supply_form_context_code")
   @@map("sytex_supply_form_contexts")
+}
+
+model sytex_form_states {
+  id       String    @id @default(uuid()) @db.Uuid
+  importId String    @map("import_id") @db.Uuid
+  code     String
+  status   String
+  planDate DateTime? @map("plan_date") @db.Date
+  import   sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_form_states_import")
+  @@unique([importId, code], map: "uq_sytex_form_state")
+  @@index([code], map: "idx_sytex_form_state_code")
+  @@map("sytex_form_states")
 }
 
 model sytex_form_links {
