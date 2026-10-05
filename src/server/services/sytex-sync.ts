@@ -22,20 +22,39 @@ export type SytexSyncStatus = {
   error: string | null;
 };
 type Config = { baseUrl: string; authorization: string; organization: string };
+/** What the service variables provide: an explicit header, or the user and key Sytex issues in the profile. */
+type Settings = { baseUrl: string; organization: string; candidates: string[] };
 type Fetcher = typeof fetch;
 
 const state: Omit<SytexSyncStatus, "configured"> = { running: false, startedAt: null, finishedAt: null, result: null, error: null };
 
-export function sytexConfig(env: Record<string, string | undefined> = process.env): Config | null {
-  const authorization = env.SYTEX_AUTHORIZATION?.trim();
-  if (!authorization) return null;
+export function sytexSettings(env: Record<string, string | undefined> = process.env): Settings | null {
+  const explicit = env.SYTEX_AUTHORIZATION?.trim(), user = env.SYTEX_USER?.trim(), key = env.SYTEX_API_KEY?.trim();
+  // Sytex accepts the profile key as a Basic password or as a Token depending on the account; the first accepted form is kept.
+  const candidates = explicit ? [explicit] : key ? [...(user ? ["Basic " + Buffer.from(user + ":" + key, "utf8").toString("base64")] : []), "Token " + key] : [];
+  if (!candidates.length) return null;
   let baseUrl: URL;
   try { baseUrl = new URL(env.SYTEX_BASE_URL?.trim() || "https://claro.sytex.io"); } catch { return null; }
   if (baseUrl.protocol !== "https:") return null;
-  return { baseUrl: baseUrl.origin, authorization, organization: env.SYTEX_ORGANIZATION_ID?.trim() || "1" };
+  return { baseUrl: baseUrl.origin, organization: env.SYTEX_ORGANIZATION_ID?.trim() || "1", candidates };
 }
 
-export function sytexSyncStatus(): SytexSyncStatus { return { configured: sytexConfig() !== null, ...state }; }
+let accepted: { key: string; authorization: string } | null = null;
+/** Finds which form of the credential Sytex accepts, with one small read, and remembers it until the variables change. */
+export async function sytexConfig(settings: Settings, fetcher: Fetcher = fetch): Promise<Config> {
+  const key = JSON.stringify(settings);
+  if (accepted?.key === key) return { baseUrl: settings.baseUrl, organization: settings.organization, authorization: accepted.authorization };
+  for (const authorization of settings.candidates) {
+    const config = { baseUrl: settings.baseUrl, organization: settings.organization, authorization };
+    try { await request(config, fetcher, "/api/project/?q=MPC&limit=1", "application/json"); }
+    catch (error) { if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") continue; throw error; }
+    accepted = { key, authorization };
+    return config;
+  }
+  throw new SytexError("SYTEX_CREDENTIAL_REJECTED");
+}
+
+export function sytexSyncStatus(): SytexSyncStatus { return { configured: sytexSettings() !== null, ...state }; }
 
 /** First day of the previous month in Argentina: covers the month being closed and the current one. */
 export function syncWindowStart(now = new Date()): string {
@@ -125,10 +144,10 @@ async function dropSupersededRows(importId: string) {
 
 /** Starts one synchronization in the background; a second request while it runs only reports the status. */
 export function startSytexSync(userId: string): SytexSyncStatus {
-  const config = sytexConfig();
-  if (!config || state.running) return sytexSyncStatus();
+  const settings = sytexSettings();
+  if (!settings || state.running) return sytexSyncStatus();
   state.running = true; state.startedAt = new Date().toISOString(); state.error = null;
-  void runSytexSync(userId, config)
+  void sytexConfig(settings).then((config) => runSytexSync(userId, config))
     .then((result) => { state.result = result; })
     .catch((error: unknown) => { state.error = error instanceof SytexError ? error.code : error instanceof Error && error.message.startsWith("SYTEX_") ? error.message : "SYTEX_SYNC_FAILED"; })
     .finally(() => { state.running = false; state.finishedAt = new Date().toISOString(); });
