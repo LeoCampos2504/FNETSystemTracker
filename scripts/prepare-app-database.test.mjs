@@ -10,7 +10,7 @@ describe("Railway application database preparation", () => {
       "sytex_supply_import_items", "sytex_supply_imports",
       "sytex_supply_form_contexts",
       "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
-      "ops_user_access", "ops_preferences", "ops_days", "ops_visits", "ops_supply_reviews", "ops_review_files", "ops_events",
+      "ops_user_access", "ops_preferences", "ops_days", "ops_visits", "ops_visit_shifts", "ops_supply_reviews", "ops_review_files", "ops_events",
     ].sort());
     for (const { sql } of migrations) {
       expect(sql).not.toMatch(/^\s*(?:ALTER|DROP|TRUNCATE|DELETE|UPDATE)\b/im);

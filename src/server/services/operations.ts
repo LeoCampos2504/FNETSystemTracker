@@ -1,7 +1,7 @@
 import { createHash,randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { User } from '@/contracts';
-import type { Favorite, Material, MaterialReview, OperationsCatalog, SourceMaterial, Visit } from '@/contracts/operations';
+import type { Favorite, Material, MaterialReview, OperationsCatalog, SiteContext, SourceMaterial, Visit, VisitShift } from '@/contracts/operations';
 import { allowedProject, materialAlert, mergeMaterials, projectKey, safeImage, selectProjects, sourceHash, sourceIdentity } from '@/server/operations-domain';
 import { getPrismaClient } from '@/server/prisma';
 import { getPendingBySites } from './operational-data';
@@ -49,9 +49,9 @@ export async function saveFavorite(actor:OperationsActor,favorite:Favorite) {
 }
 export async function audit(tx:Db,actor:OperationsActor,key:string,action:string,detail:unknown){await tx.$executeRaw`INSERT INTO ops_events(id,resource_key,action,actor_id,detail) VALUES (${randomUUID()}::uuid,${key},${action},${actor.user.id}::uuid,${JSON.stringify(detail)}::jsonb)`;}
 const assertProject=(actor:OperationsActor,project:string)=>{if(!allowedProject(project,actor.allowed))fail('FORBIDDEN_PROJECT',403);};
-export type VisitInput={requestKey:string;day:string;project:string;siteCode:string;siteName:string;taskType:string;taskCode:string;technicians:string[];status:Visit['status'];outcome:string};
-type VisitRow={id:string;day:Date;project:string;site_code:string;site_name:string;task_type:string;task_code:string;technicians:string[];status:Visit['status'];outcome:string;version:number;updated_at:Date};
-function mapVisit(r:VisitRow):Visit{return {id:r.id,day:r.day.toISOString().slice(0,10),project:r.project,siteCode:r.site_code,siteName:r.site_name,taskType:r.task_type,taskCode:r.task_code,technicians:r.technicians,status:r.status,outcome:r.outcome,version:r.version,updatedAt:r.updated_at.toISOString(),pending:[],closed:false};}
+export type VisitInput={requestKey:string;day:string;project:string;siteCode:string;siteName:string;taskType:string;taskCode:string;technicians:string[];status:Visit['status'];outcome:string;shift?:VisitShift};
+type VisitRow={id:string;day:Date;project:string;site_code:string;site_name:string;task_type:string;task_code:string;technicians:string[];status:Visit['status'];outcome:string;version:number;updated_at:Date;shift?:VisitShift|null};
+function mapVisit(r:VisitRow):Visit{return {id:r.id,day:r.day.toISOString().slice(0,10),project:r.project,siteCode:r.site_code,siteName:r.site_name,taskType:r.task_type,taskCode:r.task_code,technicians:r.technicians,status:r.status,outcome:r.outcome,version:r.version,updatedAt:r.updated_at.toISOString(),pending:[],closed:false,shift:r.shift??'LABORAL'};}
 async function lockDay(tx:Db,day:string,project:string){await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(${day+'|'+project}))) AS lock`;
   const closed=await tx.$queryRaw<unknown[]>`SELECT day FROM ops_days WHERE day=${day}::date AND project=${project}`; if(closed.length)fail('DAY_CLOSED');}
 export async function addVisit(actor:OperationsActor,input:VisitInput){
@@ -67,6 +67,7 @@ export async function addVisit(actor:OperationsActor,input:VisitInput){
     if(previous){if(previous.created_by!==actor.user.id||previous.request_hash!==requestHash)fail('REQUEST_KEY_REUSED');return {id:previous.id,alreadySaved:true};}
     const id=randomUUID();
     await tx.$executeRaw`INSERT INTO ops_visits(id,request_key,request_hash,day,project,site_code,site_name,task_type,task_code,technicians,status,outcome,created_by,updated_by) VALUES (${id}::uuid,${input.requestKey}::uuid,${requestHash},${input.day}::date,${input.project},${input.siteCode},${input.siteName},${input.taskType},${input.taskCode},${JSON.stringify(input.technicians)}::jsonb,${input.status},${input.outcome},${actor.user.id}::uuid,${actor.user.id}::uuid)`;
+    await tx.$executeRaw`INSERT INTO ops_visit_shifts(visit_id,shift) VALUES (${id}::uuid,${input.shift??'LABORAL'})`;
     await audit(tx,actor,id,'VISIT_CREATED',input);return {id};
   });
 }
@@ -82,7 +83,7 @@ export async function updateVisit(actor:OperationsActor,input:{id:string;version
 export async function visits(actor:OperationsActor,day:string,requested:string[]){
   const c=await catalog(actor),projects=selectProjects(requested,c.projects),db=getPrismaClient();
   const [rows,days]=await Promise.all([
-    db.$queryRaw<VisitRow[]>`SELECT * FROM ops_visits WHERE day=${day}::date AND project IN (SELECT jsonb_array_elements_text(${JSON.stringify(projects)}::jsonb)) ORDER BY project,site_code,updated_at`,
+    db.$queryRaw<VisitRow[]>`SELECT v.*,s.shift FROM ops_visits v LEFT JOIN ops_visit_shifts s ON s.visit_id=v.id WHERE v.day=${day}::date AND v.project IN (SELECT jsonb_array_elements_text(${JSON.stringify(projects)}::jsonb)) ORDER BY v.project,v.site_code,v.updated_at`,
     db.$queryRaw<{project:string;closed_at:Date;snapshot:Visit[]}[]>`SELECT project,closed_at,snapshot FROM ops_days WHERE day=${day}::date AND project IN (SELECT jsonb_array_elements_text(${JSON.stringify(projects)}::jsonb))`,
   ]);
   const closed=new Map(days.map(d=>[d.project,d]));
@@ -93,6 +94,13 @@ export async function visits(actor:OperationsActor,day:string,requested:string[]
   for(const v of live)v.pending=(pending[v.siteCode]??[]).filter(p=>taskProjects.get(p.formulario)===v.project).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · '));
   return {items:[...live,...days.flatMap(d=>d.snapshot.map(v=>({...v,closed:true})))],projects,closed:days.map(d=>({project:d.project,closedAt:d.closed_at.toISOString()}))};
 }
+/** Everything a coordinator needs after typing only the site: its forms, what Sytex still lists as pending and what earlier visits left open. */
+export async function siteContext(actor:OperationsActor,site:string):Promise<SiteContext>{
+  const code=site.trim().toUpperCase();if(!code)return {forms:[],pending:[],previous:[]};
+  const c=await catalog(actor),db=getPrismaClient();
+  const [pending,rows]=await Promise.all([getPendingBySites([code]),db.$queryRaw<{day:Date;project:string;task_type:string;status:Visit['status'];outcome:string}[]>`SELECT day,project,task_type,status,outcome FROM ops_visits WHERE upper(site_code)=${code} AND status IN ('CON_PENDIENTES','CANCELADO') ORDER BY day DESC LIMIT 10`]);
+  return {forms:c.tasks.filter(t=>t.siteCode.trim().toUpperCase()===code),pending:(pending[code]??[]).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · ')),previous:rows.filter(r=>allowedProject(r.project,actor.allowed)).map(r=>({day:r.day.toISOString().slice(0,10),project:r.project,taskType:r.task_type,status:r.status,outcome:r.outcome}))};
+}
 export async function closeDay(actor:OperationsActor,day:string,requested:string[]){
   const result=await visits(actor,day,requested);
   const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -102,7 +110,7 @@ export async function closeDay(actor:OperationsActor,day:string,requested:string
   if(result.items.some(v=>projects.includes(v.project)&&['PLANIFICADO','EN_CURSO'].includes(v.status)))fail('UNFINISHED_VISITS',422);
   return getPrismaClient().$transaction(async tx=>{
     for(const project of projects){await lockDay(tx,day,project);
-      const current=await tx.$queryRaw<VisitRow[]>`SELECT * FROM ops_visits WHERE day=${day}::date AND project=${project} ORDER BY site_code,updated_at`;
+      const current=await tx.$queryRaw<VisitRow[]>`SELECT v.*,s.shift FROM ops_visits v LEFT JOIN ops_visit_shifts s ON s.visit_id=v.id WHERE v.day=${day}::date AND v.project=${project} ORDER BY v.site_code,v.updated_at`;
       const snapshot=current.map(r=>{const previous=result.items.find(v=>v.id===r.id);if(!previous||previous.version!==r.version)fail('STALE_VERSION');return {...mapVisit(r),pending:previous.pending,closed:true};});
       if(snapshot.some(v=>['PLANIFICADO','EN_CURSO'].includes(v.status)))fail('UNFINISHED_VISITS',422);
       await tx.$executeRaw`INSERT INTO ops_days(day,project,closed_by,snapshot) VALUES (${day}::date,${project},${actor.user.id}::uuid,${JSON.stringify(snapshot)}::jsonb)`;
