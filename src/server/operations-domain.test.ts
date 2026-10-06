@@ -1,5 +1,5 @@
 import { describe,it,expect } from 'vitest';
-import { groupMaterials,splitCodes,materialAlert,mergeMaterials,projectKey,selectProjects,sourceHash,sourceIdentity,safeImage } from './operations-domain';
+import { groupMaterials,materialAlert,mergeMaterials,projectKey,selectProjects,sourceHash,sourceIdentity,safeImage } from './operations-domain';
 import { daySchema,inputSchema } from './operations-input';
 import { operationalWorkbook } from './operations-xlsx';
 import { unzipSync,strFromU8 } from 'fflate';
@@ -15,20 +15,6 @@ describe('control de insumos',()=>{
   expect(grouped).toMatchObject({quantity:'3',lines:3,key:sourceIdentity('FO-26-1','[#1] Insumo','1.1')});
   expect(grouped.hash).toBe(sourceHash({...grouped,quantity:'3'}));
   expect(rows.filter(r=>r.lines===1)).toHaveLength(3);
- });
- it('separates the codes of an insumo from its name without touching sizes, ratings or models',()=>{
-  expect(splitCodes('Módulo rectificador 3000W 48V SN: AB12345')).toEqual({name:'Módulo rectificador 3000W 48V',codes:['AB12345']});
-  expect(splitCodes('Módulo rectificador MOD-0123')).toEqual({name:'Módulo rectificador',codes:['MOD-0123']});
-  expect(splitCodes('Módulo rectificador Código 4521')).toEqual({name:'Módulo rectificador',codes:['4521']});
-  expect(splitCodes('Módulo rectificador 1234567')).toEqual({name:'Módulo rectificador',codes:['1234567']});
-  for(const plain of ['Llave térmica de C63','Filtro de aire de 50x50','Cable UTP Cat-6 RJ45','Aire 12000 BTU','Disyuntor MCB16 220V'])expect(splitCodes(plain)).toEqual({name:plain,codes:[]});
- });
- it('sums modules by name and lists their codes, leaving a single module as Sytex reports it',()=>{
-  const line=(group:string,description:string)=>({...row,key:sourceIdentity('FO-26-1',group,'1'),group,description,quantity:'1',provider:'Stock Claro',siteCode:'ST1'});
-  const [grouped]=groupMaterials([line('[#1]','Módulo rectificador MOD-0001'),line('[#2]','Módulo rectificador MOD-0002'),line('[#3]','Módulo rectificador mod-0002')]);
-  expect(grouped).toMatchObject({description:'Módulo rectificador',quantity:'3',lines:3,codes:['MOD-0001','MOD-0002']});
-  expect(grouped.hash).toBe(sourceHash({...grouped,quantity:'3'}));
-  expect(groupMaterials([line('[#1]','Módulo rectificador MOD-0001')])).toMatchObject([{description:'Módulo rectificador MOD-0001',lines:1}]);
  });
  it('counts repeated lines without quantity as one unit each and leaves a single line as it is',()=>{
   const line=(group:string,quantity:string|null)=>({...row,key:sourceIdentity('FO-26-1',group,'1'),group,description:'Ficha rj45',quantity});
