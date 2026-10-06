@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { databaseIsConfigured } from "@/server/services/database-availability";
 import { getTechnicianKpiData } from "@/server/services/technician-kpi";
-import { requireAdminSession } from "@/server/services/auth-sessions";
+import { requireGlobalDataSession } from "@/server/operations-http";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const authorization = await requireAdminSession();
+  const authorization = await requireGlobalDataSession();
   if (!authorization.ok) return authorization.response;
   if (!databaseIsConfigured()) return NextResponse.json({ error: "DATABASE_UNAVAILABLE" }, { status: 503 });
   try {

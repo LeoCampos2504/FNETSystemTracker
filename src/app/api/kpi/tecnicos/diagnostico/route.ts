@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getTechnicianDiagnostic } from "@/server/services/technician-diagnostic";
-import { requireAdminSession } from "@/server/services/auth-sessions";
+import { requireGlobalDataSession } from "@/server/operations-http";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const authorization = await requireAdminSession();
+  const authorization = await requireGlobalDataSession();
   if (!authorization.ok) return authorization.response;
   try {
     return NextResponse.json(await getTechnicianDiagnostic());

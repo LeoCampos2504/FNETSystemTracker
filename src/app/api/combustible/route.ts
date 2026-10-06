@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { databaseIsConfigured } from "@/server/services/database-availability";
 import { getFuelData } from "@/server/services/operational-data";
-import { requireAdminSession } from "@/server/services/auth-sessions";
+import { requireGlobalDataSession } from "@/server/operations-http";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const authorization = await requireAdminSession();
+  const authorization = await requireGlobalDataSession();
   if (!authorization.ok) return authorization.response;
   if (!databaseIsConfigured()) return NextResponse.json({ code: "DATABASE_NOT_CONFIGURED" }, { status: 503 });
   const params = request.nextUrl.searchParams;

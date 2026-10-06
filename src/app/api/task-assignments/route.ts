@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { InternalTaskType } from "@/contracts";
 import { getTaskAssignment, internalTechnicianOptions, saveTaskAssignment } from "@/server/services/task-assignments";
-import { requireAdminSession } from "@/server/services/auth-sessions";
+import { requireGlobalDataSession } from "@/server/operations-http";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ function errorResponse(error: unknown): NextResponse {
 }
 
 export async function GET(request: Request) {
-  const authorization = await requireAdminSession();
+  const authorization = await requireGlobalDataSession();
   if (!authorization.ok) return authorization.response;
   const blocked = productionBlocked();
   if (blocked) return blocked;
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 }
 
 async function save(request: Request) {
-  const authorization = await requireAdminSession();
+  const authorization = await requireGlobalDataSession();
   if (!authorization.ok) return authorization.response;
   const blocked = productionBlocked();
   if (blocked) return blocked;
