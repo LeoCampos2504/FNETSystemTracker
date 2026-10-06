@@ -37,3 +37,5 @@
 .app .techCard[aria-pressed=true] small{color:#e9e5ff}
 .totals{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}
 .totals span{background:#f1effd;color:#4a3cc4;border-radius:8px;padding:5px 10px;font-size:13px}
+.dialog.stockDialog{width:960px}
+.app .techCard{cursor:pointer}
