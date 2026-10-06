@@ -37,7 +37,7 @@ _(vacío — agregar acá)_
 
 ### [Resuelto 2026-10-05] Insumos repetidos agrupados con su recuento (aditivo)
 - Quién lo pide: Eugenia (coordinación).
-- Contrato afectado: `src/contracts/operations.ts` — se agregan `lines?: number` (cuántas líneas de Sytex componen la fila) y `codes?: string[]` (códigos o series de las líneas, por ejemplo de módulos) a `SourceMaterial`.
+- Contrato afectado: `src/contracts/operations.ts` — se agrega `lines?: number` a `SourceMaterial` (cuántas líneas de Sytex componen la fila).
 - Por qué: el mismo insumo repetido en un formulario (por ejemplo tres líneas de "Llave térmica de C63", una unidad cada una) se mostraba como tres filas iguales; ahora es una fila con la cantidad total.
 - Impacto: ninguno en `Api`, mocks ni Prisma. La revisión de una fila agrupada se guarda con la clave de su primera línea.
 
