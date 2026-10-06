@@ -43,6 +43,12 @@ describe("Sytex answer export material extraction", () => {
       expect(result.items.map((item) => [item.description, item.quantity])).toEqual([["Guata", "3"]]);
     }
   });
+  it("reads a second name line such as \"Material: 1\" or \"Material: 4 litros\" as the quantity, in either order", () => {
+    const answers = ["Insumo: Silicona transparente \nMaterial: 1", "Material: 2\nInsumo: Bolsa de residuos", "Insumo: Nafta\nMaterial: Para 4 litros", "Insumo: Cera\nMaterial: Cera para piso"];
+    const result = parseSytexSupplyRows([headers, ...answers.map((answer, i) => row(`1.30${"ABCD"[i]}.1`, "TIPO DE INSUMO/MATERIAL", answer, `[#${i + 1}] INGRESAR CANTIDAD DE INSUMOS`, "FO-26-541431"))]);
+    expect(result.errors).toEqual([]);
+    expect(result.items.map((item) => [item.description, item.quantity])).toEqual([["Silicona transparente", "1"], ["Bolsa de residuos", "2"], ["Nafta", "4"], ["Cera", null]]);
+  });
   it("names the form whose answers contradict each other", () => {
     const result = parseSytexSupplyRows([headers, row("9.2A.1", "Descripción del insumo:", "Diésel 500", "[#1] Insumo", "FO-26-000009"), row("9.2A.1", "Descripción del insumo:", "Nafta", "[#1] Insumo", "FO-26-000009")]);
     expect(result.errors).toEqual([{ line: 3, code: "ITEM_FIELD_CONFLICT", form: "FO-26-000009" }]);
