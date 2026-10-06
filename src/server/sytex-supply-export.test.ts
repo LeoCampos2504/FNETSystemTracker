@@ -25,6 +25,15 @@ describe("Sytex answer export material extraction", () => {
     expect(result.warnings).toEqual([{ line: 8, code: "IMAGE_FILE_MISSING" }]);
     expect(result.errors).toEqual([]);
   });
+  it("reads the insumo of templates that register description and quantity in one table answer", () => {
+    const result = parseSytexSupplyRows([headers,
+      row("1.11.1", "¿Debe registrar insumos utilizados?", "Si", "INSUMOS/MATERIALES", "FO-26-610449"),
+      row("1.11.2A.1", "TIPO DE INSUMO / MATERIAL", "Insumo: Guata filtro\nCantidad: 1", "[#1] Insumo", "FO-26-610449"),
+      row("1.11.2B.1", "TIPO DE INSUMO / MATERIAL", "Insumo: Gas R410A\nCantidad: 2,5", "[#2] Insumo", "FO-26-610449"),
+    ]);
+    expect(result.items.map((item) => [item.formulario, item.indice, item.description, item.quantity])).toEqual([["FO-26-610449", "1.11.2A", "Guata filtro", "1"], ["FO-26-610449", "1.11.2B", "Gas R410A", "2.5"]]);
+    expect(result.errors).toEqual([]);
+  });
   it("does not count empty material questions, yes/no answers or generic photos as material rows", () => {
     const result = parseSytexSupplyRows([headers,
       row("9.2A.1", "Descripción del insumo:", null),
