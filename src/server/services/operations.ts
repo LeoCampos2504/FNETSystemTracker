@@ -192,6 +192,8 @@ export async function saveReview(actor:OperationsActor,input:ReviewInput){
   if(row.hash!==input.sourceHash)fail('SOURCE_CHANGED');
   if(input.intraStatus==='DESCARGADO'&&(input.countedQuantity===null||input.intraQuantity===null||Number(input.countedQuantity)!==Number(input.intraQuantity)||(row.quantity!==null&&Number(input.countedQuantity)!==Number(row.quantity))))fail('QUANTITIES_DO_NOT_MATCH',422);
   if(['DESCARGADO','NO_CORRESPONDE'].includes(input.intraStatus)&&input.classification==='PENDIENTE')fail('CLASSIFICATION_REQUIRED',422);
+  // An included insumo always carries its invoice number.
+  if(input.classification==='INCLUIDO'&&!input.invoiceNumber.trim())fail('INVOICE_NUMBER_REQUIRED',422);
   if(input.intraStatus==='DESCARGADO'&&input.classification==='NO_INCLUIDO'&&!input.invoiceNumber.trim())fail('INVOICE_NUMBER_REQUIRED',422);
   // A not-included insumo is not downloaded in Intra: it stays in the stock of the technician, and that is the reason.
   if(input.intraStatus==='NO_CORRESPONDE'&&input.classification!=='NO_INCLUIDO'&&!input.notes.trim())fail('REASON_REQUIRED',422);

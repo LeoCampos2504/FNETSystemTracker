@@ -11,3 +11,17 @@
 .app table.compact{min-width:0;table-layout:auto}.compact td,.compact th{padding:10px 10px}.compact td:nth-child(3),.compact td:nth-child(6),.compact td:nth-child(8){white-space:nowrap}.compact td:nth-child(6){text-align:right;font-variant-numeric:tabular-nums}.compact th:nth-child(6){text-align:right}.tableWrap{max-width:100%}
 .card.done{background:#f3fbf7;border-color:#b9e3cd;box-shadow:inset 4px 0 0 #3bb386}.card.done .kicker{color:#2f8f6b}
 .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}.app .danger{color:#b3392f;border-color:#efc4bf;background:#fff}.app .danger:hover{background:#fff1ef}
+
+.reviewForm{display:flex;flex-direction:column;gap:14px}
+.reviewHead{background:#f5f4fb;border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.reviewHead>strong{font-size:17px;color:#202336}
+.reviewHead dl{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 18px}
+.reviewHead dt{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#8390a6}
+.reviewHead dd{margin:2px 0 0;font-size:14px;color:#34435d;overflow-wrap:anywhere}
+.reviewSection{border:1px solid #e1e4ee;background:white;border-radius:12px;padding:14px 16px}
+.reviewSection h3{margin:0 0 4px;font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:#6751e8}
+.reviewSection .fields{margin:10px 0 4px}
+.reviewSection .note{margin:6px 0 0}
+.reviewSection textarea{width:100%;box-sizing:border-box}
+.required{color:#b3392f;font-style:normal;font-size:12px}
+.optional{color:#8390a6;font-style:normal;font-size:12px}
