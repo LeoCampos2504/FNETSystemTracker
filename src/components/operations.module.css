@@ -25,3 +25,11 @@
 .reviewSection textarea{width:100%;box-sizing:border-box}
 .required{color:#b3392f;font-style:normal;font-size:12px}
 .optional{color:#8390a6;font-style:normal;font-size:12px}
+
+.techGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin:14px 0}
+.app .techCard{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:12px 14px;border-radius:12px;background:white;border:1px solid #e1e4ee}
+.techCard span{font-size:13px;color:#6751e8}
+.app .techCard.techEmpty{background:#faf9fd}
+.techEmpty span{color:#8390a6}
+.app .techCard[aria-pressed=true] span{color:#e9e5ff}
+.app .inline{flex-direction:row;align-items:center;gap:8px}

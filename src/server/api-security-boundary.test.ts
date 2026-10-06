@@ -24,7 +24,7 @@ describe("API security boundaries", () => {
     expect(protectedRoutes.length).toBeGreaterThan(0);
     for (const path of protectedRoutes) {
       const source = readFileSync(path, "utf8");
-      expect(source.includes("requireAdminSession()") || source.includes("requireOperationsSession()"), relative(apiRoot, path)).toBe(true);
+      expect(source.includes("requireAdminSession()") || source.includes("requireOperationsSession()") || source.includes("requireGlobalDataSession()"), relative(apiRoot, path)).toBe(true);
     }
   });
 

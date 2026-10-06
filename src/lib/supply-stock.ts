@@ -4,7 +4,7 @@ import type { Material } from '@/contracts/operations';
 export const inStock=(item:Pick<Material,'review'>)=>item.review?.classification==='NO_INCLUIDO'&&item.review.intraStatus==='NO_CORRESPONDE';
 /** The first technician of the form is the main one, the one who buys. */
 export const principalTechnician=(technician:string)=>technician.split(/\s*[/;]\s*/)[0]?.trim()||'Sin técnico asignado';
-const fold=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+export const fold=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
 export type StockGroup={technician:string;lines:Material[];totals:{description:string;quantity:number}[]};
 
 /** Stock per main technician, with the total of each insumo (a line without quantity counts as one unit). */

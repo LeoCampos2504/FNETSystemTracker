@@ -10,3 +10,11 @@ export async function requireOperationsSession(allowCtic=false){
     return {ok:true as const,actor};
   }catch(e){return {ok:false as const,response:supplyFailure(e)};}
 }
+
+/** Admins and coordination accounts that see every zone read the shared operational data; CTIC and zone-limited accounts do not. */
+export async function requireGlobalDataSession(){
+  const session=await requireOperationsSession();
+  if(!session.ok)return session;
+  if(session.actor.allowed!==null)return {ok:false as const,response:NextResponse.json({code:'FORBIDDEN'},{status:403,headers:{'Cache-Control':'no-store'}})};
+  return session;
+}
