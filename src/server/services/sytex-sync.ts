@@ -29,7 +29,7 @@ const REQUEST_TIMEOUT_MS = 120_000;
 export type SytexSyncStatus = {
   configured: boolean; running: boolean;
   startedAt: string | null; finishedAt: string | null;
-  result: { projects: number; forms: number; items: number; changed: boolean; since: string } | null;
+  result: { projects: number; forms: number; items: number; changed: boolean; since: string; skipped?: string[] } | null;
   error: string | null; errorDetail: string | null;
   progress: { done: number; total: number } | null;
 };
@@ -187,8 +187,13 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   }
   for (const form of parsed.formContexts ?? []) if (!form.planDate && windowStart.has(form.code)) form.planDate = windowStart.get(form.code);
   const forms = parsed.formContexts?.length ?? 0;
-  if (parsed.errors.length) throw new SytexError("SYTEX_EXPORT_HAS_CONFLICTS");
-  if (!parsed.items.length) return { projects: activeProjects, forms, items: 0, changed: false, since };
+  // A form whose answers contradict each other must not stop everyone else: it keeps what was saved before and is reported.
+  const contradictory = [...new Set(parsed.errors.map((issue) => issue.form))];
+  if (contradictory.length && contradictory.some((code) => !code)) throw new SytexError("SYTEX_EXPORT_HAS_CONFLICTS");
+  const skipped = contradictory.filter((code): code is string => !!code).sort();
+  if (skipped.length) { parsed.items = parsed.items.filter((item) => !skipped.includes(item.formulario)); parsed.errors = []; }
+  const skippedInfo = skipped.length ? { skipped } : {};
+  if (!parsed.items.length) return { projects: activeProjects, forms, items: 0, changed: false, since, ...skippedInfo };
   // Identity of the content, not of the files: an unchanged Sytex produces no new rows.
   const identity = createHash("sha256").update(JSON.stringify([
     parsed.items.map((item) => [item.formulario, item.grupo, item.indice, item.description, item.quantity, item.provider, item.image, item.imageDeclared, item.siteCode, item.status]).sort(),
@@ -197,7 +202,7 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   ])).digest("hex");
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
   if (!saved.alreadyImported) await dropSupersededRows(saved.importId);
-  return { projects: activeProjects, forms, items: parsed.items.length, changed: !saved.alreadyImported, since };
+  return { projects: activeProjects, forms, items: parsed.items.length, changed: !saved.alreadyImported, since, ...skippedInfo };
 }
 
 /** Earlier synchronizations keep only what the newest one no longer covers (forms outside its date window). */

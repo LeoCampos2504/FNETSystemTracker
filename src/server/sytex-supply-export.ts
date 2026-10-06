@@ -1,7 +1,7 @@
 import { readSheet } from "read-excel-file/node";
 import { exactFormReference } from "./form-references";
 
-type Issue = { line: number; code: string };
+type Issue = { line: number; code: string; form?: string };
 type SourceAnswer = { line: number; index: string; question: string; answer: string | null; editedAt: string | null; editor: string | null };
 export type SytexFormContext = { code: string; type: string; project: string; siteCode: string; siteName: string; description: string; technicians: string[]; link?: string; status?: string; planDate?: string };
 export type SytexExportItem = {
@@ -90,6 +90,8 @@ export function parseSytexSupplyRows(rows: unknown[][]): SytexSupplyExport {
   const get = (row: unknown[], key: string) => text(row[headers.indexOf(normalize(key))]);
   const buckets = new Map<string, SytexExportItem>();
   const seen = new Map<string, string>();
+  // Values that came from a combined table answer: an explicit question about the same item wins over them.
+  const combinedKeys = new Set<string>();
   const errors: Issue[] = [], warnings: Issue[] = [];
   const forms = new Set<string>(), dates: string[] = [];
   let answerCount = 0;
@@ -103,10 +105,10 @@ export function parseSytexSupplyRows(rows: unknown[][]): SytexSupplyExport {
     const group = get(row, "Grupo"), index = get(row, "Índice"), question = get(row, "Pregunta") ?? "";
     const answer = get(row, "Respuesta");
     // Some templates ask for the insumo in one table question: "Insumo: Guata filtro" and "Cantidad: 1" in the same answer.
-    const single = role(question), fields: [ItemField, string][] = single ? (answer ? [[single, answer]] : []) : answer && isCombinedQuestion(question) ? combinedFields(answer) : [];
+    const single = role(question), combined = !single && !!answer && isCombinedQuestion(question), fields: [ItemField, string][] = single ? (answer ? [[single, answer]] : []) : combined ? combinedFields(answer as string) : [];
     if (!group || !/(?:insumo|material)/.test(normalize(group)) || !fields.length) return;
     const stem = index?.match(/^(.+)\.\d+$/)?.[1];
-    if (!form || !index || !stem) { errors.push({ line, code: "ITEM_IDENTITY_INVALID" }); return; }
+    if (!form || !index || !stem) { errors.push({ line, code: "ITEM_IDENTITY_INVALID", ...(form ? { form } : {}) }); return; }
     const key = JSON.stringify([form, group, stem]);
     const item = buckets.get(key) ?? {
       formulario: form, grupo: group, indice: stem, description: null, quantity: null, provider: null,
@@ -118,11 +120,17 @@ export function parseSytexSupplyRows(rows: unknown[][]): SytexSupplyExport {
       const fieldKey = JSON.stringify([form, group, stem, field]);
       const previous = seen.get(fieldKey);
       if (previous !== undefined) {
-        if (previous !== value) errors.push({ line, code: "ITEM_FIELD_CONFLICT" });
-        else warnings.push({ line, code: "DUPLICATE_ANSWER_SKIPPED" });
-        continue;
+        const fromCombined = combinedKeys.has(fieldKey);
+        if (combined && !fromCombined) continue;
+        if (!combined && fromCombined) combinedKeys.delete(fieldKey);
+        else {
+          if (previous !== value) errors.push({ line, code: "ITEM_FIELD_CONFLICT", form });
+          else warnings.push({ line, code: "DUPLICATE_ANSWER_SKIPPED" });
+          continue;
+        }
       }
       seen.set(fieldKey, value);
+      if (combined) combinedKeys.add(fieldKey);
       used = true;
       if (field === "quantity") {
         item.quantity = quantity(value);

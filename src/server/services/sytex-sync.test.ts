@@ -63,6 +63,13 @@ describe("direct Sytex synchronization", () => {
     expect([identity.length, name, user]).toEqual([64, "Sincronización directa Sytex", "user-id"]);
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
+  it("keeps going when one form has contradictory answers and reports which one", async () => {
+    const answers = [...nonAnswers, ["FO-26-000009", "[#1] Insumo", "1.17A.1", "Descripción", "Diésel", "ST00001"], ["FO-26-000009", "[#1] Insumo", "1.17A.1", "Descripción", "Nafta", "ST00001"], ["FO-26-000009", "[#1] Insumo", "1.17A.2", "Cantidad", 5, "ST00001"]];
+    const result = await runSytexSync("user-id", config, sytex({ ...projects, "/api/entryanswerdata/": answers, "project=7": nonForms }));
+    expect((result as { skipped?: string[] }).skipped).toEqual(["FO-26-000009"]);
+    expect(mocks.save.mock.calls[0][0].items.map((item: { formulario: string }) => item.formulario)).toEqual(["FO-26-000001"]);
+    expect(mocks.save.mock.calls[0][0].errors).toEqual([]);
+  });
   it("does not rewrite anything when Sytex has not changed", async () => {
     mocks.save.mockResolvedValue({ importId: "existing", alreadyImported: true });
     const routes = { ...projects, "/api/entryanswerdata/": nonAnswers, "project=7": nonForms };

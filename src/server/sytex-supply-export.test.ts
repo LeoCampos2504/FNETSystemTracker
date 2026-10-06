@@ -34,6 +34,19 @@ describe("Sytex answer export material extraction", () => {
     expect(result.items.map((item) => [item.formulario, item.indice, item.description, item.quantity])).toEqual([["FO-26-610449", "1.11.2A", "Guata filtro", "1"], ["FO-26-610449", "1.11.2B", "Gas R410A", "2.5"]]);
     expect(result.errors).toEqual([]);
   });
+  it("lets an explicit description or quantity win over the combined table answer, in either order", () => {
+    for (const order of [0, 1]) {
+      const explicit = [row("1.11.2A.2", "Descripción del insumo:", "Guata"), row("1.11.2A.3", "Cantidad utilizada:", "3")];
+      const combined = [row("1.11.2A.1", "TIPO DE INSUMO / MATERIAL", "Insumo: Guata filtro\nCantidad: 1")];
+      const result = parseSytexSupplyRows([headers, ...(order ? [...explicit, ...combined] : [...combined, ...explicit])]);
+      expect(result.errors).toEqual([]);
+      expect(result.items.map((item) => [item.description, item.quantity])).toEqual([["Guata", "3"]]);
+    }
+  });
+  it("names the form whose answers contradict each other", () => {
+    const result = parseSytexSupplyRows([headers, row("9.2A.1", "Descripción del insumo:", "Diésel 500", "[#1] Insumo", "FO-26-000009"), row("9.2A.1", "Descripción del insumo:", "Nafta", "[#1] Insumo", "FO-26-000009")]);
+    expect(result.errors).toEqual([{ line: 3, code: "ITEM_FIELD_CONFLICT", form: "FO-26-000009" }]);
+  });
   it("does not count empty material questions, yes/no answers or generic photos as material rows", () => {
     const result = parseSytexSupplyRows([headers,
       row("9.2A.1", "Descripción del insumo:", null),
@@ -58,7 +71,7 @@ describe("Sytex answer export material extraction", () => {
     const result = parseSytexSupplyRows([headers,
       row("1.1", "Descripción del insumo:", "LED"), row("1.2", "Cantidad", "1"), row("1.2", "Cantidad", "2"),
     ]);
-    expect(result.errors).toEqual([{ line: 4, code: "ITEM_FIELD_CONFLICT" }]);
+    expect(result.errors).toEqual([{ line: 4, code: "ITEM_FIELD_CONFLICT", form: "FO-26-000001" }]);
     expect(result.items[0].quantity).toBe("1");
   });
   it("does not duplicate identical answers", () => {
