@@ -4,7 +4,7 @@ import type { OperationsActor,ReviewInput,VisitInput } from './operations';
 const fake=vi.hoisted(()=>({db:{} as Record<string,unknown>,reviews:[] as unknown[],closed:false,updateCount:1}));
 vi.mock('@/server/prisma',()=>({getPrismaClient:()=>fake.db}));
 vi.mock('./operational-data',()=>({getPendingBySites:async()=>({})}));
-import { addVisit,catalog,closeDay,deleteReview,materials,openForm,operationsActor,saveReview,updateVisit,yearlyMaintenance } from './operations';
+import { addVisit,catalog,closeDay,decidedClassification,deleteReview,materials,openForm,operationsActor,saveReview,updateVisit,yearlyMaintenance } from './operations';
 const user={id:'00000000-0000-4000-8000-000000000001',name:'Test',email:'test@example.invalid',role:UserRole.COORDINATOR,active:true,technicianId:null,coordinatorId:null};
 const non='NON - mantenimiento',bam='BAM - mantenimiento';
 const actor:OperationsActor={user,allowed:[non]};
@@ -34,6 +34,8 @@ describe('coordinator operation safeguards',()=>{
  it('does not confirm an incomplete Intra count',async()=>{await expect(saveReview(actor,{...await review(),intraQuantity:'1'})).rejects.toThrow('QUANTITIES_DO_NOT_MATCH');expect(execute).not.toHaveBeenCalled();});
  it('does not decide inclusion without evidence',async()=>{await expect(saveReview(actor,{...await review(),classification:'PENDIENTE'})).rejects.toThrow('CLASSIFICATION_REQUIRED');});
  it('requires an invoice number for non-included downloaded supplies',async()=>{await expect(saveReview(actor,{...await review(),classification:'NO_INCLUIDO'})).rejects.toThrow('INVOICE_NUMBER_REQUIRED');});
+ it('keeps a not-included insumo in the stock of the technician without asking for a reason',async()=>{expect(await saveReview(actor,{...await review(),classification:'NO_INCLUIDO',intraStatus:'NO_CORRESPONDE',countedQuantity:null,intraQuantity:null,invoiceNumber:'0022-1',notes:''})).toEqual({saved:true});await expect(saveReview(actor,{...await review(),classification:'INCLUIDO',intraStatus:'NO_CORRESPONDE',countedQuantity:null,intraQuantity:null,notes:''})).rejects.toThrow('REASON_REQUIRED');});
+ it('does not take an invoice typed before the inclusion was decided as a decision',()=>{expect(decidedClassification('NO_INCLUIDO','PENDIENTE')).toBe('PENDIENTE');expect(decidedClassification('NO_INCLUIDO','NO_CORRESPONDE')).toBe('NO_INCLUIDO');expect(decidedClassification('NO_INCLUIDO','DESCARGADO')).toBe('NO_INCLUIDO');expect(decidedClassification('INCLUIDO','PENDIENTE')).toBe('INCLUIDO');});
  it('rejects changed source snapshots',async()=>{await expect(saveReview(actor,{...await review(),sourceHash:'wrong'})).rejects.toThrow('SOURCE_CHANGED');});
  it('rejects stale review writes',async()=>{fake.updateCount=0;await expect(saveReview(actor,await review())).rejects.toThrow('STALE_VERSION');});
  it('saves a balanced classified review with an audit event',async()=>{expect(await saveReview(actor,await review())).toEqual({saved:true});expect(execute.mock.calls.some(([strings])=>strings.join('?').includes('ops_events'))).toBe(true);});

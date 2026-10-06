@@ -146,7 +146,9 @@ export async function history(actor:OperationsActor,requested:string[]){
  return rows.map(r=>({day:r.day.toISOString().slice(0,10),project:r.project,closedAt:r.closed_at.toISOString()}));
 }
 type ReviewRow={source_key:string;project:string;classification:string;intra_status:string;invoice_number:string;counted_quantity:Prisma.Decimal|null;intra_quantity:Prisma.Decimal|null;notes:string;source_hash:string;version:number;updated_at:Date;updated_by:string};
-const reviewContract=(r:ReviewRow):MaterialReview=>({project:r.project,classification:r.classification,intraStatus:r.intra_status,invoiceNumber:r.invoice_number,countedQuantity:r.counted_quantity?.toString()??null,intraQuantity:r.intra_quantity?.toString()??null,notes:r.notes,sourceHash:r.source_hash,version:r.version,updatedAt:r.updated_at.toISOString(),updatedBy:r.updated_by});
+/** Before the form asked "¿Es incluido?", typing an invoice marked the insumo as not included. Such a control (not included, nothing resolved in Intra) was never really decided, so it goes back to undefined. */
+export const decidedClassification=(classification:string,intraStatus:string)=>classification==='NO_INCLUIDO'&&intraStatus==='PENDIENTE'?'PENDIENTE':classification;
+const reviewContract=(r:ReviewRow):MaterialReview=>({project:r.project,classification:decidedClassification(r.classification,r.intra_status),intraStatus:r.intra_status,invoiceNumber:r.invoice_number,countedQuantity:r.counted_quantity?.toString()??null,intraQuantity:r.intra_quantity?.toString()??null,notes:r.notes,sourceHash:r.source_hash,version:r.version,updatedAt:r.updated_at.toISOString(),updatedBy:r.updated_by});
 export async function materials(actor:OperationsActor,requested:string[]=[]):Promise<Material[]>{
   const db=getPrismaClient(),c=await catalog(actor),projects=selectProjects(requested,c.projects),global=actor.allowed===null?c:await catalog({...actor,allowed:null});
   const [official,exported,reviews,files,links]=await Promise.all([
@@ -191,7 +193,8 @@ export async function saveReview(actor:OperationsActor,input:ReviewInput){
   if(input.intraStatus==='DESCARGADO'&&(input.countedQuantity===null||input.intraQuantity===null||Number(input.countedQuantity)!==Number(input.intraQuantity)||(row.quantity!==null&&Number(input.countedQuantity)!==Number(row.quantity))))fail('QUANTITIES_DO_NOT_MATCH',422);
   if(['DESCARGADO','NO_CORRESPONDE'].includes(input.intraStatus)&&input.classification==='PENDIENTE')fail('CLASSIFICATION_REQUIRED',422);
   if(input.intraStatus==='DESCARGADO'&&input.classification==='NO_INCLUIDO'&&!input.invoiceNumber.trim())fail('INVOICE_NUMBER_REQUIRED',422);
-  if(input.intraStatus==='NO_CORRESPONDE'&&!input.notes.trim())fail('REASON_REQUIRED',422);
+  // A not-included insumo is not downloaded in Intra: it stays in the stock of the technician, and that is the reason.
+  if(input.intraStatus==='NO_CORRESPONDE'&&input.classification!=='NO_INCLUIDO'&&!input.notes.trim())fail('REASON_REQUIRED',422);
   return getPrismaClient().$transaction(async tx=>{
     await tx.$executeRaw`INSERT INTO ops_supply_reviews(source_key,project,source_hash,updated_by) VALUES (${input.key},${input.project},${input.sourceHash},${actor.user.id}::uuid) ON CONFLICT DO NOTHING`;
     const updated=await tx.$executeRaw`UPDATE ops_supply_reviews SET project=${input.project},classification=${input.classification},intra_status=${input.intraStatus},invoice_number=${input.invoiceNumber},counted_quantity=${input.countedQuantity}::numeric,intra_quantity=${input.intraQuantity}::numeric,notes=${input.notes},source_hash=${input.sourceHash},version=version+1,updated_by=${actor.user.id}::uuid,updated_at=CURRENT_TIMESTAMP WHERE source_key=${input.key} AND version=${input.version}`;
