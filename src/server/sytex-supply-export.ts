@@ -54,7 +54,24 @@ function imageUrl(value: string | null): string | null {
   try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? value : null; }
   catch { return null; }
 }
-function role(question: string): "description" | "quantity" | "provider" | "image" | null {
+type ItemField = "description" | "quantity" | "provider" | "image";
+/** The table question some templates use to register an insumo and its quantity together. */
+function isCombinedQuestion(question: string): boolean { return /^tipo de (?:insumo|material)/.test(normalize(question).replace(/[:?¿]+/g, "")); }
+/** "Insumo: Guata filtro\nCantidad: 1" → description and quantity. */
+function combinedFields(answer: string): [ItemField, string][] {
+  const result: [ItemField, string][] = [];
+  for (const line of answer.split(/\r?\n/)) {
+    const cut = line.indexOf(":");
+    if (cut < 0) continue;
+    const label = normalize(line.slice(0, cut)).replace(/[?¿]+/g, ""), value = line.slice(cut + 1).trim();
+    if (!value) continue;
+    if (/^(?:insumo|material|descripcion(?: del| de)?(?: insumo| material)?)$/.test(label)) result.push(["description", value]);
+    else if (/^cantidad(?: utilizada)?$/.test(label)) result.push(["quantity", value]);
+    else if (/^(?:insumo provisto por|provisto por|proveedor)$/.test(label)) result.push(["provider", value]);
+  }
+  return result;
+}
+function role(question: string): ItemField | null {
   const label = normalize(question).replace(/[:?¿]+/g, "");
   if (label === "descripcion" || /^descripcion(?: del| de)?(?: insumo| material)/.test(label)) return "description";
   if (/^cantidad(?: utilizada)?$/.test(label)) return "quantity";
@@ -84,34 +101,39 @@ export function parseSytexSupplyRows(rows: unknown[][]): SytexSupplyExport {
     const editedAt = get(row, "Última edición el")?.replace(/^(\d{4}-\d{2}-\d{2}) /, "$1T") ?? null;
     if (editedAt && /^\d{4}-\d{2}-\d{2}T/.test(editedAt)) dates.push(editedAt);
     const group = get(row, "Grupo"), index = get(row, "Índice"), question = get(row, "Pregunta") ?? "";
-    const field = role(question);
-    if (!group || !/(?:insumo|material)/.test(normalize(group)) || !field) return;
     const answer = get(row, "Respuesta");
-    if (!answer) return;
+    // Some templates ask for the insumo in one table question: "Insumo: Guata filtro" and "Cantidad: 1" in the same answer.
+    const single = role(question), fields: [ItemField, string][] = single ? (answer ? [[single, answer]] : []) : answer && isCombinedQuestion(question) ? combinedFields(answer) : [];
+    if (!group || !/(?:insumo|material)/.test(normalize(group)) || !fields.length) return;
     const stem = index?.match(/^(.+)\.\d+$/)?.[1];
     if (!form || !index || !stem) { errors.push({ line, code: "ITEM_IDENTITY_INVALID" }); return; }
     const key = JSON.stringify([form, group, stem]);
-    const fieldKey = JSON.stringify([form, group, stem, field]);
-    const previous = seen.get(fieldKey);
-    if (previous !== undefined) {
-      if (previous !== answer) errors.push({ line, code: "ITEM_FIELD_CONFLICT" });
-      else warnings.push({ line, code: "DUPLICATE_ANSWER_SKIPPED" });
-      return;
-    }
-    seen.set(fieldKey, answer);
     const item = buckets.get(key) ?? {
       formulario: form, grupo: group, indice: stem, description: null, quantity: null, provider: null,
       siteCode: get(row, "Códigos de sitios afectados"), siteName: get(row, "Nombres de sitios afectados"), status: get(row, "Estado"),
       image: null, imageDeclared: false, lastEditedBy: null, sourceEditedAt: null, sourceAnswers: [],
     };
-    if (field === "quantity") {
-      item.quantity = quantity(answer);
-      if (item.quantity === null) warnings.push({ line, code: "QUANTITY_NOT_NUMERIC" });
-    } else if (field === "image") {
-      item.image = imageUrl(answer);
-      item.imageDeclared = Boolean(item.image) || ["ok", "si", "true"].includes(normalize(answer));
-      if (item.imageDeclared && !item.image) warnings.push({ line, code: "IMAGE_FILE_MISSING" });
-    } else item[field] = answer;
+    let used = false;
+    for (const [field, value] of fields) {
+      const fieldKey = JSON.stringify([form, group, stem, field]);
+      const previous = seen.get(fieldKey);
+      if (previous !== undefined) {
+        if (previous !== value) errors.push({ line, code: "ITEM_FIELD_CONFLICT" });
+        else warnings.push({ line, code: "DUPLICATE_ANSWER_SKIPPED" });
+        continue;
+      }
+      seen.set(fieldKey, value);
+      used = true;
+      if (field === "quantity") {
+        item.quantity = quantity(value);
+        if (item.quantity === null) warnings.push({ line, code: "QUANTITY_NOT_NUMERIC" });
+      } else if (field === "image") {
+        item.image = imageUrl(value);
+        item.imageDeclared = Boolean(item.image) || ["ok", "si", "true"].includes(normalize(value));
+        if (item.imageDeclared && !item.image) warnings.push({ line, code: "IMAGE_FILE_MISSING" });
+      } else item[field] = value;
+    }
+    if (!used) return;
     const editor = get(row, "Última edición por");
     item.sourceAnswers.push({ line, index, question, answer, editedAt, editor });
     if (editedAt && (!item.sourceEditedAt || editedAt >= item.sourceEditedAt)) { item.sourceEditedAt = editedAt; item.lastEditedBy = editor; }
