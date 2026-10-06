@@ -57,17 +57,34 @@ function imageUrl(value: string | null): string | null {
 type ItemField = "description" | "quantity" | "provider" | "image";
 /** The table question some templates use to register an insumo and its quantity together. */
 function isCombinedQuestion(question: string): boolean { return /^tipo de (?:insumo|material)/.test(normalize(question).replace(/[:?¿]+/g, "")); }
-/** "Insumo: Guata filtro\nCantidad: 1" → description and quantity. */
+/** A short "how much" value such as "1", "4 litros" or "Para 4 litros" (not "Cable 2x1.5"). */
+const AMOUNT_LIKE = /^(?:\p{L}{1,6}\s+)?\d+(?:[.,]\d+)?(?:\s*\p{L}{1,12}\.?)?$/u;
+/**
+ * "Insumo: Guata filtro\nCantidad: 1" → description and quantity.
+ * Some templates repeat the name label for the amount ("Insumo: Silicona\nMaterial: 1", or "Material: 4 litros" first):
+ * with several name lines, the amount-looking one is the quantity (unless "Cantidad" is explicit) and the other is the description.
+ */
 function combinedFields(answer: string): [ItemField, string][] {
   const result: [ItemField, string][] = [];
+  const names: { label: string; value: string }[] = [];
   for (const line of answer.split(/\r?\n/)) {
     const cut = line.indexOf(":");
     if (cut < 0) continue;
     const label = normalize(line.slice(0, cut)).replace(/[?¿]+/g, ""), value = line.slice(cut + 1).trim();
     if (!value) continue;
-    if (/^(?:insumo|material|descripcion(?: del| de)?(?: insumo| material)?)$/.test(label)) result.push(["description", value]);
+    if (/^(?:insumo|material)$/.test(label)) names.push({ label, value });
+    else if (/^descripcion(?: del| de)?(?: insumo| material)?$/.test(label)) result.push(["description", value]);
     else if (/^cantidad(?: utilizada)?$/.test(label)) result.push(["quantity", value]);
     else if (/^(?:insumo provisto por|provisto por|proveedor)$/.test(label)) result.push(["provider", value]);
+  }
+  if (names.length === 1) result.push(["description", names[0].value]);
+  else if (names.length > 1) {
+    const hasQuantity = result.some(([field]) => field === "quantity");
+    const amounts = names.filter((name) => AMOUNT_LIKE.test(name.value));
+    const amount = hasQuantity ? undefined : amounts.length === 1 ? amounts[0] : amounts.find((name) => name.label === "material");
+    const description = names.find((name) => name !== amount && name.label === "insumo") ?? names.find((name) => name !== amount);
+    if (description) result.push(["description", description.value]);
+    if (amount) result.push(["quantity", amount.value.match(/\d+(?:[.,]\d+)?/)?.[0] ?? amount.value]);
   }
   return result;
 }
