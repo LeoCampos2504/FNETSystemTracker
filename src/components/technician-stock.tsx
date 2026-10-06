@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useMemo,useState } from 'react';
 import type { Material } from '@/contracts/operations';
-import { fold,principalTechnician,stockByTechnician } from '@/lib/supply-stock';
+import { fold,stockByTechnician } from '@/lib/supply-stock';
 import { Feedback,opCall,operationsUrl,projectLabel,projectZone,useCatalog,useZoneSelection,ZoneFilter } from './operations-common';
 import s from './operations.module.css';
 const date=(value:string|null|undefined)=>value?value.slice(0,10).split('-').reverse().join('/'):'—';
@@ -14,8 +14,8 @@ export function TechnicianStock(){
  // A technician belongs to the zone where he is assigned most often: they always work in the same one.
  const roster=useMemo(()=>{const seen=new Map<string,{name:string;zones:Map<string,number>}>();
   const add=(name:string,z:string)=>{const key=fold(name);if(!key)return;const e=seen.get(key)??{name,zones:new Map<string,number>()};e.zones.set(z,(e.zones.get(z)??0)+1);seen.set(key,e);};
-  // Only the assigned user is a technician; the collaborator (CO) is whoever helps do the task, so he is left out.
-  for(const t of zones.data?.tasks??[])if(t.technicians.length)add(principalTechnician(t.technicians.join(' / ')),projectZone(t.project).zone);
+  // The technicians of a form are its assigned user and its collaborator. Task exports (TA-) list everyone involved, reviewer and requester included, so only forms count.
+  for(const t of zones.data?.tasks??[])if(/^FO-/i.test(t.code))for(const name of t.technicians.flatMap(n=>n.split(/\s*[/;]\s*/)))add(name.trim(),projectZone(t.project).zone);
   for(const g of all)add(g.technician,projectZone(g.lines[0].review?.project??g.lines[0].projects[0]??'').zone);
   return [...seen.entries()].map(([key,e])=>({key,name:e.name,zone:[...e.zones.entries()].sort((a,b)=>b[1]-a[1])[0][0],group:all.find(g=>fold(g.technician)===key)})).sort((a,b)=>(a.group?0:1)-(b.group?0:1)||a.name.localeCompare(b.name,'es'));},[zones.data,all]);
  // With a zone chosen, every technician of that zone shows up; without one, only those who hold stock.
