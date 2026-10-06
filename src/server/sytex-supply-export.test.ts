@@ -71,7 +71,7 @@ describe("Sytex answer export material extraction", () => {
     const result = parseSytexSupplyRows([headers,
       row("1.1", "Descripción del insumo:", "LED"), row("1.2", "Cantidad", "1"), row("1.2", "Cantidad", "2"),
     ]);
-    expect(result.errors).toEqual([{ line: 4, code: "ITEM_FIELD_CONFLICT" }]);
+    expect(result.errors).toEqual([{ line: 4, code: "ITEM_FIELD_CONFLICT", form: "FO-26-000001" }]);
     expect(result.items[0].quantity).toBe("1");
   });
   it("does not duplicate identical answers", () => {
