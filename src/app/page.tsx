@@ -17,7 +17,7 @@ import type { PendingVisit, PostgresQuote, SyncedData, Task, User } from "@/cont
 import { LiveDashboardView as LiveDashboard } from "@/components/live-dashboard";
 import { RoleExperienceSummary } from "@/components/role-experience-summary";
 import { GuardPlanningView, TechnicianOperationsSummary } from "@/components/guard-planning-view";
-import { GlobalZoneFilter, matchesZone, projectLabel, useZoneSelection } from "@/components/operations-common";
+import { GlobalZoneFilter, matchesZone, projectLabel, SESSION_EXPIRED_EVENT, useZoneSelection } from "@/components/operations-common";
 import { displayDate, isUnfinished, sortTasksForDisplay, sytexLink } from "@/lib/task-order";
 import { SuppliesControl } from "@/components/supplies-control";
 import { DailySchedule } from "@/components/daily-schedule";
@@ -78,7 +78,7 @@ function LoginScreen({ onLogin }: { onLogin: (role: UserRole) => void }) {
   return <main className="login-shell"><section className="login-brand-panel"><div className="brand-lockup large"><span className="brand-mark">F</span><span>FNET</span></div><div className="login-hero-copy"><p className="eyebrow">Sistema interno de operaciones</p><h1>Todo el trabajo de campo, <em>en movimiento.</em></h1><p className="muted-copy">Planificá, coordiná y seguí cada visita técnica desde una única vista operativa.</p></div><div className="login-signal"><span className="signal-dot" /> Sincronizado con Sytex · última actualización hace 8 min</div></section><section className="login-card-wrap"><div className="login-card"><div className="mobile-brand brand-lockup"><span className="brand-mark">F</span><span>FNET</span></div><p className="eyebrow">Acceso de demostración</p><h2>Ingresar al tracker</h2><p className="login-description">Elegí un perfil para recorrer la experiencia de cada rol.</p><div className="demo-role-list"><button className="demo-role" onClick={() => onLogin(UserRole.COORDINATOR)}><span className="role-icon coordinator"><Users size={18} /></span><span><strong>Coordinador Demo</strong><small>Planificación y equipos</small></span><ArrowUpRight size={17} /></button><button className="demo-role" onClick={() => onLogin(UserRole.MANAGER)}><span className="role-icon coordinator"><BriefcaseBusiness size={18} /></span><span><strong>Gerente Demo</strong><small>Consolidado regional</small></span><ArrowUpRight size={17} /></button><button className="demo-role" onClick={() => onLogin(UserRole.TECHNICIAN)}><span className="role-icon technician"><MapPin size={18} /></span><span><strong>Técnico Demo</strong><small>Mi agenda y ruta del día</small></span><ArrowUpRight size={17} /></button><button className="demo-role" onClick={() => onLogin(UserRole.ADMIN)}><span className="role-icon admin"><Settings2 size={18} /></span><span><strong>Administrador Demo</strong><small>Vista global del sistema</small></span><ArrowUpRight size={17} /></button></div><div className="login-footer-note"><ShieldCheck size={15} /> Roles centralizados · datos demo para navegación segura</div></div></section></main>;
 }
 
-function RealLoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
+function RealLoginScreen({ onLogin, notice = "" }: { onLogin: (user: User) => void; notice?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -107,7 +107,7 @@ function RealLoginScreen({ onLogin }: { onLogin: (user: User) => void }) {
     }
   }
 
-  return <main className="login-shell"><section className="login-brand-panel"><div className="brand-lockup large"><span className="brand-mark">F</span><span>FNET</span></div><div className="login-hero-copy"><p className="eyebrow">Sistema interno de operaciones</p><h1>Todo el trabajo de campo, <em>en movimiento.</em></h1><p className="muted-copy">Acceso protegido para administradores y coordinadores. Cada cuenta trabaja con sus proyectos habilitados.</p></div><div className="login-signal"><span className="signal-dot" /> Sesión segura · acceso según rol</div></section><section className="login-card-wrap"><form className="login-card login-form" onSubmit={submit}><div className="mobile-brand brand-lockup"><span className="brand-mark">F</span><span>FNET</span></div><p className="eyebrow">Acceso interno</p><h2>Ingresar al tracker</h2><p className="login-description">Usá tu cuenta de FNET. El administrador habilita las cuentas y proyectos de coordinación.</p><label><span>Correo</span><input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label><span>Contraseña</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <div className="login-error">{error}</div>}<button className="button primary login-submit" type="submit" disabled={submitting}>{submitting ? "Ingresando…" : "Ingresar"}</button><div className="login-footer-note"><ShieldCheck size={15} /> Credenciales protegidas · sesión privada</div></form></section></main>;
+  return <main className="login-shell"><section className="login-brand-panel"><div className="brand-lockup large"><span className="brand-mark">F</span><span>FNET</span></div><div className="login-hero-copy"><p className="eyebrow">Sistema interno de operaciones</p><h1>Todo el trabajo de campo, <em>en movimiento.</em></h1><p className="muted-copy">Acceso protegido para administradores y coordinadores. Cada cuenta trabaja con sus proyectos habilitados.</p></div><div className="login-signal"><span className="signal-dot" /> Sesión segura · acceso según rol</div></section><section className="login-card-wrap"><form className="login-card login-form" onSubmit={submit}><div className="mobile-brand brand-lockup"><span className="brand-mark">F</span><span>FNET</span></div><p className="eyebrow">Acceso interno</p><h2>Ingresar al tracker</h2><p className="login-description">Usá tu cuenta de FNET. El administrador habilita las cuentas y proyectos de coordinación.</p><label><span>Correo</span><input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label><span>Contraseña</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{notice && !error && <div className="login-error">{notice}</div>}{error && <div className="login-error">{error}</div>}<button className="button primary login-submit" type="submit" disabled={submitting}>{submitting ? "Ingresando…" : "Ingresar"}</button><div className="login-footer-note"><ShieldCheck size={15} /> Credenciales protegidas · sesión privada</div></form></section></main>;
 }
 
 function Sidebar({ activeView, setActiveView, role, onLogout, collapsed, setCollapsed }: { activeView: ViewKey; setActiveView: (view: ViewKey) => void; role: UserRole; onLogout: () => void; collapsed: boolean; setCollapsed: (value: boolean) => void }) {
@@ -200,6 +200,15 @@ export default function Home() {
       return response.json() as Promise<{ user: User }>;
     }).then(({ user }) => { setRole(user.role); setLoggedIn(true); }).catch(() => setLoggedIn(false)).finally(() => setAuthLoading(false));
   }, []);
+  // The session lasts 30 minutes: when it ends, say so and go back to the login instead of leaving every screen stuck.
+  const [sessionExpired, setSessionExpired] = useState(false);
+  useEffect(() => {
+    if (useMockData || !loggedIn) return;
+    const expire = () => { setSessionExpired(true); setLoggedIn(false); };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expire);
+    const timer = window.setInterval(() => { void fetch("/api/auth/me", { cache: "no-store" }).then((response) => { if (response.status === 401) expire(); }).catch(() => undefined); }, 60_000);
+    return () => { window.removeEventListener(SESSION_EXPIRED_EVENT, expire); window.clearInterval(timer); };
+  }, [loggedIn]);
   useEffect(() => {
     if (useMockData || authLoading || loggedIn) return;
     void fetch("/api/auth/logout", { method: "POST" });
@@ -225,7 +234,7 @@ export default function Home() {
   const assignTask = (task: Task) => { setScheduledIds((current) => current.includes(task.id) ? current.filter((id) => id !== task.id) : [...current, task.id]); setToast(scheduledIds.includes(task.id) ? `${task.taskCode} quitada del cronograma` : `${task.taskCode} asignada a la cuadrilla de ${zoneName(task.zoneId)}`); };
   const refresh = () => { if (useMockData) { setSyncing(true); window.setTimeout(() => { setSyncing(false); setToast("Datos demo actualizados"); }, 850); } else { setSyncing(true); setReloadToken((token) => token + 1); } };
   if (authLoading) return <main className="auth-loading"><span className="signal-dot" /> Verificando sesión segura…</main>;
-  if (!loggedIn) return useMockData ? <LoginScreen onLogin={(nextRole) => { setRole(nextRole); setLoggedIn(true); setToast("Sesión demo iniciada"); }} /> : <RealLoginScreen onLogin={(user) => { setRole(user.role); setLoggedIn(true); setToast(`Bienvenida, ${user.name}`); }} />;
+  if (!loggedIn) return useMockData ? <LoginScreen onLogin={(nextRole) => { setRole(nextRole); setLoggedIn(true); setToast("Sesión demo iniciada"); }} /> : <RealLoginScreen notice={sessionExpired ? "Tu sesión venció. Ingresá de nuevo para seguir." : ""} onLogin={(user) => { setRole(user.role); setLoggedIn(true); setSessionExpired(false); setToast(`Bienvenida, ${user.name}`); }} />;
   if (!useMockData && role === UserRole.COORDINATOR) return <CoordinatorEntry onLogout={() => setLoggedIn(false)} />;
   const currentMeta = viewMeta[activeView];
   const roleNavigation = navigation.filter(({ key }) => role !== UserRole.TECHNICIAN || key !== "quotes");

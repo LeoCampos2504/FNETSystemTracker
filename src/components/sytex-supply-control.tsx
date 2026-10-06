@@ -1,7 +1,7 @@
 "use client";
 import { useEffect,useRef,useState,type FormEvent } from 'react';
 import type { Material,OperationsCatalog } from '@/contracts/operations';
-import { Feedback,opCall,operationsUrl,projectLabel,useCatalog,useOperation,ZoneFilter } from './operations-common';
+import { Feedback,notifySessionExpired,opCall,operationsUrl,projectLabel,useCatalog,useOperation,ZoneFilter } from './operations-common';
 import { SytexSupplyImport } from './sytex-supply-import';
 import { formStatusLabel } from '@/lib/form-status';
 import s from './operations.module.css';
@@ -23,7 +23,7 @@ export function SytexSupplyControl(){
  const [sync,setSync]=useState<SyncStatus|null>(null),wasRunning=useRef(false);
  // Live data: ask Sytex again when the screen opens and every five minutes while it stays open.
  useEffect(()=>{let active=true,timer:ReturnType<typeof setTimeout>;
-  const call=(start:boolean)=>fetch('/api/sytex/sync',{method:start?'POST':'GET',cache:'no-store'}).then(r=>r.ok?r.json() as Promise<SyncStatus>:null).catch(()=>null);
+  const call=(start:boolean)=>fetch('/api/sytex/sync',{method:start?'POST':'GET',cache:'no-store'}).then(r=>{if(r.status===401)notifySessionExpired();return r.ok?r.json() as Promise<SyncStatus>:null;}).catch(()=>null);
   const tick=async(start:boolean)=>{const before=await call(false);if(!active||!before)return;
    const due=before.configured&&!before.running&&(start||!before.finishedAt||Date.now()-Date.parse(before.finishedAt)>SYNC_EVERY_MS);
    const current=due?await call(true)??before:before;if(!active)return;

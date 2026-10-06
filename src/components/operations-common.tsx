@@ -3,7 +3,7 @@ import { useEffect,useMemo,useRef,useState,useSyncExternalStore } from 'react';
 import type { OperationsCatalog } from '@/contracts/operations';
 import s from './operations.module.css';
 const errors:Record<string,string>={
- UNAUTHENTICATED:'Ingresá con tu cuenta para continuar.',FORBIDDEN:'Tu cuenta no tiene permiso para esta acción.',FORBIDDEN_PROJECT:'La zona seleccionada no está habilitada para tu cuenta.',
+ UNAUTHENTICATED:'Tu sesión venció. Ingresá de nuevo para continuar.',FORBIDDEN:'Tu cuenta no tiene permiso para esta acción.',FORBIDDEN_PROJECT:'La zona seleccionada no está habilitada para tu cuenta.',
  INPUT_INVALID:'Revisá los campos. Las cantidades admiten hasta tres decimales separados con punto.',SUPPLY_DATABASE_UNAVAILABLE:'No se pudo consultar la base. Reintentá; no se confirmó ningún cambio.',STALE_VERSION:'Otra persona modificó el registro. Actualizá y volvé a abrirlo.',SOURCE_CHANGED:'Sytex cambió desde que abriste el registro. Actualizá para revisar la cantidad nueva.',
  DAY_CLOSED:'La jornada ya está cerrada y se conserva como historial.',UNFINISHED_VISITS:'Antes de cerrar, indicá el resultado de las visitas planificadas o en curso.',NO_OPEN_DAY_WITH_VISITS:'No hay visitas abiertas para cerrar con este filtro.',FUTURE_DAY_CANNOT_CLOSE:'Una jornada futura todavía no se puede cerrar.',
  QUANTITIES_DO_NOT_MATCH:'Para confirmar la descarga deben coincidir la cantidad de Sytex, el conteo y la cantidad en Intra.',CLASSIFICATION_REQUIRED:'Definí primero si el insumo está incluido o no.',INVOICE_NUMBER_REQUIRED:'Indicá el número de factura del insumo no incluido.',REASON_REQUIRED:'Explicá en observaciones por qué no corresponde descargarlo.',
@@ -11,8 +11,12 @@ const errors:Record<string,string>={
  GUARD_PERIOD_INVALID:'Revisá las fechas: "Hasta" no puede ser anterior a "Desde" y la guardia no puede pasar de 92 días.',HOLIDAY_RANGE_INVALID:'Revisá las fechas del feriado: "Hasta" no puede ser anterior a "Desde" ni pasar de 31 días.',VISIT_NOT_OUT_OF_HOURS:'Las horas se cargan solo en tareas fuera de horario.',
  SAVE_REVIEW_FIRST:'Guardá el control antes de adjuntar un comprobante.',FILE_TYPE_INVALID:'Adjuntá un PDF, JPG, PNG o WebP válido.',FILE_TOO_LARGE:'El límite es 8 MB por archivo.',INVOICE_FILE_LIMIT:'Se permiten hasta 6 archivos y 24 MB por registro.'
 };
+/** The session lasts a limited time; when the server says there is none, the whole app goes back to the login screen. */
+export const SESSION_EXPIRED_EVENT='fnet-session-expired';
+export const notifySessionExpired=()=>{if(typeof window!=='undefined')window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));};
 export async function opCall<T>(url:string,body?:unknown):Promise<T>{
  const r=await fetch(url,{cache:'no-store',...(body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});
+ if(r.status===401)notifySessionExpired();
  const data=await r.json();if(!r.ok)throw new Error(errors[data.code]??'No se pudo completar la operación. Actualizá e intentá nuevamente.');return data;
 }
 export const operationsUrl=(kind:string,projects:string[],day?:string,exported=false)=>{const p=new URLSearchParams({kind});projects.forEach(v=>p.append('project',v));if(day)p.set('day',day);return '/api/operations'+(exported?'/export':'')+'?'+p.toString();};
