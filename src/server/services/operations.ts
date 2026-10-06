@@ -2,7 +2,7 @@ import { createHash,randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import type { User } from '@/contracts';
 import type { Favorite, Material, MaterialReview, OperationsCatalog, SiteContext, SiteMaintenance, SourceMaterial, Visit, VisitShift } from '@/contracts/operations';
-import { allowedProject, groupMaterials, materialAlert, mergeMaterials, projectKey, safeImage, selectProjects, sourceHash, sourceIdentity } from '@/server/operations-domain';
+import { allowedProject, materialAlert, mergeMaterials, projectKey, safeImage, selectProjects, sourceHash, sourceIdentity } from '@/server/operations-domain';
 import { getPrismaClient } from '@/server/prisma';
 import { getPendingBySites } from './operational-data';
 import { SupplyError } from './supply-control';
@@ -160,10 +160,10 @@ export async function materials(actor:OperationsActor,requested:string[]=[]):Pro
   const projectByForm=new Map<string,Set<string>>();for(const t of global.tasks){const set=projectByForm.get(t.code)??new Set<string>();set.add(t.project);projectByForm.set(t.code,set);}
   const make=(r:{formulario:string;group:string|null;index:string|null;description:string|null;quantity:string|null;siteCode:string|null;siteName:string|null;image:string|null;imageDeclared:boolean;technician:string;source:string;syncedAt:string;formStatus:string|null;editedAt:string|null;provider:string|null}):SourceMaterial=>{const value={formStatus:r.formStatus??'',editedAt:r.editedAt,provider:r.provider??'',link:safeImage(linkByForm.get(r.formulario)),key:sourceIdentity(r.formulario,r.group,r.index),formulario:r.formulario,group:r.group??'',index:r.index??'',description:r.description??'',quantity:r.quantity,siteCode:r.siteCode??'',siteName:r.siteName??'',technician:r.technician,image:safeImage(r.image),imageDeclared:r.imageDeclared,projects:[...(projectByForm.get(r.formulario)??[])],source:r.source,syncedAt:r.syncedAt};return {...value,hash:sourceHash(value)};};
   const taskByCode=new Map(c.tasks.map(t=>[t.code,t]));
-  const all=groupMaterials(mergeMaterials([
+  const all=mergeMaterials([
     ...official.map(r=>make({formulario:r.formulario,group:r.grupo,index:r.indice,description:r.descripcion,quantity:r.cantidad?.toString()??null,siteCode:r.codigo_sitio,siteName:r.nombre_sitio,image:r.imagen,imageDeclared:!!r.imagen,technician:taskByCode.get(r.formulario)?.technicians.join(' / ')??'',source:'Sytex · n8n',syncedAt:r.sincronizado_el.toISOString(),formStatus:r.estado,editedAt:r.ultima_edicion_el?.toISOString()??null,provider:r.provisto_por})),
     ...exported.map(r=>make({formulario:r.formulario,group:r.grupo,index:r.indice,description:r.description,quantity:r.quantity?.toString()??null,siteCode:r.siteCode,siteName:r.siteName,image:r.image,imageDeclared:r.imageDeclared,technician:taskByCode.get(r.formulario)?.technicians.join(' / ')??'',source:'Export Sytex',syncedAt:r.import.importedAt.toISOString(),formStatus:r.status,editedAt:r.sourceEditedAt,provider:r.provider})),
-  ]));
+  ]);
   const byKey=new Map(reviews.map(r=>[r.source_key,reviewContract(r)]));
   return all.map(r=>{const review=byKey.get(r.key)??null,changed=!!review&&review.sourceHash!==r.hash;return {...r,review,changed,files:files.filter(f=>f.source_key===r.key).map(f=>({id:f.id,fileName:f.file_name,mimeType:f.mime_type})),...materialAlert({...r,review,changed})};}).filter(r=>{
     const assigned=r.review?.project || (r.projects.length===1?r.projects[0]:'');
