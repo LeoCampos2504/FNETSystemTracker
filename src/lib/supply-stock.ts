@@ -20,3 +20,18 @@ export function stockByTechnician(items:Material[]):StockGroup[]{
     return {technician,lines:[...lines].sort((a,b)=>(b.editedAt??'').localeCompare(a.editedAt??'')),totals:[...totals.values()].sort((a,b)=>a.description.localeCompare(b.description,'es'))};
   }).sort((a,b)=>a.technician.localeCompare(b.technician,'es'));
 }
+
+/** Month ("YYYY-MM") an insumo belongs to: the date shown as "Fecha" (last edit in Sytex), or when it was synced if Sytex gave none. */
+export const supplyMonth=(item:Pick<Material,'editedAt'|'syncedAt'>)=>(item.editedAt||item.syncedAt||'').slice(0,7);
+
+/** The groups the control screen counts and filters by. Each insumo belongs to exactly one of the first four. */
+export type SupplyView='all'|'undefined'|'toDownload'|'downloaded'|'notIncluded'|'changed';
+export const supplyViews:Record<SupplyView,(item:Material)=>boolean>={
+  all:()=>true,
+  undefined:item=>!item.review||item.review.classification==='PENDIENTE',
+  toDownload:item=>item.review?.classification==='INCLUIDO'&&item.missing,
+  downloaded:item=>item.review?.classification==='INCLUIDO'&&!item.missing,
+  notIncluded:item=>item.review?.classification==='NO_INCLUIDO',
+  changed:item=>item.changed,
+};
+export const supplyCounts=(items:Material[])=>Object.fromEntries((Object.keys(supplyViews) as SupplyView[]).map(view=>[view,items.filter(supplyViews[view]).length])) as Record<SupplyView,number>;

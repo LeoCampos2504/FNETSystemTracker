@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Material } from '@/contracts/operations';
-import { inStock, principalTechnician, stockByTechnician } from './supply-stock';
+import { inStock, principalTechnician, stockByTechnician, supplyCounts, supplyMonth } from './supply-stock';
 
 const item=(over:Partial<Material>&{classification?:string;intraStatus?:string}={}):Material=>{
   const {classification='NO_INCLUIDO',intraStatus='NO_CORRESPONDE',...rest}=over;
@@ -27,5 +27,26 @@ describe('technician stock',()=>{
     expect(groups[0].lines).toHaveLength(3);
     expect(groups[0].totals).toEqual([{description:'Cable',quantity:5},{description:'Ficha RJ45',quantity:1}]);
     expect(groups[1].totals).toEqual([{description:'Llave térmica',quantity:1}]);
+  });
+});
+
+describe('supply control counters',()=>{
+  const rows=[
+    item({classification:'PENDIENTE',intraStatus:'PENDIENTE',missing:true}),
+    item({review:null,missing:true}),
+    item({classification:'INCLUIDO',intraStatus:'PENDIENTE',missing:true}),
+    item({classification:'INCLUIDO',intraStatus:'DESCARGADO',missing:false}),
+    item({classification:'INCLUIDO',intraStatus:'DESCARGADO',missing:false}),
+    item({classification:'NO_INCLUIDO',intraStatus:'NO_CORRESPONDE',missing:false}),
+    item({classification:'INCLUIDO',intraStatus:'DESCARGADO',missing:true,changed:true}),
+  ];
+  it('counts by classification, so defining an insumo moves it between cards',()=>{
+    expect(supplyCounts(rows)).toEqual({all:7,undefined:2,toDownload:2,downloaded:2,notIncluded:1,changed:1});
+    const defined=[...rows];defined[0]=item({classification:'INCLUIDO',intraStatus:'DESCARGADO',missing:false});
+    expect(supplyCounts(defined)).toMatchObject({undefined:1,downloaded:3});
+  });
+  it('takes the month from the shown date and falls back to the sync date',()=>{
+    expect(supplyMonth({editedAt:'2026-09-30T23:10:00Z',syncedAt:'2026-10-05T00:00:00.000Z'})).toBe('2026-09');
+    expect(supplyMonth({editedAt:null,syncedAt:'2026-10-05T00:00:00.000Z'})).toBe('2026-10');
   });
 });
