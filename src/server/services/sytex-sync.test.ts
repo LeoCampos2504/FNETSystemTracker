@@ -70,6 +70,20 @@ describe("direct Sytex synchronization", () => {
     expect(mocks.save.mock.calls[0][0].items.map((item: { formulario: string }) => item.formulario)).toEqual(["FO-26-000001"]);
     expect(mocks.save.mock.calls[0][0].errors).toEqual([]);
   });
+  it("deletes insumos that a listed form no longer has, but never touches skipped forms", async () => {
+    const answers = [...nonAnswers, ["FO-26-000009", "[#1] Insumo", "1.17A.1", "Descripción", "Diésel", "ST00001"], ["FO-26-000009", "[#1] Insumo", "1.17A.1", "Descripción", "Nafta", "ST00001"]];
+    const forms = [...nonForms, ["FO-26-000009", "MPC-AA", "Mantenimiento Preventivo Civil", "NON - MPC Mantenimiento Preventivo Civil O&M", "ST00001", "Sitio", "tecnico@example.invalid", null]];
+    await runSytexSync("user-id", config, sytex({ ...projects, "/api/entryanswerdata/": answers, "project=7": forms }));
+    const call = mocks.executeRaw.mock.calls.find((parts) => String((parts[0] as string[]).join("?")).includes("NOT EXISTS"));
+    expect(call?.[2]).toEqual(["FO-26-000001"]);
+    expect(call?.[3]).toEqual(["FO-26-000001"]);
+  });
+  it("cleans removed insumos even when the rest of Sytex has not changed", async () => {
+    mocks.save.mockResolvedValue({ importId: "existing", alreadyImported: true });
+    await runSytexSync("user-id", config, sytex({ ...projects, "/api/entryanswerdata/": nonAnswers, "project=7": nonForms }));
+    expect(mocks.executeRaw.mock.calls.some((parts) => String((parts[0] as string[]).join("?")).includes("NOT EXISTS"))).toBe(true);
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
   it("does not rewrite anything when Sytex has not changed", async () => {
     mocks.save.mockResolvedValue({ importId: "existing", alreadyImported: true });
     const routes = { ...projects, "/api/entryanswerdata/": nonAnswers, "project=7": nonForms };
