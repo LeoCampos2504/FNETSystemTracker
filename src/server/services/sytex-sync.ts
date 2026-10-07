@@ -202,7 +202,21 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   ])).digest("hex");
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
   if (!saved.alreadyImported) await dropSupersededRows(saved.importId);
+  // Also when nothing else changed: an insumo the technicians deleted from a form must disappear here too.
+  await dropRemovedItems(parsed.items, (parsed.formContexts ?? []).map((form) => form.code).filter((code) => !skipped.includes(code)));
   return { projects: activeProjects, forms, items: parsed.items.length, changed: !saved.alreadyImported, since, ...skippedInfo };
+}
+
+/**
+ * Forms that Sytex just listed are complete in this pass, so an insumo saved earlier that the form no longer has
+ * (a technician added it by mistake and removed it) is deleted. Forms outside the window or skipped stay untouched.
+ */
+async function dropRemovedItems(items: { formulario: string; grupo: string; indice: string }[], covered: string[]) {
+  if (!covered.length) return;
+  await getPrismaClient().$executeRaw`DELETE FROM sytex_supply_import_items prior USING sytex_supply_imports batch
+    WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND prior.formulario = ANY(${covered}::text[])
+      AND NOT EXISTS (SELECT 1 FROM unnest(${items.map((item) => item.formulario)}::text[], ${items.map((item) => item.grupo)}::text[], ${items.map((item) => item.indice)}::text[]) AS cur(formulario, grupo, indice)
+        WHERE cur.formulario = prior.formulario AND cur.grupo = prior.grupo AND cur.indice = prior.indice)`;
 }
 
 /** Earlier synchronizations keep only what the newest one no longer covers (forms outside its date window). */
