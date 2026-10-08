@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { addMonths, fold, isoDay, MONTHS, mergeSubZones, monthName, monthRange, monthWeeks, placeKey, rangeLabel, weekRange, type DateRange, type ZoneSelection } from "@/lib/filters";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 import f from "./screen-filters.module.css";
 
 function store<T>(initial: T) {
@@ -57,13 +58,13 @@ export function DateRangeFilter({ label = "Fecha", hint }: { label?: string; hin
   return <div className={f.wrap} ref={ref}>
     <span className={f.label}>{label}</span>
     <button type="button" className={f.trigger} aria-haspopup="dialog" aria-expanded={open} onClick={() => { setMonth((range.from || now).slice(0, 7)); setOpen(!open); }}>
-      <span aria-hidden>📅</span> {rangeLabel(range)} <span aria-hidden className={f.caret}>▾</span>
+      <CalendarDays size={16} className={f.icon} aria-hidden /><span className={f.triggerText}>{rangeLabel(range)}</span><ChevronDown size={16} className={f.caret} aria-hidden />
     </button>
     {open && <div className={f.popover} role="dialog" aria-label="Elegir fechas">
       <div className={f.calHead}>
-        <button type="button" className={f.nav} aria-label={mode === "days" ? "Mes anterior" : "Año anterior"} onClick={() => setMonth(addMonths(month, mode === "days" ? -1 : -12))}>‹</button>
+        <button type="button" className={f.nav} aria-label={mode === "days" ? "Mes anterior" : "Año anterior"} onClick={() => setMonth(addMonths(month, mode === "days" ? -1 : -12))}><ChevronLeft size={18} aria-hidden /></button>
         <button type="button" className={f.title} onClick={() => setMode(mode === "days" ? "months" : "days")} title={mode === "days" ? "Elegir un mes entero" : "Volver a los días"}>{mode === "days" ? monthName(month) : String(year)}</button>
-        <button type="button" className={f.nav} aria-label={mode === "days" ? "Mes siguiente" : "Año siguiente"} onClick={() => setMonth(addMonths(month, mode === "days" ? 1 : 12))}>›</button>
+        <button type="button" className={f.nav} aria-label={mode === "days" ? "Mes siguiente" : "Año siguiente"} onClick={() => setMonth(addMonths(month, mode === "days" ? 1 : 12))}><ChevronRight size={18} aria-hidden /></button>
       </div>
       {mode === "days" ? <>
         <div className={f.grid} onMouseLeave={() => setHover("")}>
@@ -118,7 +119,7 @@ export function ZonePlacesPicker({ zones }: { zones: string[] }) {
   const summary = !chosen.places.length ? "Todas las zonas" : chosen.places.length === 1 ? (chosen.places[0].includes("|") ? subLabel(...(chosen.places[0].split("|") as [string, string])) : chosen.places[0]) : chosen.places.length + " seleccionadas";
   return <div className={f.wrap} ref={ref}>
     <span className={f.label}>Zona / subzona</span>
-    <button type="button" className={f.trigger} aria-haspopup="dialog" aria-expanded={open} onClick={() => open ? close() : begin()}>{summary} <span aria-hidden className={f.caret}>▾</span></button>
+    <button type="button" className={f.trigger} aria-haspopup="dialog" aria-expanded={open} onClick={() => open ? close() : begin()}><MapPin size={16} className={f.icon} aria-hidden /><span className={f.triggerText}>{summary}</span><ChevronDown size={16} className={f.caret} aria-hidden /></button>
     {open && <div className={f.popover + " " + f.places} role="dialog" aria-label="Elegir zonas y subzonas">
       <input className={f.search} placeholder="Buscar zona o subzona" aria-label="Buscar zona o subzona" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
       <div className={f.list}>
