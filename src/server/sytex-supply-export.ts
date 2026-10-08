@@ -321,7 +321,7 @@ export function parseSytexMaintenanceRows(rows: unknown[][]): SytexMaintenanceFa
     let kind: SytexMaintenanceKind, lastDate: string | null;
     if (group === "service anual" && question.includes("fecha del ultimo service anual")) { kind = "SERVICE_GE"; lastDate = day(answer); }
     else if (group === "service anual" && question.startsWith("va a realizar service anual") && normalize(answer) === "si") { kind = "SERVICE_GE"; lastDate = day(reportedAt); }
-    else if (group.startsWith("aire acondicionado") && question.includes("fecha de reemplazo de los filtros")) { kind = "FILTROS_AA"; lastDate = day(answer); }
+    else if (question.includes("fecha de reemplazo de los filtros")) { kind = "FILTROS_AA"; lastDate = day(answer); }
     else continue;
     if (!lastDate) continue;
     const key = JSON.stringify([siteCode, kind, formCode]), previous = facts.get(key);
@@ -337,15 +337,16 @@ export function parseSytexMaintenanceRows(rows: unknown[][]): SytexMaintenanceFa
  * topic; any other filter, the yearly service and the oil, coolant and distilled water belong to the generator.
  */
 export function siteTopic(group: string, question: string): SytexSiteTopic | null {
-  const g = normalize(group.replace(/^\[#\d+\]\s*/, "")), q = normalize(question), all = g + " " + q;
-  // Insumos bought for the visit (an "Aceite 15W40" in a material list) are not reports about the site.
+  const g = normalize(group.replace(/^\[#\d+\]\s*/, "")), q = normalize(question).replace(/^[¿¡]+\s*/, "");
+  // Insumos bought for the visit are read from the insumo list, not as reports about the site.
   if (/insumo|material/.test(g)) return null;
-  if (g.startsWith("aire acondicionado") && all.includes("filtro")) return "FILTROS_AA";
-  if (g.startsWith("aire acondicionado")) return null;
-  if (/aceite|refrigerante|agua destilada|destilada/.test(all) && !q.includes("filtro")) return "FLUIDOS";
-  if (q.includes("filtro") || g.includes("service")) return "SERVICE_GE";
-  if (all.includes("combustible") || /\bgasoil\b|\bdiesel\b|\bnafta\b/.test(all)) return "COMBUSTIBLE";
-  if (all.includes("horometro")) return "HOROMETRO";
+  // Air conditioner filters: the change date and how the filter was left, inside each unit's evaporator.
+  if (q.includes("fecha de reemplazo de los filtros") || q.startsWith("el filtro de aire fue") || (g.startsWith("aire acondicionado") && q.includes("filtro"))) return "FILTROS_AA";
+  if (q.includes("gas refrigerante")) return null;
+  if (q.includes("horometro")) return "HOROMETRO";
+  if (q.includes("combustible") && !q.includes("filtro")) return "COMBUSTIBLE";
+  if (g.includes("service")) return "SERVICE_GE";
+  if (/nivel de aceite|nivel del liquido refrigerante|completado de niveles/.test(q)) return "FLUIDOS";
   return null;
 }
 

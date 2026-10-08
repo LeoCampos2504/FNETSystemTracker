@@ -157,6 +157,14 @@ describe("yearly maintenance reported in the forms", () => {
   });
 });
 
+describe("air conditioner filters inside the evaporator", () => {
+  const head = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Nombres de sitios afectados", "Estado", "Última edición el", "Última edición por"];
+  it("finds the change date whatever group Sytex names", () => {
+    expect(parseSytexMaintenanceRows([head, ["FO-26-610643", "EVAPORADOR", "1.7.31", "Fecha de reemplazo de los filtros.", "2026-04-02", "ST00079", "Rosario de la Frontera 2", "To review", "2026-10-08T10:00:00", "Técnico"]]))
+      .toEqual([{ siteCode: "ST00079", kind: "FILTROS_AA", lastDate: "2026-04-02", formCode: "FO-26-610643", reportedAt: "2026-10-08T10:00:00" }]);
+  });
+});
+
 describe("form list links", () => {
   it("keeps the Sytex link of each form and drops unsafe ones", () => {
     const head = ["Code", "Name", "Template", "Project", "Link"];

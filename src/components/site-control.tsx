@@ -10,8 +10,8 @@ import c from "./site-control.module.css";
 type Tab = "summary" | "service" | "air" | "fuel";
 const tabs: { key: Tab; label: string }[] = [
   { key: "summary", label: "Resumen por sitio" },
-  { key: "service", label: "Service de grupos" },
-  { key: "air", label: "Filtros de aire" },
+  { key: "service", label: "Service de grupos (anual)" },
+  { key: "air", label: "Filtros de aire (cada 6 meses)" },
   { key: "fuel", label: "Combustible" },
 ];
 type Due = "overdue" | "soon" | "ok" | "none";
@@ -136,11 +136,11 @@ function Services({ rows, sites, onOpen }: { rows: SiteServiceReport[]; sites: S
   const job = new Map(sites.map((r) => [r.siteCode, r.service]));
   return <Paged rows={rows} empty="No hay services informados en Sytex para este filtro. Probá con otro período o con «Todas las fechas»." head={["Sitio", "Fecha", "Próximo service", "Aceite", "Agua destilada", "Refrigerante", "Filtros cambiados", "Formulario"]} render={(r) => <tr key={r.formCode}>
     <td><SiteName row={r} onOpen={onOpen} /></td>
-    <td className={s.nowrap}><strong>{date(r.date)}</strong><small>{r.serviceDone ? "Service anual realizado" : "Control"}</small></td>
+    <td className={s.nowrap}><strong>{date(r.date)}</strong><small>{r.serviceDone ? "Service anual realizado" : "Visita sin service"}</small></td>
     <td><JobCell job={job.get(r.siteCode) ?? null} /></td>
-    <td className={c.num}>{liters(r.oilLiters)}</td>
-    <td className={c.num}>{liters(r.waterLiters)}</td>
-    <td className={c.num}>{liters(r.coolantLiters)}</td>
+    <td className={c.num}><strong>{liters(r.oilLiters)}</strong><small>{r.oilChanged ? "Cambio de aceite" : "Sin cambio"}</small></td>
+    <td className={c.num}><strong>{liters(r.waterLiters)}</strong></td>
+    <td className={c.num}><strong>{liters(r.coolantLiters)}</strong><small>{r.coolantChanged ? "Cambio de refrigerante" : "Sin cambio"}</small></td>
     <td>{r.filters.length ? <ul className={c.list}>{r.filters.map((f) => <li key={f}>{f}</li>)}</ul> : <span className={c.muted}>Ninguno informado</span>}</td>
     <td className={s.nowrap}><FormLink code={r.formCode} link={r.link} /></td>
   </tr>} />;
@@ -172,7 +172,7 @@ function FuelLoads({ rows, onOpen }: { rows: SiteFuelLoad[]; onOpen: (code: stri
 }
 
 function SiteDetail({ site, fuel, services, onClose }: { site: SiteControlRow; fuel: SiteFuelLoad[]; services: SiteServiceReport[]; onClose: () => void }) {
-  const last = services[0] ?? null, total = fuel.reduce((sum, f) => sum + (f.liters ?? 0), 0);
+  const last = services.find((r) => r.serviceDone) ?? services[0] ?? null, total = fuel.reduce((sum, f) => sum + (f.liters ?? 0), 0);
   return <div className={s.overlay} onClick={onClose}><section className={s.dialog + " " + c.detail} role="dialog" aria-modal="true" aria-label={"Sitio " + site.siteCode} onClick={(e) => e.stopPropagation()}>
     <div className={s.heading}><div><span className={s.kicker}>{site.project ? projectLabel(site.project) : "Sin zona"}</span><h2>{site.siteCode} · {site.siteName || "Sin nombre"}</h2></div><button onClick={onClose}>Cerrar</button></div>
     <div className={c.cards}>
@@ -181,7 +181,8 @@ function SiteDetail({ site, fuel, services, onClose }: { site: SiteControlRow; f
       <div><span>Combustible</span><strong>{liters(Math.round(total * 100) / 100)}</strong><small>{fuel.length} cargas registradas</small></div>
     </div>
     {last && <><h3 className={c.subhead}>Último service informado · {date(last.date)} · <FormLink code={last.formCode} link={last.link} /></h3>
-      <div className={c.fluids}><div><span>Aceite</span><strong>{liters(last.oilLiters)}</strong></div><div><span>Agua destilada</span><strong>{liters(last.waterLiters)}</strong></div><div><span>Líquido refrigerante</span><strong>{liters(last.coolantLiters)}</strong></div><div><span>Filtros cambiados</span><strong>{last.filters.length || "—"}</strong></div></div>
+      <div className={c.fluids}><div><span>Aceite</span><strong>{liters(last.oilLiters)}</strong><small>{last.oilChanged ? "Se cambió" : "No se cambió"}</small></div><div><span>Agua destilada</span><strong>{liters(last.waterLiters)}</strong></div><div><span>Líquido refrigerante</span><strong>{liters(last.coolantLiters)}</strong><small>{last.coolantChanged ? "Se cambió" : "No se cambió"}</small></div><div><span>Filtros cambiados</span><strong>{last.filters.length || "Ninguno"}</strong><small>{last.filters.join(", ")}</small></div></div>
+      {last.supplies.length > 0 && <p className={s.note}>Insumos del formulario: {last.supplies.join(" · ")}</p>}
       <details className={c.answers}><summary>Ver todas las respuestas del formulario ({last.answers.length})</summary><dl>{last.answers.map((a, i) => <div key={i}><dt>{a.question}</dt><dd>{a.answer}</dd></div>)}</dl></details></>}
     <h3 className={c.subhead}>Cargas de combustible</h3>
     {fuel.length ? <ul className={c.timeline}>{fuel.slice(0, 12).map((f) => <li key={f.id}><span>{dateTime(f.date)}</span><strong>{liters(f.liters)}</strong><Level before={f.levelBefore} after={f.levelAfter} /><FormLink code={f.formCode} link={f.link} /></li>)}</ul> : <p className={s.note}>No hay cargas registradas para este sitio.</p>}

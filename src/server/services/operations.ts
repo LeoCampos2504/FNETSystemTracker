@@ -98,11 +98,12 @@ export async function visits(actor:OperationsActor,day:string,requested:string[]
   for(const v of live)v.pending=(pending[v.siteCode]??[]).filter(p=>taskProjects.get(p.formulario)===v.project).map(p=>[p.formulario,p.question,p.answer,p.comments].filter(Boolean).join(' · '));
   return {items:[...live,...days.flatMap(d=>d.snapshot.map(v=>({...v,closed:true})))],projects,closed:days.map(d=>({project:d.project,closedAt:d.closed_at.toISOString()}))};
 }
-/** The most recent report of each yearly job decides when it is due again: one year after its date. */
+/** The most recent report of each job decides when it is due again: a year for the generator service, six months for air conditioner filters. */
 export function yearlyMaintenance(facts:{kind:string;lastDate:Date;formCode:string;reportedAt:string}[],today=new Date()):SiteMaintenance[]{
   const latest=new Map<string,(typeof facts)[number]>();
   for(const fact of facts){const prior=latest.get(fact.kind);if(!prior||fact.reportedAt>prior.reportedAt||(fact.reportedAt===prior.reportedAt&&fact.lastDate>prior.lastDate))latest.set(fact.kind,fact);}
-  return [...latest.values()].filter(fact=>fact.kind==='SERVICE_GE'||fact.kind==='FILTROS_AA').map(fact=>{const due=new Date(fact.lastDate);due.setUTCFullYear(due.getUTCFullYear()+1);
+  // The generator service (with its oil, coolant and filters) is yearly; the air conditioner filters are changed every six months.
+  return [...latest.values()].filter(fact=>fact.kind==='SERVICE_GE'||fact.kind==='FILTROS_AA').map(fact=>{const due=new Date(fact.lastDate);if(fact.kind==='FILTROS_AA')due.setUTCMonth(due.getUTCMonth()+6);else due.setUTCFullYear(due.getUTCFullYear()+1);
     return {kind:fact.kind as SiteMaintenance['kind'],lastDate:fact.lastDate.toISOString().slice(0,10),dueDate:due.toISOString().slice(0,10),due:due.toISOString().slice(0,10)<=today.toISOString().slice(0,10),formCode:fact.formCode};});
 }
 const FINISHED_FORM=/^(approved|aprobad|submitted|enviad|to review|para revisar|cancel|closed|cerrad|complet|finaliz)/i;

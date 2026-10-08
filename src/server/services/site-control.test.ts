@@ -8,15 +8,17 @@ const row = (group: string, index: string, question: string, answer: string, for
 const stored = (rows: unknown[][]): StoredAnswer[] => parseSytexSiteAnswers([header, ...rows]).map((a) => ({ ...a, groupName: a.group, position: a.index }));
 
 describe("site control answers from Sytex", () => {
-  it("sorts answers into generator service, fluids, fuel and air conditioner filters", () => {
-    expect(siteTopic("Service anual", "¿Va a realizar service anual?")).toBe("SERVICE_GE");
-    expect(siteTopic("Service anual", "Cambio de filtro de aceite")).toBe("SERVICE_GE");
-    expect(siteTopic("Service anual", "Litros de aceite agregados")).toBe("FLUIDOS");
-    expect(siteTopic("Grupo electrógeno", "Agua destilada (litros)")).toBe("FLUIDOS");
-    expect(siteTopic("[#1] Carga de combustible", "Litros cargados")).toBe("COMBUSTIBLE");
-    expect(siteTopic("Aire acondicionado 1", "Fecha de reemplazo de los filtros")).toBe("FILTROS_AA");
-    expect(siteTopic("[#1] Insumo", "Descripción del insumo:")).toBeNull();
-    expect(siteTopic("Entorno", "Sellado de entry ports requiere atención?")).toBeNull();
+  it("sorts the answers of the generator and air conditioner preventives", () => {
+    expect(siteTopic("SERVICE ANUAL", "Va a realizar Service anual?")).toBe("SERVICE_GE");
+    expect(siteTopic("SERVICE ANUAL", "Cambio de Filtro de Combustible")).toBe("SERVICE_GE");
+    expect(siteTopic("GENERADOR", "NIVEL DE COMBUSTIBLE [%]")).toBe("COMBUSTIBLE");
+    expect(siteTopic("General", "CANTIDAD DE LITROS DE COMBUSTIBLE CARGADOS")).toBe("COMBUSTIBLE");
+    expect(siteTopic("GENERADOR", "HOROMETRO [Hs]")).toBe("HOROMETRO");
+    expect(siteTopic("GENERADOR", "NIVEL DE ACEITE Y ESTADO")).toBe("FLUIDOS");
+    expect(siteTopic("EVAPORADOR", "Fecha de reemplazo de los filtros.")).toBe("FILTROS_AA");
+    expect(siteTopic("EVAPORADOR", "¿El filtro de aire fue:?")).toBe("FILTROS_AA");
+    expect(siteTopic("COMPRESOR", "Indicar tipo de Gas Refrigerante utilizado")).toBeNull();
+    expect(siteTopic("[#1] Ingrese cantidad de insumos", "Tipo de insumo")).toBeNull();
   });
   it("reads numbers the way technicians write them", () => {
     expect(answerNumber("40")).toBe(40);
@@ -24,28 +26,35 @@ describe("site control answers from Sytex", () => {
     expect(answerNumber("1.709,4")).toBe(1709.4);
     expect(answerNumber("No informado")).toBeNull();
   });
-  it("builds one fuel load per repeated group, with levels and hour meter", () => {
+  it("builds the fuel load of a generator preventive with the level before and after", () => {
     const loads = fuelLoadsFromAnswers(stored([
-      row("[#1] Carga de combustible", "2.1", "Tipo de combustible", "Diesel 500"),
-      row("[#1] Carga de combustible", "2.2", "Nivel de combustible inicial (%)", "24"),
-      row("[#1] Carga de combustible", "2.3", "Litros de combustible cargados", "400,09"),
-      row("[#1] Carga de combustible", "2.4", "Nivel de combustible final (%)", "64"),
-      row("Grupo electrógeno", "3.1", "Horómetro", "45,5"),
-      row("[#2] Carga de combustible", "2.3", "Litros de combustible cargados", "0"),
+      row("GENERADOR", "1.2.5", "HOROMETRO [Hs]", "45,5"),
+      row("GENERADOR", "1.2.6", "NIVEL DE COMBUSTIBLE [%]", "24"),
+      row("General", "1.46", "CANTIDAD DE LITROS DE COMBUSTIBLE CARGADOS", "400,09"),
+      row("General", "1.47", "PORCENTAJE  DE COMBUSTIBLE POSTERIOR A LA CARGA", "64"),
+      row("GENERADOR", "1.2.6", "NIVEL DE COMBUSTIBLE [%]", "50", "FO-26-000002"),
+      row("General", "1.46", "CANTIDAD DE LITROS DE COMBUSTIBLE CARGADOS", "0", "FO-26-000002"),
     ]));
     expect(loads).toHaveLength(1);
-    expect(loads[0]).toMatchObject({ formCode: "FO-26-000001", siteCode: "ST00079", liters: 400.09, fuel: "Diesel 500", levelBefore: "24", levelAfter: "64", hourmeter: "45,5" });
+    expect(loads[0]).toMatchObject({ formCode: "FO-26-000001", siteCode: "ST00079", liters: 400.09, levelBefore: "24", levelAfter: "64", hourmeter: "45,5" });
   });
-  it("sums the oil, distilled water and coolant of a service and lists the filters changed", () => {
+  it("reports what the yearly service changed and takes the liters from the insumos of the form", () => {
     const [report] = serviceReportsFromAnswers(stored([
-      row("Service anual", "4.1", "¿Va a realizar service anual?", "Si"),
-      row("Service anual", "4.2", "Litros de aceite agregados", "8 L"),
-      row("Service anual", "4.3", "Agua destilada (litros)", "2"),
-      row("Service anual", "4.4", "Líquido refrigerante cargado", "5 litros"),
-      row("Service anual", "4.5", "Cambio de filtro de aceite", "Si"),
-      row("Service anual", "4.6", "Cambio de filtro de aire", "No"),
-    ]));
-    expect(report).toMatchObject({ serviceDone: true, oilLiters: 8, waterLiters: 2, coolantLiters: 5, filters: ["Cambio de filtro de aceite"] });
-    expect(report.answers).toHaveLength(6);
+      row("SERVICE ANUAL", "1.5.3", "Va a realizar Service anual?", "Si"),
+      row("SERVICE ANUAL", "1.5.4", "Cambio de aceite", "Si"),
+      row("SERVICE ANUAL", "1.5.5", "Cambio de Filtro de Aceite", "Si"),
+      row("SERVICE ANUAL", "1.5.6", "Cambio de Filtro de Combustible", "Si"),
+      row("SERVICE ANUAL", "1.5.7", "Cambio de Filtro de Aire", "No"),
+      row("SERVICE ANUAL", "1.5.9", "Cambio de líquido refrigerante", "Si"),
+      row("SERVICE ANUAL", "1.5.14", "FILTRO AIRE - Requiere atención?", "Si"),
+    ]), [
+      { formCode: "FO-26-000001", description: "Aceite 15W40", quantity: "8" },
+      { formCode: "FO-26-000001", description: "Agua destilada", quantity: "2" },
+      { formCode: "FO-26-000001", description: "Líquido refrigerante", quantity: "5" },
+      { formCode: "FO-26-000001", description: "Filtro de aceite", quantity: "1" },
+      { formCode: "FO-26-000009", description: "Aceite 15W40", quantity: "4" },
+    ]);
+    expect(report).toMatchObject({ serviceDone: true, oilChanged: true, coolantChanged: true, oilLiters: 8, waterLiters: 2, coolantLiters: 5, filters: ["Filtro de Aceite", "Filtro de Combustible"] });
+    expect(report.supplies).toEqual(["Aceite 15W40: 8", "Agua destilada: 2", "Líquido refrigerante: 5"]);
   });
 });
