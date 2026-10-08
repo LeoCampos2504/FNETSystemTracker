@@ -8,7 +8,7 @@ import { inStock,principalTechnician,supplyCounts,supplyMonth,supplyViews,type S
 import s from './operations.module.css';
 const classifications:Record<string,string>={PENDIENTE:'Por definir',INCLUIDO:'Incluido',NO_INCLUIDO:'No incluido'};
 const intra:Record<string,string>={PENDIENTE:'Pendiente de descarga',PARCIAL:'Descarga parcial',DESCARGADO:'Descargado en Intra',NO_CORRESPONDE:'No corresponde'};
-type SyncStatus={progress?:{done:number;total:number}|null;errorDetail?:string|null;configured:boolean;running:boolean;finishedAt:string|null;result:{projects:number;forms:number;items:number;changed:boolean;since:string;skipped?:string[]}|null;error:string|null};
+type SyncStatus={progress?:{done:number;total:number}|null;errorDetail?:string|null;configured:boolean;running:boolean;finishedAt:string|null;result:{projects:number;forms:number;items:number;changed:boolean;since:string;skipped?:string[];incomplete?:number}|null;error:string|null};
 const SYNC_EVERY_MS=5*60*1000;
 const currentMonth=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');};
 const monthLabel=(m:string)=>{const t=new Date(m+'-15T12:00:00').toLocaleDateString('es-AR',{month:'long',year:'numeric'});return t.charAt(0).toUpperCase()+t.slice(1);};
@@ -19,7 +19,7 @@ function syncText(sync:SyncStatus){
  if(sync.running)return sync.progress?'Consultando Sytex… descarga '+sync.progress.done+' de '+sync.progress.total+'. Mientras tanto se muestran los datos de la última consulta.':'Consultando Sytex… revisando qué proyectos tienen formularios.';
  if(sync.error)return (syncErrors[sync.error]??(sync.error.startsWith('SYTEX_RESPONSE_')?'Sytex respondió con error '+sync.error.slice(15)+'. Se reintenta en unos minutos.':'La última consulta a Sytex falló. Se reintenta en unos minutos.'))+(sync.errorDetail?' Detalle: '+sync.errorDetail:'');
  if(!sync.finishedAt||!sync.result)return 'Sytex en directo configurado: primera consulta en curso.';
- return 'Sytex en directo · última consulta '+new Date(sync.finishedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' · '+sync.result.items+' insumos en '+sync.result.projects+' proyectos desde el '+sync.result.since.split('-').reverse().join('/')+'.'+(sync.result.skipped?.length?' Sin actualizar por respuestas contradictorias en Sytex: '+sync.result.skipped.slice(0,6).join(', ')+(sync.result.skipped.length>6?' y '+(sync.result.skipped.length-6)+' más':'')+'.':'');
+ return 'Sytex en directo · última consulta '+new Date(sync.finishedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' · '+sync.result.items+' insumos en '+sync.result.projects+' proyectos desde el '+sync.result.since.split('-').reverse().join('/')+'.'+(sync.result.incomplete?' Quedaron '+sync.result.incomplete+' descargas de meses anteriores sin completar porque Sytex tardó demasiado; se reintentan en unos minutos.':'')+(sync.result.skipped?.length?' Sin actualizar por respuestas contradictorias en Sytex: '+sync.result.skipped.slice(0,6).join(', ')+(sync.result.skipped.length>6?' y '+(sync.result.skipped.length-6)+' más':'')+'.':'');
 }
 export function SytexSupplyControl(){
  const zones=useCatalog(),[items,setItems]=useState<Material[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[revision,setRevision]=useState(0),[search,setSearch]=useState(''),[view,setView]=useState<SupplyView>('all'),[month,setMonth]=useState(currentMonth),[page,setPage]=useState(1),[selected,setSelected]=useState<Material|null>(null),[syncRequest,setSyncRequest]=useState(0);

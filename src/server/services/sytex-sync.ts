@@ -24,12 +24,12 @@ export function configuredProjectIds(env: Record<string, string | undefined> = p
 }
 const CONCURRENCY = 4;
 const ANSWER_CONCURRENCY = 2;
-const REQUEST_TIMEOUT_MS = 120_000;
+const REQUEST_TIMEOUT_MS = 240_000;
 
 export type SytexSyncStatus = {
   configured: boolean; running: boolean;
   startedAt: string | null; finishedAt: string | null;
-  result: { projects: number; forms: number; items: number; changed: boolean; since: string; skipped?: string[] } | null;
+  result: { projects: number; forms: number; items: number; changed: boolean; since: string; skipped?: string[]; incomplete?: number } | null;
   error: string | null; errorDetail: string | null;
   progress: { done: number; total: number } | null;
 };
@@ -135,7 +135,7 @@ async function listProjects(config: Config, fetcher: Fetcher): Promise<{ id: num
   return [...found].map(([id, name]) => ({ id, name }));
 }
 
-const RETRY_WAITS_MS = [5_000];
+const RETRY_WAITS_MS = [5_000, 20_000];
 /** One export. A busy or timed-out Sytex (429 or 5xx) is asked again after a pause before giving up. */
 async function sheet(config: Config, fetcher: Fetcher, kind: "formdata" | "entryanswerdata" | "taskdata", projectId: number, window: string, waits = RETRY_WAITS_MS): Promise<unknown[][]> {
   const path = `/api/${kind}/?org_id=${encodeURIComponent(config.organization)}&${window}&project=${projectId}`;
@@ -180,7 +180,16 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   let done = 0;
   onProgress(0, taskEntries.length + active.length);
   const taskSheets = (await inBatches(taskEntries, async (entry) => { const rows = await sheet(config, fetcher, "taskdata", entry.project.id, entry.window, waits); onProgress(++done, taskEntries.length + active.length); return { entry, rows }; }, ANSWER_CONCURRENCY)).filter((task) => hasRows(task.rows));
-  const answers = (await inBatches(active, async (entry) => { const rows = await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); onProgress(++done, taskEntries.length + active.length); return rows; }, ANSWER_CONCURRENCY)).filter(hasRows);
+  // A closed month that Sytex cannot serve right now is asked again later; the current month has to arrive.
+  const incomplete: typeof active = [];
+  const answers = (await inBatches(active, async (entry) => {
+    try { return await sheet(config, fetcher, "entryanswerdata", entry.project.id, entry.window, waits); }
+    catch (error) {
+      const busy = error instanceof SytexError && (error.code === "SYTEX_UNREACHABLE" || /^SYTEX_RESPONSE_(429|5\d\d)$/.test(error.code));
+      if (!busy || !entry.window.includes("plan_date__lte")) throw error;
+      incomplete.push(entry); return [];
+    } finally { onProgress(++done, taskEntries.length + active.length); }
+  }, ANSWER_CONCURRENCY)).filter(hasRows);
   if (!answers.length) return { projects: activeProjects, forms: 0, items: 0, changed: false, since };
   const parsed = parseSytexExportSheets([...answers, ...active.map((entry) => entry.rows), ...taskSheets.map((task) => task.rows)]);
   // Without a plan date in the list, the month of the window it was asked in tells when the form is planned.
@@ -200,7 +209,7 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   if (contradictory.length && contradictory.some((code) => !code)) throw new SytexError("SYTEX_EXPORT_HAS_CONFLICTS");
   const skipped = contradictory.filter((code): code is string => !!code).sort();
   if (skipped.length) { parsed.items = parsed.items.filter((item) => !skipped.includes(item.formulario)); parsed.errors = []; }
-  const skippedInfo = skipped.length ? { skipped } : {};
+  const skippedInfo = { ...(skipped.length ? { skipped } : {}), ...(incomplete.length ? { incomplete: incomplete.length } : {}) };
   if (!parsed.items.length) return { projects: activeProjects, forms, items: 0, changed: false, since, ...skippedInfo };
   // Identity of the content, not of the files: an unchanged Sytex produces no new rows.
   const identity = createHash("sha256").update(JSON.stringify([
@@ -211,7 +220,8 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
   if (!saved.alreadyImported) await dropSupersededRows(saved.importId);
   // Also when nothing else changed: an insumo the technicians deleted from a form must disappear here too.
-  await dropRemovedItems(parsed.items, (parsed.formContexts ?? []).map((form) => form.code).filter((code) => !skipped.includes(code)));
+  const notComplete = new Set([...skipped, ...incomplete.flatMap((entry) => parseSytexFormRows(entry.rows).map((form) => form.code))]);
+  await dropRemovedItems(parsed.items, (parsed.formContexts ?? []).map((form) => form.code).filter((code) => !notComplete.has(code)));
   return { projects: activeProjects, forms, items: parsed.items.length, changed: !saved.alreadyImported, since, ...skippedInfo };
 }
 
@@ -256,7 +266,11 @@ export function startSytexSync(userId: string): SytexSyncStatus {
   state.running = true; state.startedAt = new Date().toISOString(); state.error = null; state.errorDetail = null; state.progress = null;
   const quick = Date.now() - lastFullAt < FULL_EVERY_MS, startedFull = Date.now();
   void sytexConfig(settings).then((config) => runSytexSync(userId, config, fetch, new Date(), RETRY_WAITS_MS, (done, total) => { state.progress = { done, total }; }, quick))
-    .then((result) => { state.result = result; if (!quick) lastFullAt = startedFull; })
+    .then((result) => {
+      state.result = result;
+      // With downloads left over, the full pass comes back in half an hour instead of waiting twelve.
+      if (!quick) lastFullAt = "incomplete" in result ? startedFull - FULL_EVERY_MS + 30 * 60 * 1000 : startedFull;
+    })
     .catch((error: unknown) => { state.errorDetail = error instanceof SytexError && error.detail ? error.detail : null; state.error = error instanceof SytexError ? error.code : error instanceof Error && error.message.startsWith("SYTEX_") ? error.message : "SYTEX_SYNC_FAILED"; })
     .finally(() => { state.progress = null; state.running = false; state.finishedAt = new Date().toISOString(); });
   return sytexSyncStatus();
