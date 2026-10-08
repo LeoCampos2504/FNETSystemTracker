@@ -26,9 +26,9 @@ const nonAnswers = [answerHeaders, ["FO-26-000001", "[#1] Insumo", "1.17A.1", "D
 beforeEach(() => { vi.clearAllMocks(); mocks.save.mockResolvedValue({ importId: "00000000-0000-4000-8000-00000000000a", alreadyImported: false }); });
 
 describe("direct Sytex synchronization", () => {
-  it("covers the previous and the current month in Argentina time", () => {
-    expect(syncWindowStart(new Date("2026-10-05T15:00:00Z"))).toBe("2026-09-01");
-    expect(syncWindowStart(new Date("2026-01-01T02:00:00Z"))).toBe("2025-11-01");
+  it("covers the two closed months and the current one in Argentina time", () => {
+    expect(syncWindowStart(new Date("2026-10-05T15:00:00Z"))).toBe("2026-08-01");
+    expect(syncWindowStart(new Date("2026-01-01T02:00:00Z"))).toBe("2025-10-01");
   });
   it("is disabled without a credential and never uses an insecure address", () => {
     expect(sytexSettings({})).toBeNull();
@@ -53,9 +53,9 @@ describe("direct Sytex synchronization", () => {
   it("downloads answers only for projects with forms and stores every project in one batch", async () => {
     const calls: { url: string; headers: Record<string, string> }[] = [];
     const result = await runSytexSync("user-id", config, sytex({ ...projects, "/api/formdata/?org_id=1&plan_date__gte=2026-10-01&project=7": nonForms, "/api/entryanswerdata/?org_id=1&plan_date__gte=2026-10-01&project=7": nonAnswers }, calls), new Date("2026-10-05T15:00:00Z"));
-    expect(result).toEqual({ projects: 1, forms: 1, items: 1, changed: true, since: "2026-09-01" });
+    expect(result).toEqual({ projects: 1, forms: 1, items: 1, changed: true, since: "2026-08-01" });
     expect(calls.filter((call) => call.url.includes("/api/entryanswerdata/")).map((call) => call.url)).toEqual(["https://sytex.example.invalid/api/entryanswerdata/?org_id=1&plan_date__gte=2026-10-01&project=7"]);
-    expect(calls.filter((call) => call.url.includes("/api/formdata/") && call.url.includes("project=7")).map((call) => call.url.split("?")[1])).toEqual(["org_id=1&plan_date__gte=2026-09-01&plan_date__lte=2026-09-30&project=7", "org_id=1&plan_date__gte=2026-10-01&project=7"]);
+    expect(calls.filter((call) => call.url.includes("/api/formdata/") && call.url.includes("project=7")).map((call) => call.url.split("?")[1])).toEqual(["org_id=1&plan_date__gte=2026-08-01&plan_date__lte=2026-08-31&project=7", "org_id=1&plan_date__gte=2026-09-01&plan_date__lte=2026-09-30&project=7", "org_id=1&plan_date__gte=2026-10-01&project=7"]);
     expect(calls.every((call) => call.headers.Authorization === "Token secret" && call.headers.Organization === "1")).toBe(true);
     const [parsed, identity, name, user] = mocks.save.mock.calls[0];
     expect(parsed.items[0]).toMatchObject({ formulario: "FO-26-000001", description: "Precintos", quantity: "40" });
@@ -105,7 +105,7 @@ describe("direct Sytex synchronization", () => {
     expect(configuredProjectIds({ SYTEX_PROJECT_IDS: "8677, 2346;8677 x" })).toEqual([8677, 2346]);
   });
   it("asks month by month and retries an export that Sytex could not serve at first", async () => {
-    expect(syncWindows(new Date("2026-03-10T15:00:00Z"))).toEqual(["plan_date__gte=2026-02-01&plan_date__lte=2026-02-28", "plan_date__gte=2026-03-01"]);
+    expect(syncWindows(new Date("2026-03-10T15:00:00Z"))).toEqual(["plan_date__gte=2026-01-01&plan_date__lte=2026-01-31", "plan_date__gte=2026-02-01&plan_date__lte=2026-02-28", "plan_date__gte=2026-03-01"]);
     let failures = 1;
     const flaky = (async (input: string | URL | Request, init?: RequestInit) => {
       if (String(input).includes("/api/entryanswerdata/") && failures-- > 0) return new Response("", { status: 504 });
@@ -118,7 +118,7 @@ describe("direct Sytex synchronization", () => {
   it("asks only for the current month in a quick pass", async () => {
     const asked: string[] = [];
     const spy = (async (input: string | URL | Request, init?: RequestInit) => { asked.push(String(input)); return sytex({ ...projects, "/api/entryanswerdata/": nonAnswers, "plan_date__gte=2026-10-01&project=7": nonForms })(input, init); }) as typeof fetch;
-    expect(await runSytexSync("user-id", config, spy, new Date("2026-10-05T15:00:00Z"), [0], () => undefined, true)).toMatchObject({ items: 1, since: "2026-09-01" });
+    expect(await runSytexSync("user-id", config, spy, new Date("2026-10-05T15:00:00Z"), [0], () => undefined, true)).toMatchObject({ items: 1, since: "2026-08-01" });
     const exports = asked.filter((url) => url.includes("/api/formdata/") && !url.includes("2999"));
     expect(exports.length).toBeGreaterThan(0);
     expect(exports.every((url) => url.includes("plan_date__gte=2026-10-01") && !url.includes("plan_date__lte"))).toBe(true);
