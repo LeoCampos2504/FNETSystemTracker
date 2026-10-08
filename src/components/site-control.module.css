@@ -49,3 +49,6 @@
 .timeline{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .timeline li{display:grid;grid-template-columns:150px 90px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
 @media(max-width:650px){.timeline li{grid-template-columns:1fr 1fr}.siteSearch{min-width:0;flex:1}}
+/* The insumos table aligns some columns by position; this panel aligns every column to the left. */
+.table.table th,.table.table td{text-align:left;white-space:normal}
+.table.table td.num{white-space:nowrap}
