@@ -35,6 +35,12 @@ _(vacío — agregar acá)_
 
 ## Resueltos
 
+### [Resuelto 2026-10-08] Subzona en `SourceMaterial` (aditivo)
+
+- **Cambio:** `SourceMaterial.subZone?: string | null`, la subzona de Sytex («Sub project») de la tarea del formulario.
+- **Motivo:** filtrar insumos por subzona (lista de casillas zona/subzona) igual que las tareas.
+- **Impacto:** opcional; no entra en el hash de control, así que no marca insumos como "cambiados". Mocks e implementaciones sin cambios obligatorios.
+
 ### [Resuelto 2026-10-08] Fecha de realización y subzona en `Task` (aditivo)
 - Quién lo pide: Eugenia (coordinación).
 - Contrato afectado: `src/contracts/task.ts` — se agregan `completedDate?: string | null` (día en que la tarea se realizó en Sytex, no la fecha de plan) y `subZone?: string | null` (subzona de la operación: Jujuy, Metán, Orán…). `requestDate` pasa a venir también de los formularios sincronizados.
