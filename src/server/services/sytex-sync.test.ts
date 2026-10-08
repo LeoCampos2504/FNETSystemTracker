@@ -136,7 +136,7 @@ describe("direct Sytex synchronization", () => {
     expect(exports.length).toBeGreaterThan(0);
     expect(exports.every((url) => url.includes("plan_date__gte=2026-10-01") && !url.includes("plan_date__lte"))).toBe(true);
   });
-  it("asks for the task list only in projects with corrective forms and saves those tasks", async () => {
+  it("asks for the task list of every project (forms take their sub-zone and dates from it) and saves the corrective tasks", async () => {
     const calls: { url: string; headers: Record<string, string> }[] = [];
     const mccForms = [formHeaders, ["FO-26-000002", "Cerrar", "Correctivo Civil Integral", "NON - MCCIntegral Mantenimiento Correctivo Civil O&M", "ST00213", "Salta", null, null]];
     const taskHead = ["Code", "Task description", "Project", "Affected sites codes", "Affected sites names", "Task type", "Status"];
@@ -145,7 +145,7 @@ describe("direct Sytex synchronization", () => {
       "/api/formdata/?org_id=1&plan_date__gte=2026-10-01&project=7": nonForms, "/api/formdata/?org_id=1&plan_date__gte=2026-10-01&project=9": mccForms,
       "/api/entryanswerdata/": nonAnswers, "/api/taskdata/?org_id=1&plan_date__gte=2026-10-01&project=9": tasks };
     await runSytexSync("user-id", config, sytex(routes, calls), new Date("2026-10-05T15:00:00Z"), [0], () => undefined, true);
-    expect(calls.filter((call) => call.url.includes("/api/taskdata/")).map((call) => call.url.split("?")[1])).toEqual(["org_id=1&plan_date__gte=2026-10-01&project=9"]);
+    expect(calls.filter((call) => call.url.includes("/api/taskdata/")).map((call) => call.url.split("?")[1])).toEqual(["org_id=1&plan_date__gte=2026-10-01&project=7", "org_id=1&plan_date__gte=2026-10-01&project=9"]);
     const [parsed] = mocks.save.mock.calls[0];
     expect(parsed.formContexts.find((form: { code: string }) => form.code === "TA-26-412547")).toMatchObject({ type: "CORRECTIVO", status: "Open", planDate: "2026-10-01" });
   });

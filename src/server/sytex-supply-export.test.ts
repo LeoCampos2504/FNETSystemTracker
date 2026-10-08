@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseSytexExportSheets, parseSytexFormRows, parseSytexMaintenanceRows, parseSytexSupplyRows, parseSytexTaskRows } from "./sytex-supply-export";
+import { parseSytexExportSheets, parseSytexFormRows, parseSytexMaintenanceRows, parseSytexSupplyRows, parseSytexTaskDates, parseSytexTaskRows } from "./sytex-supply-export";
 
 const headers = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta", "Códigos de sitios afectados", "Última edición el", "Última edición por"];
 const date = new Date("2026-10-02T18:00:00Z");
@@ -197,5 +197,32 @@ describe("corrective tasks from the task export", () => {
   it("joins the task list to the forms and answers of the same synchronization", () => {
     const parsed = parseSytexExportSheets([[answersHeadersForTasks, ["FO-26-100001", "[#1] Insumo", "1.1.1", "Descripción", "Cable", "ST00213", "2026-10-02 10:00:00", "Ana"], ["FO-26-100001", "[#1] Insumo", "1.1.2", "Cantidad", 2, "ST00213", "2026-10-02 10:00:00", "Ana"]], rows]);
     expect(parsed.formContexts?.map((form) => form.code)).toEqual(["TA-26-412547"]);
+  });
+});
+
+describe("sub-zone and real dates of tasks", () => {
+  const taskHead = ["Code", "Task description", "Project", "Affected sites codes", "Affected sites names", "Task type", "Task template", "Status", "Sub project", "Request date", "Start plan date", "Start date", "Finish date"];
+  const tasks = [taskHead,
+    ["TA-26-394939", "MPC Aire Acondicionado", "NON - MPC Mantenimiento Preventivo Civil O&M", "JU00139", "Jujuy - Mariano Moreno", "Maintenance", "MPC Aire Acondicionado", "Completed", "Jujuy", "2026-09-28", "2026-10-01 ", "2026-10-06 15:34:21.113817", "2026-10-06 15:34:21.113817"],
+    ["TA-26-394942", "MPC Aire Acondicionado", "NON - MPC Mantenimiento Preventivo Civil O&M", "JU00139", "Jujuy - Mariano Moreno", "Maintenance", "MPC Aire Acondicionado", "Open", "Metán", "", "2026-10-01 ", " ", " "],
+    ["TA-26-409910", "Correctivo", "NON - MCCIntegral Mantenimiento Correctivo Civil O&M", "ST00213", "Salta 12", "Admin", "Correctivo", "Completed", "Orán", "2026-10-01", "2026-10-09 ", "2026-10-02 12:28:24.461960", "2026-10-02 12:28:24.461960"],
+  ];
+  it("reads the sub-zone and the day a task was really done, not the plan date", () => {
+    const dates = parseSytexTaskDates(tasks);
+    expect(dates.get("TA-26-394939")).toEqual({ subZone: "Jujuy", requestedOn: "2026-09-28", startedOn: "2026-10-06", finishedOn: "2026-10-06" });
+    expect(dates.get("TA-26-394942")).toEqual({ subZone: "Metán" });
+    expect(parseSytexTaskRows(tasks)[0]).toMatchObject({ code: "TA-26-409910", planDate: "2026-10-09", subZone: "Orán", finishedOn: "2026-10-02", requestedOn: "2026-10-01" });
+  });
+  it("gives each form the sub-zone and dates of its task", () => {
+    const formHead = ["Code", "Name", "Template", "Project", "Task"];
+    const parsed = parseSytexExportSheets([
+      [answersHeadersForTasks, ["FO-26-611211", "[#1] Insumo", "1.1.1", "Descripción", "Cable", "JU00139", "2026-10-02 10:00:00", "Ana"], ["FO-26-611211", "[#1] Insumo", "1.1.2", "Cantidad", 2, "JU00139", "2026-10-02 10:00:00", "Ana"]],
+      [formHead, ["FO-26-611211", "MPC-AA", "Mantenimiento Preventivo Civil", "NON - MPC Mantenimiento Preventivo Civil O&M", "TA-26-394939"], ["FO-26-611212", "MPC-AA", "Mantenimiento Preventivo Civil", "NON - MPC Mantenimiento Preventivo Civil O&M", "TA-26-394942"]],
+      tasks,
+    ]);
+    const form = (code: string) => parsed.formContexts?.find((context) => context.code === code);
+    expect(form("FO-26-611211")).toMatchObject({ subZone: "Jujuy", finishedOn: "2026-10-06", requestedOn: "2026-09-28" });
+    expect(form("FO-26-611212")).toMatchObject({ subZone: "Metán" });
+    expect(form("FO-26-611212")?.finishedOn).toBeUndefined();
   });
 });
