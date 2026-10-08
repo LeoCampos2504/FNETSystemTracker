@@ -249,13 +249,16 @@ async function dropSupersededRows(importId: string) {
     db.$executeRaw`DELETE FROM sytex_form_states prior USING sytex_supply_imports batch, sytex_form_states fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
-    db.$executeRaw`DELETE FROM sytex_task_dates prior USING sytex_supply_imports batch, sytex_task_dates fresh
-      WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
-        AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`,
     db.$executeRaw`DELETE FROM sytex_site_maintenance prior USING sytex_supply_imports batch, sytex_site_maintenance fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.site_code = prior.site_code AND fresh.kind = prior.kind AND fresh.form_code = prior.form_code`,
   ]);
+  // Own table, created by db:prepare-app: a database still without it only loses the dates.
+  try {
+    await db.$executeRaw`DELETE FROM sytex_task_dates prior USING sytex_supply_imports batch, sytex_task_dates fresh
+      WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
+        AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`;
+  } catch { /* table not created yet */ }
 }
 
 /** Starts one synchronization in the background; a second request while it runs only reports the status. */

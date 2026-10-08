@@ -113,7 +113,7 @@ async function getFormTasks(skip: Set<string>) {
     prisma.sytex_supply_form_contexts.findMany({ include: { import: { select: { importedAt: true } } }, orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
     prisma.sytex_form_states.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
     prisma.sytex_form_links.findMany({ select: { code: true, link: true } }),
-    prisma.sytex_task_dates.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
+    prisma.sytex_task_dates.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }).catch(() => []),
   ]);
   const taskDates = new Map(dates.map((row) => [row.code, row]));
   const latest = new Map(contexts.map((row) => [row.code, row])), state = new Map(states.map((row) => [row.code, row])), link = new Map(links.map((row) => [row.code, row.link]));
