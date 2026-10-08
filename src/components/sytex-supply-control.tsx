@@ -46,7 +46,7 @@ export function SytexSupplyControl(){
  // Changing the dates or the zones can leave fewer pages than the one open.
  const pages=Math.max(1,Math.ceil(filtered.length/50)),current=Math.min(page,pages);
  const status=(r:Material)=>r.changed?{text:'Cambió en Sytex',tone:s.badgeWait}:inStock(r)?{text:'En stock del técnico',tone:s.badgeOff}:!r.missing?{text:r.review?.intraStatus==='NO_CORRESPONDE'?'No corresponde':'Descargado',tone:r.review?.intraStatus==='NO_CORRESPONDE'?s.badgeOff:s.badgeOk}:r.review?.intraStatus==='PARCIAL'?{text:'Descarga parcial',tone:s.badgeWait}:{text:'Pendiente',tone:s.badgeWait};
- return <section className={s.app}><header className={s.heading}><div><span className={s.kicker}>SYTEX · CONTEO Y DESCARGA EN INTRA</span><h1>Insumos por zona</h1></div><button onClick={()=>{setSyncRequest(v=>v+1);setRevision(v=>v+1);}} disabled={loading||sync?.running}>{sync?.running?'Consultando Sytex…':'Actualizar datos'}</button></header>
+ return <section className={s.app}><header className={s.heading}><div><span className={s.kicker}>Conteo de Sytex y descarga en Intra</span><h1>Insumos por zona</h1></div><button onClick={()=>{setSyncRequest(v=>v+1);setRevision(v=>v+1);}} disabled={loading||sync?.running}>{sync?.running?'Consultando Sytex…':'Actualizar datos'}</button></header>
  <ZoneFilter state={zones} dates={{label:'Fecha (última edición en Sytex)'}}/><Feedback error={error||zones.error}/>
  {sync&&<p className={s.note} role="status">{syncText(sync)}</p>}
  {zones.data?.admin&&<details className={s.zones}><summary>Cargar Excel de Sytex (carga manual)</summary><SytexSupplyImport onImported={()=>{setRevision(v=>v+1);void opCall<OperationsCatalog>('/api/operations').then(zones.setData).catch(()=>undefined);}}/></details>}
