@@ -52,3 +52,4 @@
 /* The insumos table aligns some columns by position; this panel aligns every column to the left. */
 .table.table th,.table.table td{text-align:left;white-space:normal}
 .table.table td.num{white-space:nowrap}
+.inlineButton{display:inline !important;min-height:0 !important;padding:0 !important;border:0 !important;background:transparent !important;color:var(--brand) !important;font-weight:600 !important;text-decoration:underline;cursor:pointer}
