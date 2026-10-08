@@ -44,8 +44,8 @@ describe('coordinator operation safeguards',()=>{
  it('does not link a task to a different site',async()=>{await expect(addVisit(actor,{...visit,siteCode:'ST2'})).rejects.toThrow('TASK_SITE_MISMATCH');});
  it('cannot close a day without visits',async()=>{await expect(closeDay(actor,'2026-10-04',[])).rejects.toThrow('NO_OPEN_DAY_WITH_VISITS');});
  it('does not update an inaccessible visit',async()=>{query.mockImplementation(async(strings:TemplateStringsArray)=>strings.join('?').includes('ops_visits')?[{project:bam}]:[]);await expect(updateVisit(actor,{id:visit.requestKey,version:0,technicians:['Test'],status:'REALIZADO',outcome:''})).rejects.toThrow('FORBIDDEN_PROJECT');});
- it('counts one year from the most recently reported service or filter change',()=>{const facts=[{kind:'SERVICE_GE',lastDate:new Date('2025-03-10'),formCode:'FO-26-1',reportedAt:'2026-09-01T10:00:00'},{kind:'SERVICE_GE',lastDate:new Date('2026-09-20'),formCode:'FO-26-2',reportedAt:'2026-09-20T10:00:00'},{kind:'FILTROS_AA',lastDate:new Date('2025-10-01'),formCode:'FO-26-3',reportedAt:'2026-09-02T10:00:00'}];
-  expect(yearlyMaintenance(facts,new Date('2026-10-05'))).toEqual([{kind:'SERVICE_GE',lastDate:'2026-09-20',dueDate:'2027-09-20',due:false,formCode:'FO-26-2'},{kind:'FILTROS_AA',lastDate:'2025-10-01',dueDate:'2026-10-01',due:true,formCode:'FO-26-3'}]);});
+ it('counts a year for the generator service and six months for air conditioner filters',()=>{const facts=[{kind:'SERVICE_GE',lastDate:new Date('2025-03-10'),formCode:'FO-26-1',reportedAt:'2026-09-01T10:00:00'},{kind:'SERVICE_GE',lastDate:new Date('2026-09-20'),formCode:'FO-26-2',reportedAt:'2026-09-20T10:00:00'},{kind:'FILTROS_AA',lastDate:new Date('2025-10-01'),formCode:'FO-26-3',reportedAt:'2026-09-02T10:00:00'}];
+  expect(yearlyMaintenance(facts,new Date('2026-10-05'))).toEqual([{kind:'SERVICE_GE',lastDate:'2026-09-20',dueDate:'2027-09-20',due:false,formCode:'FO-26-2'},{kind:'FILTROS_AA',lastDate:'2025-10-01',dueDate:'2026-04-01',due:true,formCode:'FO-26-3'}]);});
 });
 
 describe('forms offered when a site is typed',()=>{
