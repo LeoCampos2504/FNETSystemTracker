@@ -9,6 +9,7 @@ vi.mock("@/server/prisma", () => ({ getPrismaClient: () => ({
   sytex_supply_form_contexts: { findMany: async () => [] },
   sytex_form_states: { findMany: async () => [] },
   sytex_form_links: { findMany: async () => [] },
+  sytex_task_dates: { findMany: async () => [] },
 }) }));
 vi.mock("@/server/services/operational-data", () => ({
   getFuelData: async () => ({ items: [], metrics: {} }),
