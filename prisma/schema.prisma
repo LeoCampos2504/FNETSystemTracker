@@ -129,6 +129,7 @@ model sytex_supply_imports {
   maintenance         sytex_site_maintenance[]
   links               sytex_form_links[]
   states              sytex_form_states[]
+  taskDates           sytex_task_dates[]
 
   @@index([importedAt], map: "idx_sytex_supply_imports_date")
   @@map("sytex_supply_imports")
@@ -160,6 +161,20 @@ model sytex_form_states {
   @@unique([importId, code], map: "uq_sytex_form_state")
   @@index([code], map: "idx_sytex_form_state_code")
   @@map("sytex_form_states")
+}
+
+model sytex_task_dates {
+  id          String    @id @default(uuid()) @db.Uuid
+  importId    String    @map("import_id") @db.Uuid
+  code        String
+  subZone     String    @default("") @map("sub_zone")
+  requestedOn DateTime? @map("requested_on") @db.Date
+  startedOn   DateTime? @map("started_on") @db.Date
+  finishedOn  DateTime? @map("finished_on") @db.Date
+  import      sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_task_dates_import")
+  @@unique([importId, code], map: "uq_sytex_task_dates")
+  @@index([code], map: "idx_sytex_task_dates_code")
+  @@map("sytex_task_dates")
 }
 
 model sytex_form_links {

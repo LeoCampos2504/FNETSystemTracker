@@ -24,6 +24,8 @@ describe("tasks built from the direct Sytex synchronization", () => {
   it("keeps the zone, status, plan date, crew and link of the form", () => {
     expect(formTask(base)).toMatchObject({ taskCode: "FO-26-610440", zoneId: base.project, status: TaskStatus.IN_PROGRESS, scheduledDate: "2026-10-20", siteCode: "BA00700", assignedTo: "Ana", collaborator: "Luis", externalUrl: base.link });
     expect(formTask(base)?.assignments).toHaveLength(2);
+    expect(formTask({ ...base, subZone: "Orán", requestedOn: new Date("2026-09-28T00:00:00Z"), finishedOn: new Date("2026-10-06T00:00:00Z") })).toMatchObject({ subZone: "Orán", completedDate: "2026-10-06", requestDate: "2026-09-28T00:00:00.000Z", scheduledDate: "2026-10-20" });
+    expect(formTask(base)).toMatchObject({ subZone: null, completedDate: null, requestDate: null });
   });
   it("shows a form without status or date as open and undated, and skips other kinds of form", () => {
     expect(formTask({ ...base, status: "", planDate: null, technicians: [], siteCode: "" })).toMatchObject({ status: TaskStatus.OPEN, scheduledDate: "sin-fecha", siteCode: "Sin sitio informado", assignments: [] });

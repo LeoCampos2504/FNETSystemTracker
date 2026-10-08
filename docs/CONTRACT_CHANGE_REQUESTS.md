@@ -35,6 +35,12 @@ _(vacío — agregar acá)_
 
 ## Resueltos
 
+### [Resuelto 2026-10-08] Fecha de realización y subzona en `Task` (aditivo)
+- Quién lo pide: Eugenia (coordinación).
+- Contrato afectado: `src/contracts/task.ts` — se agregan `completedDate?: string | null` (día en que la tarea se realizó en Sytex, no la fecha de plan) y `subZone?: string | null` (subzona de la operación: Jujuy, Metán, Orán…). `requestDate` pasa a venir también de los formularios sincronizados.
+- Por qué: filtrar por día y mes reales de realización y por zona/subzona con varias casillas.
+- Impacto: tabla nueva `sytex_task_dates` (migración `20261008_add_task_dates`, se aplica con `npm run db:prepare-app`); sin cambios en `Api` ni mocks (campos opcionales).
+
 ### [Resuelto 2026-10-05] Enlace a Sytex en `Task` (aditivo)
 - Quién lo pide: Eugenia (coordinación).
 - Contrato afectado: `src/contracts/task.ts` — se agrega `externalUrl?: string | null` a `Task`. Es opcional: mocks y `http-api` siguen siendo válidos.

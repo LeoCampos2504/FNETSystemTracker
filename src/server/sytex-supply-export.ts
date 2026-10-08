@@ -3,7 +3,9 @@ import { exactFormReference } from "./form-references";
 
 type Issue = { line: number; code: string; form?: string };
 type SourceAnswer = { line: number; index: string; question: string; answer: string | null; editedAt: string | null; editor: string | null };
-export type SytexFormContext = { code: string; type: string; project: string; siteCode: string; siteName: string; description: string; technicians: string[]; link?: string; status?: string; planDate?: string };
+/** When a task was asked for and when it was really done (not the plan date), and the sub-zone of its operation (Metán, Orán…). */
+export type SytexTaskDates = { subZone?: string; requestedOn?: string; startedOn?: string; finishedOn?: string };
+export type SytexFormContext = { code: string; type: string; project: string; siteCode: string; siteName: string; description: string; technicians: string[]; link?: string; status?: string; planDate?: string; taskCode?: string } & SytexTaskDates;
 export type SytexExportItem = {
   formulario: string; grupo: string; indice: string;
   description: string | null; quantity: string | null; provider: string | null;
@@ -28,7 +30,7 @@ const HEADER_ALIASES: Record<string, string> = {
   "affected sites codes": "codigos de sitios afectados", "affected sites names": "nombres de sitios afectados",
   status: "estado", "last edition on": "ultima edicion el", "last edition by": "ultima edicion por",
   code: "codigo", name: "nombre", template: "plantilla", project: "proyecto",
-  "plan date": "fecha de plan", "planned date": "fecha de plan", "fecha plan": "fecha de plan", "task description": "descripcion de la tarea", "task type": "tipo de tarea", "task template": "plantilla de la tarea", "assigned staff": "personal asignado", "start plan date": "fecha de inicio plan", "assigned to": "asignado a", "collaborator user": "usuario colaborador", link: "enlace",
+  "plan date": "fecha de plan", "planned date": "fecha de plan", "fecha plan": "fecha de plan", "task description": "descripcion de la tarea", "task type": "tipo de tarea", "task template": "plantilla de la tarea", "assigned staff": "personal asignado", "start plan date": "fecha de inicio plan", "assigned to": "asignado a", "sub project": "subproyecto", "start date": "fecha de inicio", "finish date": "fecha de fin", "request date": "fecha de solicitud", task: "tarea", "collaborator user": "usuario colaborador", link: "enlace",
 };
 function normalize(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " "); }
 function text(value: unknown): string | null {
@@ -196,6 +198,7 @@ export function parseSytexFormRows(rows: unknown[][]): SytexFormContext[] {
       description: get(row, "Nombre"), technicians: [...new Set([get(row, "Asignado a"), get(row, "Usuario colaborador")].filter(Boolean))],
       ...(headers.includes("enlace") && imageUrl(get(row, "Enlace")) ? { link: get(row, "Enlace") } : {}),
       ...(get(row, "Estado") ? { status: get(row, "Estado") } : {}),
+      ...(/^TA-\d{2}-\d{6}$/.test(get(row, "Tarea").toUpperCase()) ? { taskCode: get(row, "Tarea").toUpperCase() } : {}),
       ...(day(get(row, "Fecha de plan")) ? { planDate: day(get(row, "Fecha de plan")) as string } : {}) };
     const previous = forms.get(code);
     if (previous && JSON.stringify(previous) !== JSON.stringify(value)) throw new Error("SYTEX_EXPORT_FORM_CONFLICT");
@@ -222,9 +225,29 @@ export function parseSytexTaskRows(rows: unknown[][]): SytexFormContext[] {
       technicians: [...new Set(get(row, "Personal asignado").split(/[;,]/).map(name => name.trim()).filter(Boolean))],
       ...(headers.includes("enlace") && imageUrl(get(row, "Enlace")) ? { link: get(row, "Enlace") } : {}),
       ...(get(row, "Estado") ? { status: get(row, "Estado") } : {}),
-      ...(day(get(row, "Fecha de inicio plan")) ? { planDate: day(get(row, "Fecha de inicio plan")) as string } : {}) });
+      ...(day(get(row, "Fecha de inicio plan")) ? { planDate: day(get(row, "Fecha de inicio plan")) as string } : {}), ...taskDates(row, headers) });
   }
   return [...tasks.values()];
+}
+
+/** The sub-zone and real dates of a task row: "Sub project", "Request date", "Start date" and "Finish date" (blank until it is done). */
+function taskDates(row: unknown[], headers: string[]): SytexTaskDates {
+  const get = (key: string) => text(row[headers.indexOf(normalize(key))]) ?? "";
+  const subZone = get("Subproyecto"), requestedOn = day(get("Fecha de solicitud")), startedOn = day(get("Fecha de inicio")), finishedOn = day(get("Fecha de fin"));
+  return { ...(subZone ? { subZone } : {}), ...(requestedOn ? { requestedOn } : {}), ...(startedOn ? { startedOn } : {}), ...(finishedOn ? { finishedOn } : {}) };
+}
+
+/** Every task of a task export (preventive ones too): forms get their sub-zone and real dates from the task they belong to. */
+export function parseSytexTaskDates(rows: unknown[][]): Map<string, SytexTaskDates> {
+  const result = new Map<string, SytexTaskDates>();
+  if (rows.length < 2) return result;
+  const headers = headerKeys(rows[0]), codeColumn = headers.indexOf("codigo");
+  if (codeColumn < 0) return result;
+  for (const row of rows.slice(1)) {
+    const code = text(row[codeColumn])?.toUpperCase() ?? "";
+    if (/^TA-\d{2}-\d{6}$/.test(code)) result.set(code, taskDates(row, headers));
+  }
+  return result;
 }
 
 export async function parseSytexFormExport(bytes: Uint8Array): Promise<SytexFormContext[]> {
@@ -236,7 +259,7 @@ const ANSWER_COLUMNS = ["Formulario", "Grupo", "Índice", "Pregunta", "Respuesta
 /** Joins the exports of several projects: answer files feed the materials, form lists give each form its project. */
 export function parseSytexExportSheets(sheets: unknown[][][]): SytexSupplyExport {
   const answers: unknown[][] = [ANSWER_COLUMNS];
-  const contexts = new Map<string, SytexFormContext>();
+  const contexts = new Map<string, SytexFormContext>(), taskInfo = new Map<string, SytexTaskDates>();
   let answerSheets = 0;
   for (const rows of sheets) {
     if (!rows.length) throw new Error("SYTEX_EXPORT_EMPTY");
@@ -250,6 +273,7 @@ export function parseSytexExportSheets(sheets: unknown[][][]): SytexSupplyExport
       for (const row of rows.slice(1)) answers.push(positions.map((position) => position < 0 ? null : row[position] ?? null));
       answerSheets++;
     } else if (headers.includes("descripcion de la tarea")) {
+      for (const [code, dates] of parseSytexTaskDates(rows)) taskInfo.set(code, dates);
       for (const task of parseSytexTaskRows(rows)) contexts.set(task.code, task);
     } else if (headers.includes("codigo") && headers.includes("proyecto")) {
       for (const form of parseSytexFormRows(rows)) {
@@ -261,6 +285,11 @@ export function parseSytexExportSheets(sheets: unknown[][][]): SytexSupplyExport
   }
   if (!answerSheets) throw new Error("SYTEX_EXPORT_ANSWERS_REQUIRED");
   const parsed = parseSytexSupplyRows(answers), maintenance = parseSytexMaintenanceRows(answers);
+  // A form takes the sub-zone and the real dates of its task; the task itself already carries them.
+  for (const context of contexts.values()) {
+    const dates = context.taskCode ? taskInfo.get(context.taskCode) : undefined;
+    if (dates) Object.assign(context, dates);
+  }
   return { ...parsed, ...(contexts.size ? { formContexts: [...contexts.values()] } : {}), ...(maintenance.length ? { maintenance } : {}) };
 }
 

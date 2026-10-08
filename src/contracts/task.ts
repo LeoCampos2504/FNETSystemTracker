@@ -31,6 +31,10 @@ export interface Task extends ExternalSyncFields {
   scheduledAt: string | null;
   /** Official request/open timestamp used for operational aging. */
   requestDate?: string | null;
+  /** Day the task was really done in Sytex (YYYY-MM-DD), when it is completed. It is not the plan date, which only says the month it belongs to. */
+  completedDate?: string | null;
+  /** Sub-zone of the operation inside the zone (Jujuy, Metán, Orán…), as Sytex names it in "Sub project". */
+  subZone?: string | null;
   /** Raw official assignment fields when Sytex exposes them. */
   assignedTo?: string | null;
   collaborator?: string | null;

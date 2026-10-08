@@ -89,7 +89,7 @@ function mapTask(row: {
   };
 }
 
-type FormTaskInput = { code: string; type: string; project: string; siteCode: string; description: string; technicians: unknown; status: string; planDate: Date | null; link: string | null; syncedAt: Date };
+type FormTaskInput = { code: string; type: string; project: string; siteCode: string; description: string; technicians: unknown; status: string; planDate: Date | null; link: string | null; syncedAt: Date; subZone?: string; requestedOn?: Date | null; finishedOn?: Date | null };
 /** A form or corrective task from the direct Sytex synchronization, shown as a task of its zone. A corrective is shown by its task (TA-…), not by its forms. */
 export function formTask(row: FormTaskInput) {
   const type = row.type === "CORRECTIVO" && row.code.startsWith("TA-") ? TaskType.CORRECTIVE : row.type === "PREVENTIVO" ? TaskType.PREVENTIVE : null;
@@ -99,7 +99,7 @@ export function formTask(row: FormTaskInput) {
   return {
     id: "form-" + row.code, taskCode: row.code, formCode: null as string | null, type, description: row.description || "Sin descripción informada",
     priority, criticality: taskCriticality(priority, row.status), status: taskStatus(row.status),
-    scheduledDate: dateOnly(row.planDate), scheduledAt: iso(row.planDate), requestDate: null as string | null,
+    scheduledDate: dateOnly(row.planDate), scheduledAt: iso(row.planDate), requestDate: iso(row.requestedOn ?? null), completedDate: row.finishedOn ? dateOnly(row.finishedOn) : null as string | null, subZone: row.subZone || null as string | null,
     assignedTo: technicians[0] ?? null, collaborator: technicians[1] ?? null, contractor: null as string | null,
     siteId: siteCode, siteCode, zoneId: row.project || "Sin proyecto informado", coordinates: { latitude: 0, longitude: 0 },
     assignments: technicians.slice(0, 2).map((technicianId, index) => ({ technicianId, crewRole: index === 0 ? CrewRole.PRIMARY : CrewRole.COLLABORATOR })),
@@ -107,16 +107,23 @@ export function formTask(row: FormTaskInput) {
     externalSource: ExternalSource.SYTEX, externalId: row.code, sourceUpdatedAt: row.syncedAt.toISOString(), externalUrl: row.link,
   };
 }
+/** Own table created by db:prepare-app: until it exists, tasks just come without sub-zone and real dates. */
+async function readTaskDates() {
+  try { return await getPrismaClient().sytex_task_dates.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }); }
+  catch { return []; }
+}
 async function getFormTasks(skip: Set<string>) {
   const prisma = getPrismaClient();
-  const [contexts, states, links] = await Promise.all([
+  const [contexts, states, links, dates] = await Promise.all([
     prisma.sytex_supply_form_contexts.findMany({ include: { import: { select: { importedAt: true } } }, orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
     prisma.sytex_form_states.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
     prisma.sytex_form_links.findMany({ select: { code: true, link: true } }),
+    readTaskDates(),
   ]);
+  const taskDates = new Map(dates.map((row) => [row.code, row]));
   const latest = new Map(contexts.map((row) => [row.code, row])), state = new Map(states.map((row) => [row.code, row])), link = new Map(links.map((row) => [row.code, row.link]));
   return [...latest.values()].filter((row) => !skip.has(row.code)).flatMap((row) => {
-    const task = formTask({ code: row.code, type: row.type, project: row.project, siteCode: row.siteCode, description: row.description, technicians: row.technicians, status: state.get(row.code)?.status ?? "", planDate: state.get(row.code)?.planDate ?? null, link: link.get(row.code) ?? null, syncedAt: row.import.importedAt });
+    const task = formTask({ code: row.code, type: row.type, project: row.project, siteCode: row.siteCode, description: row.description, technicians: row.technicians, status: state.get(row.code)?.status ?? "", planDate: state.get(row.code)?.planDate ?? null, link: link.get(row.code) ?? null, syncedAt: row.import.importedAt, subZone: taskDates.get(row.code)?.subZone, requestedOn: taskDates.get(row.code)?.requestedOn, finishedOn: taskDates.get(row.code)?.finishedOn });
     return task ? [task] : [];
   });
 }

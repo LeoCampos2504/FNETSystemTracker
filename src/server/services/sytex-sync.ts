@@ -158,10 +158,6 @@ async function inBatches<T, R>(items: T[], work: (item: T) => Promise<R>, size =
 }
 
 const hasRows = (rows: unknown[][]) => rows.slice(1).some((row) => row.some((cell) => cell !== null && cell !== ""));
-/** Only corrective projects need their task list: a preventive task is already represented by its forms. */
-const projectColumn = (rows: unknown[][]) => rows[0]?.findIndex((cell) => /^(proyecto|project)$/i.test(String(cell ?? "").trim())) ?? -1;
-const hasCorrectiveForms = (rows: unknown[][]) => { const column = projectColumn(rows); return column >= 0 && rows.slice(1).some((row) => /correctiv|\bmcc/i.test(String(row[column] ?? ""))); };
-
 export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS, onProgress: (done: number, total: number) => void = () => undefined, quick = false) {
   const since = syncWindowStart(now);
   // A quick pass asks only for the current month; the closed month is saved by a full pass and stays untouched.
@@ -174,8 +170,8 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   const formLists = await inBatches(requests, async (entry) => ({ ...entry, rows: await sheet(config, fetcher, "formdata", entry.project.id, entry.window, waits) }));
   const active = formLists.filter((entry) => hasRows(entry.rows)), activeProjects = new Set(active.map((entry) => entry.project.id)).size;
   if (!active.length) return { projects: 0, forms: 0, items: 0, changed: false, since };
-  // Corrective tasks (TA-…) come from their own list; the corrective forms found above say which projects have them.
-  const taskEntries = active.filter((entry) => hasCorrectiveForms(entry.rows));
+  // Tasks (TA-…) come from their own list: corrective ones are shown as tasks, and every form takes its sub-zone and real dates from its task.
+  const taskEntries = active;
   // Answer exports are the heavy ones: only a few at a time, and the screen is told how far they got.
   let done = 0;
   onProgress(0, taskEntries.length + active.length);
@@ -214,7 +210,7 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   // Identity of the content, not of the files: an unchanged Sytex produces no new rows.
   const identity = createHash("sha256").update(JSON.stringify([
     parsed.items.map((item) => [item.formulario, item.grupo, item.indice, item.description, item.quantity, item.provider, item.image, item.imageDeclared, item.siteCode, item.status]).sort(),
-    (parsed.formContexts ?? []).map((form) => [form.code, form.type, form.project, form.siteCode, form.siteName, form.description, form.technicians, form.link ?? null, form.status ?? null, form.planDate ?? null]).sort(),
+    (parsed.formContexts ?? []).map((form) => [form.code, form.type, form.project, form.siteCode, form.siteName, form.description, form.technicians, form.link ?? null, form.status ?? null, form.planDate ?? null, form.subZone ?? null, form.requestedOn ?? null, form.startedOn ?? null, form.finishedOn ?? null]).sort(),
     (parsed.maintenance ?? []).map((fact) => [fact.siteCode, fact.kind, fact.formCode, fact.lastDate]).sort(),
   ])).digest("hex");
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
@@ -257,6 +253,12 @@ async function dropSupersededRows(importId: string) {
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.site_code = prior.site_code AND fresh.kind = prior.kind AND fresh.form_code = prior.form_code`,
   ]);
+  // Own table, created by db:prepare-app: a database still without it only loses the dates.
+  try {
+    await db.$executeRaw`DELETE FROM sytex_task_dates prior USING sytex_supply_imports batch, sytex_task_dates fresh
+      WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
+        AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`;
+  } catch { /* table not created yet */ }
 }
 
 /** Starts one synchronization in the background; a second request while it runs only reports the status. */
