@@ -38,7 +38,7 @@ type Config = { baseUrl: string; authorization: string; organization: string };
 type Settings = { baseUrl: string; organization: string; candidates: string[] };
 type Fetcher = typeof fetch;
 
-/** When the closed month was last downloaded; routine passes skip it until then. */
+/** When the closed months were last downloaded; routine passes skip it until then. */
 const FULL_EVERY_MS = 12 * 60 * 60 * 1000;
 let lastFullAt = 0;
 const state: Omit<SytexSyncStatus, "configured"> = { running: false, startedAt: null, finishedAt: null, result: null, error: null, errorDetail: null, progress: null };
@@ -73,19 +73,27 @@ export async function sytexConfig(settings: Settings, fetcher: Fetcher = fetch):
 
 export function sytexSyncStatus(): SytexSyncStatus { return { configured: sytexSettings() !== null, ...state }; }
 
-/** First day of the previous month in Argentina: covers the month being closed and the current one. */
+/** Closed months the synchronization goes back to, besides the current one (2 in October → August and September). */
+const CLOSED_MONTHS = 2;
+/** First day of the oldest closed month in Argentina: covers the months being closed and the current one. */
 export function syncWindowStart(now = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit" }).formatToParts(now);
   const year = Number(parts.find((part) => part.type === "year")?.value), month = Number(parts.find((part) => part.type === "month")?.value);
-  const previous = new Date(Date.UTC(year, month - 2, 1));
-  return `${previous.getUTCFullYear()}-${String(previous.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  const oldest = new Date(Date.UTC(year, month - 1 - CLOSED_MONTHS, 1));
+  return `${oldest.getUTCFullYear()}-${String(oldest.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
-/** Sytex exports one month at a time, like the spreadsheet did: the closed month, then the current one with no end. */
+/** Sytex exports one month at a time, like the spreadsheet did: each closed month, then the current one with no end. */
 export function syncWindows(now = new Date()): string[] {
-  const start = syncWindowStart(now), [year, month] = start.split("-").map(Number);
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate(), next = new Date(Date.UTC(year, month, 1));
-  return [`plan_date__gte=${start}&plan_date__lte=${start.slice(0, 8)}${String(lastDay).padStart(2, "0")}`, `plan_date__gte=${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-01`];
+  const [year, month] = syncWindowStart(now).split("-").map(Number), windows: string[] = [];
+  for (let step = 0; step < CLOSED_MONTHS; step++) {
+    const first = new Date(Date.UTC(year, month - 1 + step, 1)), last = new Date(Date.UTC(year, month + step, 0)).getUTCDate();
+    const prefix = `${first.getUTCFullYear()}-${String(first.getUTCMonth() + 1).padStart(2, "0")}`;
+    windows.push(`plan_date__gte=${prefix}-01&plan_date__lte=${prefix}-${String(last).padStart(2, "0")}`);
+  }
+  const current = new Date(Date.UTC(year, month - 1 + CLOSED_MONTHS, 1));
+  windows.push(`plan_date__gte=${current.getUTCFullYear()}-${String(current.getUTCMonth() + 1).padStart(2, "0")}-01`);
+  return windows;
 }
 
 class SytexError extends Error { constructor(public code: string, public detail = "") { super(code); } }
@@ -157,7 +165,7 @@ const hasCorrectiveForms = (rows: unknown[][]) => { const column = projectColumn
 export async function runSytexSync(userId: string, config: Config, fetcher: Fetcher = fetch, now = new Date(), waits = RETRY_WAITS_MS, onProgress: (done: number, total: number) => void = () => undefined, quick = false) {
   const since = syncWindowStart(now);
   // A quick pass asks only for the current month; the closed month is saved by a full pass and stays untouched.
-  const windows = quick ? syncWindows(now).slice(1) : syncWindows(now);
+  const windows = quick ? syncWindows(now).slice(-1) : syncWindows(now);
   const projects = await listProjects(config, fetcher).catch((error: unknown) => {
     if (error instanceof SytexError && error.code === "SYTEX_CREDENTIAL_REJECTED") return configuredProjectIds().map((id) => ({ id, name: "" }));
     throw error;
