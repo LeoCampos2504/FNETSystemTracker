@@ -107,13 +107,18 @@ export function formTask(row: FormTaskInput) {
     externalSource: ExternalSource.SYTEX, externalId: row.code, sourceUpdatedAt: row.syncedAt.toISOString(), externalUrl: row.link,
   };
 }
+/** Own table created by db:prepare-app: until it exists, tasks just come without sub-zone and real dates. */
+async function readTaskDates() {
+  try { return await getPrismaClient().sytex_task_dates.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }); }
+  catch { return []; }
+}
 async function getFormTasks(skip: Set<string>) {
   const prisma = getPrismaClient();
   const [contexts, states, links, dates] = await Promise.all([
     prisma.sytex_supply_form_contexts.findMany({ include: { import: { select: { importedAt: true } } }, orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
     prisma.sytex_form_states.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }),
     prisma.sytex_form_links.findMany({ select: { code: true, link: true } }),
-    prisma.sytex_task_dates.findMany({ orderBy: [{ import: { importedAt: "asc" } }, { id: "asc" }] }).catch(() => []),
+    readTaskDates(),
   ]);
   const taskDates = new Map(dates.map((row) => [row.code, row]));
   const latest = new Map(contexts.map((row) => [row.code, row])), state = new Map(states.map((row) => [row.code, row])), link = new Map(links.map((row) => [row.code, row.link]));
