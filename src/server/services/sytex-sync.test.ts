@@ -101,7 +101,7 @@ describe("direct Sytex synchronization", () => {
     const calls: { url: string; headers: Record<string, string> }[] = [];
     const result = await runSytexSync("user-id", config, sytex({ "/api/project/": new Response("{}", { status: 401 }), "/api/entryanswerdata/": nonAnswers, "project=8677": nonForms }, calls));
     expect(result).toMatchObject({ projects: 1, items: 1 });
-    expect(calls.filter((call) => call.url.includes("/api/formdata/")).length).toBe(configuredProjectIds().length * 2);
+    expect(calls.filter((call) => call.url.includes("/api/formdata/")).length).toBe(configuredProjectIds().length * syncWindows().length);
     expect(configuredProjectIds({ SYTEX_PROJECT_IDS: "8677, 2346;8677 x" })).toEqual([8677, 2346]);
   });
   it("asks month by month and retries an export that Sytex could not serve at first", async () => {
