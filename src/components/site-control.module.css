@@ -1,0 +1,54 @@
+.siteFilter{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:-8px 0 20px}
+.app .siteSearch,.siteSearch{display:flex;flex-direction:column;gap:6px;min-width:280px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chips button{min-height:32px !important;padding:0 12px !important;border-radius:999px !important;border-color:#bccdf1 !important;background:var(--brand-tint) !important;color:var(--brand-dark) !important;font-size:13px !important}
+.chips .clear{background:#fff !important;border-color:var(--line) !important;color:var(--muted) !important}
+.tabs{display:flex;gap:4px;margin:4px 0 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{min-height:44px !important;padding:0 16px !important;border:0 !important;border-bottom:2px solid transparent !important;border-radius:0 !important;background:transparent !important;color:var(--muted) !important;font-size:14px !important;font-weight:600;white-space:nowrap}
+.tabs button:hover{color:var(--ink) !important}
+.tabs button[aria-selected=true]{border-bottom-color:var(--brand) !important;color:var(--brand) !important}
+.table td{vertical-align:middle}
+.table td strong{display:block}
+.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.muted{color:#8a95a8}
+.siteLink{display:block !important;min-height:0 !important;padding:0 !important;border:0 !important;background:transparent !important;text-align:left !important;color:var(--ink) !important;font-weight:400 !important;cursor:pointer}
+.siteLink strong{color:var(--brand)}
+.siteLink:hover strong{text-decoration:underline}
+.siteLink small{margin-top:2px !important}
+.job{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.job small{margin-top:0 !important}
+.due{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:650;white-space:nowrap}
+.bad{background:#fdecea;color:#b4372f}
+.warn{background:#fff4dc;color:#93600f}
+.good{background:var(--green-tint);color:#23793d}
+.none{background:#eef1f6;color:#5d6b82}
+.level{display:flex;flex-direction:column;gap:5px;min-width:120px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.levelBar{position:relative;display:block;height:6px;border-radius:99px;background:#e9edf4;overflow:hidden}
+.levelBar i{position:absolute;inset:0 auto 0 0;background:#b9c8e8}
+.levelBar b{position:absolute;top:0;bottom:0;background:var(--brand-green)}
+.origin{display:inline-block;padding:3px 10px;border-radius:999px;background:#eef1f6;color:#445068;font-size:12.5px;font-weight:600}
+.list{margin:0;padding-left:16px}
+.list li{margin:2px 0}
+.detail{width:900px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:8px 0 18px}
+.cards>div{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.cards span:first-child{font-size:13px;font-weight:600;color:var(--muted)}
+.cards strong{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.cards small{margin-top:0 !important}
+.subhead{margin:18px 0 10px;font-size:15px;font-weight:700}
+.fluids{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.fluids>div{padding:12px 14px;border-radius:10px;background:#f6f8fc}
+.fluids span{display:block;font-size:12.5px;font-weight:600;color:var(--muted)}
+.fluids strong{display:block;margin-top:4px;font-size:18px;font-variant-numeric:tabular-nums}
+.answers{margin:12px 0 0}
+.answers summary{cursor:pointer;color:var(--brand);font-weight:600}
+.answers dl{display:grid;gap:6px;margin:10px 0 0}
+.answers dl>div{display:grid;grid-template-columns:1fr auto;gap:16px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.answers dt{color:#445068}
+.answers dd{margin:0;font-weight:600;text-align:right}
+.timeline{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.timeline li{display:grid;grid-template-columns:150px 90px 1fr auto;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+@media(max-width:650px){.timeline li{grid-template-columns:1fr 1fr}.siteSearch{min-width:0;flex:1}}
+/* The insumos table aligns some columns by position; this panel aligns every column to the left. */
+.table.table th,.table.table td{text-align:left;white-space:normal}
+.table.table td.num{white-space:nowrap}

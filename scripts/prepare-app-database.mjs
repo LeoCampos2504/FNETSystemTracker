@@ -20,13 +20,14 @@ const ownedMigrations = [
   "20261005_add_guard_duty",
   "20261005_add_guard_periods",
   "20261008_add_task_dates",
+  "20261008_add_site_answers",
 ];
 const ownedTables = new Set([
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
   "app_login_attempts", "mendel_transactions", "mendel_import_batches",
   "mendel_form_references",
   "sytex_supply_imports", "sytex_supply_import_items",
-  "sytex_supply_form_contexts", "sytex_site_maintenance", "sytex_form_links", "sytex_form_states", "sytex_task_dates",
+  "sytex_supply_form_contexts", "sytex_site_maintenance", "sytex_form_links", "sytex_form_states", "sytex_task_dates", "sytex_site_answers",
   "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
   "ops_user_access", "ops_preferences", "ops_days", "ops_visits", "ops_visit_shifts", "ops_supply_reviews", "ops_review_files", "ops_events",
   "ops_guard_weeks", "ops_guard_periods", "ops_holidays", "ops_visit_hours", "ops_ctic_users",

@@ -130,6 +130,7 @@ model sytex_supply_imports {
   links               sytex_form_links[]
   states              sytex_form_states[]
   taskDates           sytex_task_dates[]
+  siteAnswers         sytex_site_answers[]
 
   @@index([importedAt], map: "idx_sytex_supply_imports_date")
   @@map("sytex_supply_imports")
@@ -175,6 +176,25 @@ model sytex_task_dates {
   @@unique([importId, code], map: "uq_sytex_task_dates")
   @@index([code], map: "idx_sytex_task_dates_code")
   @@map("sytex_task_dates")
+}
+
+model sytex_site_answers {
+  id         String @id @default(uuid()) @db.Uuid
+  importId   String @map("import_id") @db.Uuid
+  formCode   String @map("form_code")
+  siteCode   String @map("site_code")
+  siteName   String @default("") @map("site_name")
+  topic      String
+  groupName  String @map("grupo")
+  position   String @map("indice")
+  question   String @map("pregunta")
+  answer     String @map("respuesta")
+  reportedAt String @default("") @map("reported_at")
+  import     sytex_supply_imports @relation(fields: [importId], references: [id], onDelete: Cascade, map: "fk_sytex_site_answers_import")
+  @@unique([importId, formCode, groupName, position], map: "uq_sytex_site_answers")
+  @@index([siteCode], map: "idx_sytex_site_answers_site")
+  @@index([formCode], map: "idx_sytex_site_answers_form")
+  @@map("sytex_site_answers")
 }
 
 model sytex_form_links {

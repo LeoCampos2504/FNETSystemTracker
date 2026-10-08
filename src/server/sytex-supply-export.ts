@@ -19,10 +19,15 @@ export type SytexSupplyExport = {
   errors: Issue[]; warnings: Issue[]; sourceEditedFrom: string | null; sourceEditedThrough: string | null;
   formContexts?: SytexFormContext[];
   maintenance?: SytexMaintenanceFact[];
+  siteAnswers?: SytexSiteAnswer[];
 };
 /** Last date a yearly job was done at a site, as the technicians report it in the preventive forms. */
 export type SytexMaintenanceKind = "SERVICE_GE" | "FILTROS_AA";
 export type SytexMaintenanceFact = { siteCode: string; kind: SytexMaintenanceKind; lastDate: string; formCode: string; reportedAt: string };
+/** Topics of the site control: what the technicians report about the generator, the fuel and the air conditioners. */
+export type SytexSiteTopic = "COMBUSTIBLE" | "SERVICE_GE" | "FLUIDOS" | "FILTROS_AA" | "HOROMETRO";
+/** One answer of a form kept as Sytex wrote it, so the control can be read again without asking Sytex. */
+export type SytexSiteAnswer = { formCode: string; siteCode: string; siteName: string; topic: SytexSiteTopic; group: string; index: string; question: string; answer: string; reportedAt: string };
 const MAX_ROWS = 300_000;
 // Sytex exports use the language of the session that downloaded them; both spellings are the same export.
 const HEADER_ALIASES: Record<string, string> = {
@@ -284,13 +289,13 @@ export function parseSytexExportSheets(sheets: unknown[][][]): SytexSupplyExport
     } else throw new Error("SYTEX_EXPORT_FILE_UNKNOWN");
   }
   if (!answerSheets) throw new Error("SYTEX_EXPORT_ANSWERS_REQUIRED");
-  const parsed = parseSytexSupplyRows(answers), maintenance = parseSytexMaintenanceRows(answers);
+  const parsed = parseSytexSupplyRows(answers), maintenance = parseSytexMaintenanceRows(answers), siteAnswers = parseSytexSiteAnswers(answers);
   // A form takes the sub-zone and the real dates of its task; the task itself already carries them.
   for (const context of contexts.values()) {
     const dates = context.taskCode ? taskInfo.get(context.taskCode) : undefined;
     if (dates) Object.assign(context, dates);
   }
-  return { ...parsed, ...(contexts.size ? { formContexts: [...contexts.values()] } : {}), ...(maintenance.length ? { maintenance } : {}) };
+  return { ...parsed, ...(contexts.size ? { formContexts: [...contexts.values()] } : {}), ...(maintenance.length ? { maintenance } : {}), ...(siteAnswers.length ? { siteAnswers } : {}) };
 }
 
 export async function parseSytexExportBundle(files: Uint8Array[]): Promise<SytexSupplyExport> {
@@ -311,7 +316,7 @@ export function parseSytexMaintenanceRows(rows: unknown[][]): SytexMaintenanceFa
   for (const row of rows.slice(1)) {
     const formCode = exactFormReference(text(row[0])), siteCode = text(row[5])?.toUpperCase(), answer = text(row[4]);
     if (!formCode || !siteCode || !answer || siteCode.includes(",")) continue;
-    const group = normalize((text(row[1]) ?? "").replace(/^\[#\d+\]\s*/, "")), question = normalize(text(row[3]) ?? "");
+    const group = normalize((text(row[1]) ?? "").replace(/^\[#\d+\]\s*/, "")), question = normalize(text(row[3]) ?? "").replace(/^[¿¡]+\s*/, "");
     const reportedAt = text(row[8])?.replace(" ", "T") ?? "";
     let kind: SytexMaintenanceKind, lastDate: string | null;
     if (group === "service anual" && question.includes("fecha del ultimo service anual")) { kind = "SERVICE_GE"; lastDate = day(answer); }
@@ -325,4 +330,35 @@ export function parseSytexMaintenanceRows(rows: unknown[][]): SytexMaintenanceFa
     if (!previous || serviceNow || (kind === "FILTROS_AA" && lastDate < previous.lastDate)) facts.set(key, { siteCode, kind, lastDate: serviceNow && previous && previous.lastDate > lastDate ? previous.lastDate : lastDate, formCode, reportedAt: reportedAt > (previous?.reportedAt ?? "") ? reportedAt : previous?.reportedAt ?? reportedAt });
   }
   return [...facts.values()];
+}
+
+/**
+ * Topic of an answer for the site control, from its group and question. Filters of the air conditioners are their own
+ * topic; any other filter, the yearly service and the oil, coolant and distilled water belong to the generator.
+ */
+export function siteTopic(group: string, question: string): SytexSiteTopic | null {
+  const g = normalize(group.replace(/^\[#\d+\]\s*/, "")), q = normalize(question), all = g + " " + q;
+  // Insumos bought for the visit (an "Aceite 15W40" in a material list) are not reports about the site.
+  if (/insumo|material/.test(g)) return null;
+  if (g.startsWith("aire acondicionado") && all.includes("filtro")) return "FILTROS_AA";
+  if (g.startsWith("aire acondicionado")) return null;
+  if (/aceite|refrigerante|agua destilada|destilada/.test(all) && !q.includes("filtro")) return "FLUIDOS";
+  if (q.includes("filtro") || g.includes("service")) return "SERVICE_GE";
+  if (all.includes("combustible") || /\bgasoil\b|\bdiesel\b|\bnafta\b/.test(all)) return "COMBUSTIBLE";
+  if (all.includes("horometro")) return "HOROMETRO";
+  return null;
+}
+
+/** The answers the site control reads (generator service, fluids, fuel loads, air conditioner filters), one site per form. */
+export function parseSytexSiteAnswers(rows: unknown[][]): SytexSiteAnswer[] {
+  const answers = new Map<string, SytexSiteAnswer>();
+  for (const row of rows.slice(1)) {
+    const formCode = exactFormReference(text(row[0])), siteCode = text(row[5])?.toUpperCase(), answer = text(row[4]);
+    const group = text(row[1]) ?? "", question = text(row[3]) ?? "", index = text(row[2]) ?? "";
+    if (!formCode || !siteCode || !answer || siteCode.includes(",") || !question) continue;
+    const topic = siteTopic(group, question);
+    if (!topic) continue;
+    answers.set(JSON.stringify([formCode, group, index]), { formCode, siteCode, siteName: text(row[6]) ?? "", topic, group: group.slice(0, 300), index: index.slice(0, 60), question: question.slice(0, 500), answer: answer.slice(0, 500), reportedAt: text(row[8])?.replace(" ", "T") ?? "" });
+  }
+  return [...answers.values()];
 }
