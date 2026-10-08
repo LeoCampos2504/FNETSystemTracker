@@ -78,6 +78,19 @@ describe("direct Sytex synchronization", () => {
     expect(call?.[2]).toEqual(["FO-26-000001"]);
     expect(call?.[3]).toEqual(["FO-26-000001"]);
   });
+  it("saves the rest when a closed month cannot be downloaded, and does not delete what that month had", async () => {
+    const augustForms = [formHeaders, ["FO-26-000002", "MPC-AA", "Mantenimiento Preventivo Civil", "NON - MPC Mantenimiento Preventivo Civil O&M", "ST00001", "Sitio", "tecnico@example.invalid", null]];
+    const routes = { "/api/formdata/?org_id=1&plan_date__gte=2026-08-01&plan_date__lte=2026-08-31&project=7": augustForms, "/api/entryanswerdata/?org_id=1&plan_date__gte=2026-08-01&plan_date__lte=2026-08-31&project=7": new Response("", { status: 504 }),
+      ...projects, "/api/entryanswerdata/": nonAnswers, "project=7": nonForms };
+    const result = await runSytexSync("user-id", config, sytex(routes), new Date("2026-10-05T15:00:00Z"), [0]);
+    expect(result).toMatchObject({ items: 1, incomplete: 1 });
+    const cleanup = mocks.executeRaw.mock.calls.find((parts) => String((parts[0] as string[]).join("?")).includes("NOT EXISTS"));
+    expect(cleanup?.[2]).toEqual(["FO-26-000001"]);
+  });
+  it("still fails when the current month cannot be downloaded", async () => {
+    const routes = { "/api/entryanswerdata/?org_id=1&plan_date__gte=2026-10-01&project=7": new Response("", { status: 504 }), ...projects, "/api/entryanswerdata/": nonAnswers, "project=7": nonForms };
+    await expect(runSytexSync("user-id", config, sytex(routes), new Date("2026-10-05T15:00:00Z"), [0])).rejects.toThrow("SYTEX_RESPONSE_504");
+  });
   it("cleans removed insumos even when the rest of Sytex has not changed", async () => {
     mocks.save.mockResolvedValue({ importId: "existing", alreadyImported: true });
     await runSytexSync("user-id", config, sytex({ ...projects, "/api/entryanswerdata/": nonAnswers, "project=7": nonForms }));
