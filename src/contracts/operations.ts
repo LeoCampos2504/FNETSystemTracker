@@ -12,3 +12,10 @@ export type Holiday = { day:string; name:string };
 export type OffHoursVisit = { id:string; day:string; project:string; siteCode:string; siteName:string; taskCode:string; technicians:string[]; status:VisitStatus; outcome:string; hours:number|null };
 export type GuardOverview = { ctic:boolean; from:string; to:string; periods:GuardPeriod[]; holidays:Holiday[]; offHours:OffHoursVisit[]; technicians:string[] };
 export type SiteContext = { maintenance:SiteMaintenance[]; forms:OperationsCatalog['tasks']; pending:string[]; previous:{day:string;project:string;taskType:string;status:VisitStatus;outcome:string}[] };
+
+/** Site control: generator service, air conditioner filters and fuel loads of every site, read from Sytex. */
+export type SiteAnswer = { question:string; answer:string };
+export type SiteFuelLoad = { id:string; formCode:string; siteCode:string; siteName:string; project:string; date:string|null; liters:number|null; fuel:string|null; levelBefore:string|null; levelAfter:string|null; hourmeter:string|null; origin:string; source:'Sytex'|'n8n'; link:string|null };
+export type SiteServiceReport = { formCode:string; siteCode:string; siteName:string; project:string; date:string|null; serviceDone:boolean; oilLiters:number|null; waterLiters:number|null; coolantLiters:number|null; filters:string[]; hourmeter:string|null; link:string|null; answers:SiteAnswer[] };
+export type SiteControlRow = { siteCode:string; siteName:string; project:string; service:SiteMaintenance|null; airFilters:SiteMaintenance|null; lastService:SiteServiceReport|null; lastFuel:SiteFuelLoad|null };
+export type SiteControl = { sites:SiteControlRow[]; fuel:SiteFuelLoad[]; services:SiteServiceReport[] };

@@ -35,6 +35,12 @@ _(vacío — agregar acá)_
 
 ## Resueltos
 
+### [Resuelto 2026-10-08] Control de sitios (aditivo)
+
+- **Cambio:** tipos nuevos `SiteControl`, `SiteControlRow`, `SiteFuelLoad`, `SiteServiceReport` y `SiteAnswer` en `src/contracts/operations.ts`; `GET /api/operations?kind=sites`.
+- **Motivo:** panel de Control de sitios (service de grupos, filtros de aire, combustible, aceite, agua destilada y refrigerante).
+- **Impacto:** tabla propia nueva `sytex_site_answers` (migración `20261008_add_site_answers`, `npm run db:prepare-app`). Sin cambios en tipos existentes.
+
 ### [Resuelto 2026-10-08] Subzona en `SourceMaterial` (aditivo)
 
 - **Cambio:** `SourceMaterial.subZone?: string | null`, la subzona de Sytex («Sub project») de la tarea del formulario.

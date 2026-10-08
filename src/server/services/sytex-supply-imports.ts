@@ -9,7 +9,7 @@ export async function saveSytexSupplyExport(parsed: SytexSupplyExport, fileHash:
   const prisma = getPrismaClient();
   const previous = await prisma.sytex_supply_imports.findUnique({ where: { fileHash }, select: { id: true } });
   if (previous) return { importId: previous.id, alreadyImported: true };
-  // The dates table is created by db:prepare-app; until it exists the rest is still saved.
+  // The dates and site-answer tables are created by db:prepare-app; until they exist the rest is still saved.
   const insert = (withDates: boolean) => prisma.sytex_supply_imports.create({
       data: {
         fileHash, fileName: fileName.slice(0, 250), importedBy,
@@ -18,13 +18,14 @@ export async function saveSytexSupplyExport(parsed: SytexSupplyExport, fileHash:
         items: { create: parsed.items },
         ...(parsed.formContexts ? { forms: { create: parsed.formContexts.map((form) => ({ code: form.code, type: form.type, project: form.project, siteCode: form.siteCode, siteName: form.siteName, description: form.description, technicians: form.technicians })) }, links: { create: parsed.formContexts.flatMap((form) => form.link ? [{ code: form.code, link: form.link }] : []) }, states: { create: parsed.formContexts.flatMap((form) => form.status || form.planDate ? [{ code: form.code, status: form.status ?? "", planDate: form.planDate ? new Date(form.planDate + "T00:00:00Z") : null }] : []) } } : {}),
         ...(withDates && parsed.formContexts ? { taskDates: { create: parsed.formContexts.flatMap((form) => form.subZone || form.requestedOn || form.startedOn || form.finishedOn ? [{ code: form.code, subZone: form.subZone ?? "", requestedOn: asDate(form.requestedOn), startedOn: asDate(form.startedOn), finishedOn: asDate(form.finishedOn) }] : []) } } : {}),
+        ...(withDates && parsed.siteAnswers ? { siteAnswers: { create: parsed.siteAnswers.map((a) => ({ formCode: a.formCode, siteCode: a.siteCode, siteName: a.siteName, topic: a.topic, groupName: a.group, position: a.index, question: a.question, answer: a.answer, reportedAt: a.reportedAt })) } } : {}),
         ...(parsed.maintenance ? { maintenance: { create: parsed.maintenance.map((fact) => ({ ...fact, lastDate: new Date(fact.lastDate + "T00:00:00Z") })) } } : {}),
       },
       select: { id: true },
     });
   try {
     const saved = await insert(true).catch((error: unknown) => {
-      if (String((error as { message?: unknown })?.message ?? "").includes("sytex_task_dates")) return insert(false);
+      if (String((error as { message?: unknown })?.message ?? "").match(/sytex_task_dates|sytex_site_answers/)) return insert(false);
       throw error;
     });
     return { importId: saved.id, alreadyImported: false };

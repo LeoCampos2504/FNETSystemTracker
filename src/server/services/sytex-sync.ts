@@ -212,6 +212,7 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
     parsed.items.map((item) => [item.formulario, item.grupo, item.indice, item.description, item.quantity, item.provider, item.image, item.imageDeclared, item.siteCode, item.status]).sort(),
     (parsed.formContexts ?? []).map((form) => [form.code, form.type, form.project, form.siteCode, form.siteName, form.description, form.technicians, form.link ?? null, form.status ?? null, form.planDate ?? null, form.subZone ?? null, form.requestedOn ?? null, form.startedOn ?? null, form.finishedOn ?? null]).sort(),
     (parsed.maintenance ?? []).map((fact) => [fact.siteCode, fact.kind, fact.formCode, fact.lastDate]).sort(),
+    (parsed.siteAnswers ?? []).map((a) => [a.formCode, a.group, a.index, a.question, a.answer, a.siteCode, a.topic]).sort(),
   ])).digest("hex");
   const saved = await saveSytexSupplyExport(parsed, identity, SYNC_SOURCE_NAME, userId);
   if (!saved.alreadyImported) await dropSupersededRows(saved.importId);
@@ -258,6 +259,12 @@ async function dropSupersededRows(importId: string) {
     await db.$executeRaw`DELETE FROM sytex_task_dates prior USING sytex_supply_imports batch, sytex_task_dates fresh
       WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
         AND fresh.import_id = ${importId}::uuid AND fresh.code = prior.code`;
+  } catch { /* table not created yet */ }
+  // Site control answers: the newest synchronization of a form replaces everything older of that form.
+  try {
+    await db.$executeRaw`DELETE FROM sytex_site_answers prior USING sytex_supply_imports batch
+      WHERE prior.import_id = batch.id AND batch.file_name = ${SYNC_SOURCE_NAME} AND batch.id <> ${importId}::uuid
+        AND EXISTS (SELECT 1 FROM sytex_site_answers fresh WHERE fresh.import_id = ${importId}::uuid AND fresh.form_code = prior.form_code)`;
   } catch { /* table not created yet */ }
 }
 
