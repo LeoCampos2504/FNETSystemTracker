@@ -2,6 +2,7 @@
 import { useEffect,useMemo,useState } from 'react';
 import type { Material } from '@/contracts/operations';
 import { fold,stockByTechnician } from '@/lib/supply-stock';
+import { selectedZones } from '@/lib/filters';
 import { Feedback,opCall,operationsUrl,projectLabel,projectZone,useCatalog,useZoneSelection,ZoneFilter } from './operations-common';
 import s from './operations.module.css';
 const date=(value:string|null|undefined)=>value?value.slice(0,10).split('-').reverse().join('/'):'—';
@@ -10,7 +11,7 @@ export function TechnicianStock(){
  const zones=useCatalog(),[items,setItems]=useState<Material[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(false),[search,setSearch]=useState(''),[open,setOpen]=useState('');
  const filter=zones.projects.join('|');
  useEffect(()=>{if(!zones.data)return;let active=true;const timer=setTimeout(()=>{setLoading(true);opCall<{items:Material[]}>(operationsUrl('materials',zones.projects)).then(d=>{if(active){setItems(d.items);setError('');}}).catch(e=>{if(active){setError(e.message);setItems([]);}}).finally(()=>{if(active)setLoading(false);});},0);return()=>{active=false;clearTimeout(timer);};},[filter,zones.data]); // eslint-disable-line react-hooks/exhaustive-deps
- const all=useMemo(()=>stockByTechnician(items),[items]),zone=useZoneSelection().zone;
+ const all=useMemo(()=>stockByTechnician(items),[items]),picked=selectedZones(useZoneSelection().places),zone=picked.size>0;
  // A technician belongs to the zone where he is assigned most often: they always work in the same one.
  const roster=useMemo(()=>{const seen=new Map<string,{name:string;zones:Map<string,number>}>();
   const add=(name:string,z:string)=>{const key=fold(name);if(!key)return;const e=seen.get(key)??{name,zones:new Map<string,number>()};e.zones.set(z,(e.zones.get(z)??0)+1);seen.set(key,e);};
@@ -19,7 +20,7 @@ export function TechnicianStock(){
   for(const g of all)add(g.technician,projectZone(g.lines[0].review?.project??g.lines[0].projects[0]??'').zone);
   return [...seen.entries()].map(([key,e])=>({key,name:e.name,zone:[...e.zones.entries()].sort((a,b)=>b[1]-a[1])[0][0],group:all.find(g=>fold(g.technician)===key)})).sort((a,b)=>(a.group?0:1)-(b.group?0:1)||a.name.localeCompare(b.name,'es'));},[zones.data,all]);
  // With a zone chosen, every technician of that zone shows up; without one, only those who hold stock.
- const term=search.toLocaleLowerCase(),cards=roster.filter(r=>(zone?r.zone===zone:!!r.group)&&(!term||r.name.toLocaleLowerCase().includes(term)||r.group?.lines.some(l=>[l.description,l.formulario,l.siteCode,l.siteName,l.review?.invoiceNumber].join(' ').toLocaleLowerCase().includes(term)))),detail=roster.find(r=>r.key===open);
+ const term=search.toLocaleLowerCase(),cards=roster.filter(r=>(zone?picked.has(r.zone):!!r.group)&&(!term||r.name.toLocaleLowerCase().includes(term)||r.group?.lines.some(l=>[l.description,l.formulario,l.siteCode,l.siteName,l.review?.invoiceNumber].join(' ').toLocaleLowerCase().includes(term)))),detail=roster.find(r=>r.key===open);
  useEffect(()=>{if(!open)return;const close=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen('');};window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close);},[open]);
  return <section className={s.app}><header className={s.heading}><div><span className={s.kicker}>STOCK POR TÉCNICO</span><h1>Stock por técnico</h1><p className={s.note}>Lo que marcás como &quot;No incluido&quot; no se descarga en Intra: queda en el stock del técnico principal del formulario, que es quien lo compró.</p></div></header>
  <ZoneFilter state={zones}/><Feedback error={error||zones.error}/>
