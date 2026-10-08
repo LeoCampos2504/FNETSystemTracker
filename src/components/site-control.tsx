@@ -23,7 +23,8 @@ export function dueState(job: SiteMaintenance | null, today = isoDay(new Date())
   if (job.dueDate <= today) return "overdue";
   return job.dueDate <= addDays(today, SOON_DAYS) ? "soon" : "ok";
 }
-const dueText: Record<Due, string> = { overdue: "Vencido", soon: "Vence pronto", ok: "Al día", none: "Sin dato" };
+const dueText: Record<Due, string> = { overdue: "Vencido", soon: "Vence pronto", ok: "Al día", none: "Sin informar" };
+const hasData = (r: SiteControlRow) => !!(r.service || r.airFilters || r.lastService || r.lastFuel);
 const dueTone: Record<Due, string> = { overdue: c.bad, soon: c.warn, ok: c.good, none: c.none };
 const date = (value: string | null | undefined) => value ? value.slice(0, 10).split("-").reverse().join("/") : "—";
 const dateTime = (value: string | null | undefined) => {
@@ -57,7 +58,7 @@ function FormLink({ code, link }: { code: string; link: string | null }) {
 export function SiteControlView() {
   const zones = useCatalog(), chosen = useZoneSelection(), range = useDateRange();
   const [data, setData] = useState<SiteControl | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0);
-  const [tab, setTab] = useState<Tab>("summary"), [query, setQuery] = useState(""), [picked, setPicked] = useState<string[]>([]), [only, setOnly] = useState<Due | "">(""), [open, setOpen] = useState("");
+  const [tab, setTab] = useState<Tab>("summary"), [query, setQuery] = useState(""), [picked, setPicked] = useState<string[]>([]), [only, setOnly] = useState<Due | "">(""), [open, setOpen] = useState(""), [withoutData, setWithoutData] = useState(false);
   useEffect(() => {
     let active = true;
     opCall<SiteControl>("/api/operations?kind=sites").then((d) => { if (active) { setData(d); setError(""); } }).catch((e) => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
@@ -66,7 +67,10 @@ export function SiteControlView() {
 
   const term = fold(query);
   const siteOk = (code: string, name: string, project: string) => matchesZone(project, chosen) && (!picked.length || picked.includes(code)) && (!term || fold(code + " " + name).includes(term));
-  const sites = useMemo(() => (data?.sites ?? []).filter((r) => siteOk(r.siteCode, r.siteName, r.project)), [data, chosen, picked, term]); // eslint-disable-line react-hooks/exhaustive-deps
+  const zoneSites = useMemo(() => (data?.sites ?? []).filter((r) => siteOk(r.siteCode, r.siteName, r.project)), [data, chosen, picked, term]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Many sites have no generator or air conditioner, or no preventive in the synchronized months: they are hidden unless asked for.
+  const empty = zoneSites.filter((r) => !hasData(r)).length;
+  const sites = useMemo(() => withoutData || picked.length ? zoneSites : zoneSites.filter(hasData), [zoneSites, withoutData, picked]);
   const fuel = useMemo(() => (data?.fuel ?? []).filter((f) => siteOk(f.siteCode, f.siteName, f.project) && inDateRange(f.date, range)), [data, chosen, picked, term, range]); // eslint-disable-line react-hooks/exhaustive-deps
   const services = useMemo(() => (data?.services ?? []).filter((r) => siteOk(r.siteCode, r.siteName, r.project) && inDateRange(r.date, range)), [data, chosen, picked, term, range]); // eslint-disable-line react-hooks/exhaustive-deps
   const allSites = data?.sites ?? [];
@@ -89,12 +93,13 @@ export function SiteControlView() {
     <Feedback error={error || zones.error} />
     {loading && !data ? <p role="status">Consultando los sitios…</p> : <>
       <div className={s.stats}>
-        <button type="button" aria-pressed={tab === "summary" && only === ""} onClick={() => { setTab("summary"); setOnly(""); }}>Sitios<strong>{sites.length}</strong><small>con el filtro actual</small></button>
+        <button type="button" aria-pressed={tab === "summary" && only === ""} onClick={() => { setTab("summary"); setOnly(""); }}>Sitios<strong>{sites.length}</strong><small>con service, filtros o combustible informados</small></button>
         <button type="button" aria-pressed={tab === "summary" && only === "overdue"} onClick={() => { setTab("summary"); setOnly(only === "overdue" ? "" : "overdue"); }}>Service vencido<strong>{count((r) => r.service, "overdue")}</strong><small>{count((r) => r.service, "soon")} vencen en {SOON_DAYS} días</small></button>
         <button type="button" aria-pressed={tab === "air"} onClick={() => setTab("air")}>Filtros de aire vencidos<strong>{count((r) => r.airFilters, "overdue")}</strong><small>{count((r) => r.airFilters, "soon")} vencen en {SOON_DAYS} días</small></button>
         <button type="button" aria-pressed={tab === "fuel"} onClick={() => setTab("fuel")}>Combustible cargado<strong>{liters(Math.round(totalLiters * 100) / 100)}</strong><small>{fuel.length} cargas en el período</small></button>
       </div>
       <div className={c.tabs} role="tablist">{tabs.map((t) => <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>{t.label}</button>)}</div>
+      {empty > 0 && <p className={s.note}>{withoutData || picked.length ? <>Se muestran también {empty} sitios sin datos en Sytex (sin grupo, sin aire o sin preventivo en los meses sincronizados). </> : <>Hay {empty} sitios más sin datos en Sytex: no tienen grupo o aire acondicionado, o no tuvieron preventivo en los meses sincronizados. </>}{!picked.length && <button type="button" className={c.inlineButton} onClick={() => setWithoutData(!withoutData)}>{withoutData ? "Ocultarlos" : "Mostrarlos"}</button>}</p>}
       {tab === "summary" && <Summary rows={sites.filter((r) => !only || dueState(r.service) === only)} onOpen={setOpen} />}
       {tab === "service" && <Services rows={services} sites={sites} onOpen={setOpen} />}
       {tab === "air" && <AirFilters rows={sites} onOpen={setOpen} />}
