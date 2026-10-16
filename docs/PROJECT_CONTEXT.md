@@ -1,5 +1,11 @@
 # Contexto funcional — FNET System Tracker
 
+## Actualización 2026-10-16 — MENDEL-02C
+
+El texto histórico del prototipo se preserva debajo. La bandeja `/compras/bandeja` agrega control por zona y confirmaciones internas persistentes, con acceso real Admin/coordinador. No es una integración automática con Mendel: Admin prepara CSV/XLSX en el navegador y comparte explícitamente los gastos filtrados. Los coordinadores solo acceden a zonas habilitadas para su cuenta por Admin; sin habilitación no ven datos. Respuestas: PENDIENTE, AUTORIZADO y NO_AUTORIZADO, con autor, fecha e historial. No modifican aprobaciones oficiales ni descuentos. Ver [informe y operación](reports/MENDEL_02C_ZONE_CONFIRMATIONS.md); la evidencia final de CI y despliegue se registra en el PR de esta entrega.
+
+La publicación usa preparación `--migrations-only` para no repetir importaciones iniciales de Sytex/Mendel. Se agregan tres tablas `fnet_mendel_zone_*`; no se cambian Prisma schema, migraciones históricas, n8n ni tablas fuente. Las habilitaciones a cuentas reales y la publicación de gastos son decisiones explícitas de Admin, no tareas automáticas del despliegue.
+
 App web/PWA interna para técnicos de campo de FNET. Consume datos de coordinación
 y trabajo de campo; **el trabajo técnico real se completa en Sytex**, esta app
 no lo reemplaza.

@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { prepareAppDatabase, readAppMigrations } from "./prepare-app-database.mjs";
 
 describe("Railway application database preparation", () => {
+  it("supports a migrations-only deploy without replaying initial source imports", () => {
+    const source = readFileSync(new URL("./prepare-app-database.mjs", import.meta.url), "utf8");
+    expect(source).toContain('if (!process.argv.includes("--migrations-only")) await importInitialSupplySources(client)');
+    const sql = readFileSync(new URL("../prisma/migrations/20261016_add_mendel_zone_control/migration.sql", import.meta.url), "utf8");
+    expect(sql).not.toMatch(/\b(?:UPDATE|DELETE|TRUNCATE|DROP|ALTER)\b/i);
+    expect([...sql.matchAll(/CREATE TABLE "([^"]+)"/g)].map(m => m[1])).toEqual(["fnet_mendel_zone_expenses", "fnet_mendel_zone_access", "fnet_mendel_zone_decisions"]);
+  });
   it("only prepares owned tables and preserves the Sytex sources", () => {
     const migrations = readAppMigrations();
     expect(migrations.flatMap((migration) => migration.tables.map((table) => table.name)).sort()).toEqual([
+      "fnet_mendel_zone_expenses", "fnet_mendel_zone_access", "fnet_mendel_zone_decisions",
       "app_login_attempts", "app_sessions", "app_users", "mendel_form_references",
       "mendel_import_batches", "mendel_transactions", "task_assignment_history", "task_assignments",
       "sytex_supply_import_items", "sytex_supply_imports",
