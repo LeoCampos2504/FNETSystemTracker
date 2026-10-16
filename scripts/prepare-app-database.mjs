@@ -21,8 +21,10 @@ const ownedMigrations = [
   "20261005_add_guard_periods",
   "20261008_add_task_dates",
   "20261008_add_site_answers",
+  "20261016_add_mendel_zone_control",
 ];
 const ownedTables = new Set([
+  "fnet_mendel_zone_expenses", "fnet_mendel_zone_access", "fnet_mendel_zone_decisions",
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
   "app_login_attempts", "mendel_transactions", "mendel_import_batches",
   "mendel_form_references",
@@ -90,7 +92,8 @@ async function main() {
   try {
     await client.connect();
     await prepareAppDatabase(client);
-    await importInitialSupplySources(client);
+    // Production feature deploys can prepare owned tables without replaying initial Sytex/Mendel imports.
+    if (!process.argv.includes("--migrations-only")) await importInitialSupplySources(client);
   } finally {
     await client.end();
   }

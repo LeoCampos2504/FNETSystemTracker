@@ -119,7 +119,7 @@ export function MendelPurchases() {
   return <main className="mendel-page">
     <header className="mendel-header">
       <Link className="mendel-back" href="/"><ArrowLeft size={17} /> Volver a FNET</Link>
-      <div className="mendel-title-row"><div><p className="eyebrow">Compras · fuente Mendel</p><h1>Registro de compras</h1><p className="mendel-subtitle">Importación de exportaciones y seguimiento de comprobantes.</p></div><button className="button secondary" type="button" onClick={() => void load()}><RefreshCw size={16} /> Actualizar</button></div>
+      <div className="mendel-title-row"><div><p className="eyebrow">Compras · fuente Mendel</p><h1>Registro de compras</h1><a className="button primary" href="/compras/bandeja">Mendel por zonas · confirmaciones y prints</a><p className="mendel-subtitle">Importación de exportaciones y seguimiento de comprobantes.</p></div><button className="button secondary" type="button" onClick={() => void load()}><RefreshCw size={16} /> Actualizar</button></div>
     </header>
 
     <section className="mendel-import-card">

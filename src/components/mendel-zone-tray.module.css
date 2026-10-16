@@ -1,0 +1,34 @@
+.page { max-width: 1640px; margin: auto; padding: 26px; color: #172b44; }
+.page button, .fileButton { min-height: 40px; padding: 9px 13px; border: 1px solid #d9e1ed; border-radius: 9px; background: white; color: #234365; font: inherit; cursor: pointer; }
+.page button:disabled { opacity: .45; cursor: not-allowed; }
+.page input, .page select, .dialog input, .dialog select, .dialog textarea { font: inherit; min-width: 0; padding: 9px; border: 1px solid #cbd6e5; border-radius: 7px; color: #172b44; background: white; }
+.heading, .tableHeading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; align-items: center; }
+.heading h1 { margin: 7px 0; font-size: 28px; }.heading p { margin: 7px 0; color: #64748b; }.heading a { color: #245ac4; }
+.actions, .toolbar, .zones, .pager { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.fileButton { position: relative; display: inline-flex; align-items: center; overflow: hidden; }
+.fileButton input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.fileButton:focus-within, .page button:focus-visible, .dialog button:focus-visible { outline: 3px solid #d49b32; outline-offset: 2px; }
+.page .primary, .dialog .primary { background: #2159c7; border-color: #2159c7; color: white; }
+.source, .footnote { font-size: 13px; color: #64748b; line-height: 1.6; overflow-wrap: anywhere; }
+.notice, .error { padding: 12px 15px; border-radius: 9px; font-size: 13px; line-height: 1.5; background: #fff6df; color: #735118; }.error { background: #ffeded; color: #a42d3c; }
+.status { min-height: 18px; font-size: 13px; color: #26714f; overflow-wrap: anywhere; }
+.page details { background:white; padding:16px; border:1px solid #dce4ef; border-radius:12px; margin:14px 0; }.page summary { cursor:pointer; font-weight:600; }.page details label,.dialog section label { display:flex; flex-direction:column; gap:6px; margin:12px 0; }.page details p { font-size:13px; line-height:1.5; }.dialog section { border-block:1px solid #dce4ef; padding:14px 0; margin:14px 0; }.dialog section textarea { min-height:85px; width:100%; }.dialog section article { border-top:1px solid #e1e7ef; padding:12px 0; font-size:13px; line-height:1.6; }.tableScroll small { display:block; color:#64748b; margin-top:5px; }
+.workspace { border: 1px solid #dce4ef; border-radius: 14px; padding: 18px; background: #fff; min-width: 0; }
+.filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.filters label, .field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #64748b; min-width: 0; }
+.filters input, .filters select { width: 100%; min-height: 40px; font-size: 14px; }
+.toolbar { margin: 15px 0; }.check { display: flex; align-items: center; gap: 8px; font-size: 13px; flex: 1 1 260px; line-height: 1.5; }.check input { width: 18px; height: 18px; flex: none; }
+.zones { border-block: 1px solid #edf0f6; padding: 12px 0; }.zones button[aria-pressed="true"] { background: #e9f0ff; border-color: #2159c7; }
+.tableHeading { padding: 16px 0; }.tableHeading h2 { margin: 0; font-size: 18px; }.tableHeading p { color: #64748b; font-size: 13px; margin: 6px 0 0; }
+.tableScroll { width: 100%; overflow: auto; max-height: 68vh; } .tableScroll table { width: 100%; min-width: 1120px; border-collapse: collapse; font-size: 13px; }
+.tableScroll th { position: sticky; top: 0; background: #078fb1; color: white; text-align: left; white-space: nowrap; padding: 11px 9px; z-index: 1; }
+.tableScroll td { padding: 10px 9px; border-bottom: 1px solid #e1e7ef; vertical-align: top; max-width: 230px; overflow-wrap: anywhere; }.tableScroll tr:nth-child(even) { background: #f5f7fa; }
+.amount { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }.notePreview { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.badge, .missing { display: inline-block; padding: 4px 7px; border-radius: 6px; background: #edf2f8; white-space: nowrap; }.missing { color: #b22235; background: #ffebed; font-weight: 700; }
+.empty { padding: 45px 15px; text-align: center; color: #64748b; }.pager { margin-top: 15px; justify-content: flex-end; font-size: 13px; }.cards { display: none; }
+.dialog { border: 0; border-radius: 14px; padding: 0; width: min(1000px, calc(100vw - 24px)); max-height: 90dvh; color: #172b44; box-shadow: 0 20px 70px #13263d55; }.dialog::backdrop { background: #13263d99; }
+.dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 18px; border-bottom: 1px solid #dce4ef; }.dialog h2 { margin: 0; font-size: 19px; overflow-wrap: anywhere; }.dialog button { font: inherit; cursor: pointer; border: 1px solid #d9e1ed; border-radius: 8px; padding: 9px 13px; background: white; color: #234365; min-height: 40px; }.dialog button:disabled { opacity: .45; cursor: not-allowed; }
+.dialogBody { max-height: calc(90dvh - 83px); overflow-y: auto; overscroll-behavior: contain; padding: 18px; }.dialogBody p { font-size: 13px; line-height: 1.5; }.dialogBody .field { margin: 14px 0; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }.facts dt { color: #64748b; font-size: 12px; }.facts dd { margin: 3px 0 0; font-size: 14px; overflow-wrap: anywhere; }.fullNote { white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; background: #f4f7fb; border: 1px solid #e0e7f0; border-radius: 9px; line-height: 1.6; font-size: 14px; }.message { width: 100%; min-height: 240px; line-height: 1.5; resize: vertical; }.preview { display: block; width: 100%; height: auto; margin-top: 15px; border: 1px solid #e1e7ef; }
+@media(max-width: 1050px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(max-width: 650px) { .page { padding: 16px 12px; }.heading h1 { font-size: 24px; }.workspace { padding: 13px; }.filters, .facts { grid-template-columns: minmax(0, 1fr); }.tableScroll { display: none; }.cards { display: block; }.cards article { padding: 15px 0; border-top: 1px solid #e1e7ef; overflow-wrap: anywhere; }.cards header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }.cards p { font-size: 13px; line-height: 1.5; }.cards button { margin-top: 10px; }.dialogBody { padding: 14px; }.actions { width: 100%; }.actions button, .actions .fileButton { flex: 1 1 auto; }.page button, .page select, .page input, .dialog button, .dialog input, .dialog select { min-height: 44px; }.check input { min-height: 18px; } }
