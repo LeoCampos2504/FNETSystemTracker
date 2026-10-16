@@ -30,5 +30,46 @@
 .dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 18px; border-bottom: 1px solid #dce4ef; }.dialog h2 { margin: 0; font-size: 19px; overflow-wrap: anywhere; }.dialog button { font: inherit; cursor: pointer; border: 1px solid #d9e1ed; border-radius: 8px; padding: 9px 13px; background: white; color: #234365; min-height: 40px; }.dialog button:disabled { opacity: .45; cursor: not-allowed; }
 .dialogBody { max-height: calc(90dvh - 83px); overflow-y: auto; overscroll-behavior: contain; padding: 18px; }.dialogBody p { font-size: 13px; line-height: 1.5; }.dialogBody .field { margin: 14px 0; }
 .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }.facts dt { color: #64748b; font-size: 12px; }.facts dd { margin: 3px 0 0; font-size: 14px; overflow-wrap: anywhere; }.fullNote { white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; background: #f4f7fb; border: 1px solid #e0e7f0; border-radius: 9px; line-height: 1.6; font-size: 14px; }.message { width: 100%; min-height: 240px; line-height: 1.5; resize: vertical; }.preview { display: block; width: 100%; height: auto; margin-top: 15px; border: 1px solid #e1e7ef; }
+.compactDialog { width: min(780px, calc(100vw - 24px)); }
+.compactDialog > header { align-items: center; padding: 12px 18px; }
+.compactDialog .dialogBody { max-height: calc(90dvh - 67px); }
+.expenseSummary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.expenseIdentity { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 230px; }
+.expenseIdentity > div { min-width: 0; }
+.expenseIdentity p { color: #64748b; margin: 0 0 4px; overflow-wrap: anywhere; }
+.expenseIdentity h3 { font-size: 17px; margin: 0; overflow-wrap: anywhere; line-height: 1.35; }
+.expenseIcon { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 11px; color: #2159c7; background: #edf3ff; }
+.expenseAmount { font-size: 22px; letter-spacing: -.04em; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.detailMeta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; padding: 12px; background: #f6f8fc; border: 1px solid #e6ecf5; border-radius: 10px; }
+.detailMeta > div { min-width: 0; }
+.detailMeta dt { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+.detailMeta dd { font-size: 13px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.detailColumns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 16px; }
+.detailColumns > * { min-width: 0; }
+.detailNotes h3 { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 2px 0 9px; }
+.detailNotes h3:not(:first-child) { margin-top: 14px; }
+.detailNote { max-height: 180px; overflow-y: auto; overscroll-behavior: contain; padding: 11px; font-size: 13px; line-height: 1.6; }
+.dialogBody .detailHint { font-size: 11px; line-height: 1.5; color: #64748b; margin: 9px 0; }
+.dialog .decisionPanel { border: 1px solid #dce6f8; border-radius: 12px; background: #f8faff; padding: 14px; margin: 0; min-width: 0; }
+.decisionHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; }
+.decisionHeading h3 { font-size: 14px; margin: 0; }
+.decisionBadge { display: inline-flex; border-radius: 6px; padding: 4px 6px; font-size: 10px; line-height: 1.4; background: #fff1d9; color: #805515; }
+.decisionBadge[data-decision="AUTORIZADO"] { color: #176543; background: #e4f5ec; }
+.decisionBadge[data-decision="NO_AUTORIZADO"] { color: #9b2b3b; background: #ffe8ed; }
+.dialog .decisionPanel label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; margin: 12px 0; }
+.dialog .decisionPanel select, .dialog .decisionPanel textarea { width: 100%; font-size: 13px; padding: 9px; }
+.dialog .decisionPanel textarea { min-height: 70px; resize: vertical; line-height: 1.5; }
+.optional { color: #64748b; font-size: 10px; }
+.dialog .confirmButton { display: inline-flex; justify-content: center; align-items: center; gap: 8px; width: 100%; font-size: 13px; font-weight: 600; margin-top: 3px; }
+.dialog .decisionError { color: #a42d3c; background: #fff0f2; padding: 8px; border-radius: 7px; font-size: 12px; overflow-wrap: anywhere; }
+.dialog .reconfirmation { color: #805515; background: #fff1d9; padding: 8px; border-radius: 7px; font-size: 12px; }
+.dialog .historyDetails { border: 0; border-top: 1px solid #dce6f8; border-radius: 0; background: transparent; margin: 12px 0 0; padding: 10px 0 0; }
+.historyDetails summary, .sourceDetails summary { font-size: 12px; color: #526a89; cursor: pointer; }
+.dialog .historyDetails article { padding: 9px 0; font-size: 12px; }
+.historyDetails article small { display: block; color: #64748b; margin-top: 4px; line-height: 1.5; }
+.historyDetails article p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.dialog .sourceDetails { margin: 16px 0 0; padding: 12px 0 0; border: 0; border-top: 1px solid #e2e8f0; border-radius: 0; background: transparent; }
+.sourceDetails .facts { margin-top: 12px; }
 @media(max-width: 1050px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media(max-width: 650px) { .page { padding: 16px 12px; }.heading h1 { font-size: 24px; }.workspace { padding: 13px; }.filters, .facts { grid-template-columns: minmax(0, 1fr); }.tableScroll { display: none; }.cards { display: block; }.cards article { padding: 15px 0; border-top: 1px solid #e1e7ef; overflow-wrap: anywhere; }.cards header { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }.cards p { font-size: 13px; line-height: 1.5; }.cards button { margin-top: 10px; }.dialogBody { padding: 14px; }.actions { width: 100%; }.actions button, .actions .fileButton { flex: 1 1 auto; }.page button, .page select, .page input, .dialog button, .dialog input, .dialog select { min-height: 44px; }.check input { min-height: 18px; } }
+@media(max-width: 650px) { .detailColumns { grid-template-columns: minmax(0, 1fr); gap: 12px; }.detailMeta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }.detailMeta > div:last-child { grid-column: 1 / -1; }.expenseSummary { align-items: flex-start; gap: 8px; }.expenseAmount { margin-left: 48px; font-size: 21px; }.detailNote { max-height: 140px; }.compactDialog > header { padding: 10px 14px; }.dialog .decisionPanel { padding: 12px; } }
