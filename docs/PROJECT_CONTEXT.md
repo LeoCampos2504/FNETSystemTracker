@@ -6,6 +6,10 @@ El texto histórico del prototipo se preserva debajo. La bandeja `/compras/bande
 
 La publicación usa preparación `--migrations-only` para no repetir importaciones iniciales de Sytex/Mendel. Se agregan tres tablas `fnet_mendel_zone_*`; no se cambian Prisma schema, migraciones históricas, n8n ni tablas fuente. Las habilitaciones a cuentas reales y la publicación de gastos son decisiones explícitas de Admin, no tareas automáticas del despliegue.
 
+### Revisión de interfaz MENDEL-02C-R1
+
+El detalle compacto prioriza notas y respuesta de coordinación con botón azul `Confirmar respuesta`. La asignación masiva de zona ya no forma parte del detalle; solo se ofrece un respaldo para filas sin zona. Historial e información de origen son desplegables y los errores de consulta no se presentan como un historial vacío. Se mantiene íntegra la separación entre confirmación FNET y aprobación oficial de Mendel, sin nueva migración ni cambio de permisos. Ver [revisión, alcance y evidencia local](reports/MENDEL_02C_R1_COMPACT_DETAIL.md); la publicación requiere su verificación independiente.
+
 App web/PWA interna para técnicos de campo de FNET. Consume datos de coordinación
 y trabajo de campo; **el trabajo técnico real se completa en Sytex**, esta app
 no lo reemplaza.
