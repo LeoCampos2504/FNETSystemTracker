@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/server/services/auth-sessions";
 import { getPrismaClient } from "@/server/prisma";
+import { purchaseIntraStates, type IntraDb } from '@/server/services/mendel-intra-control';
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +55,10 @@ export async function GET(request: NextRequest) {
       prisma.mendel_transactions.count({ where: { AND: [baseWhere, { reconciliationStatus: "PENDING" }] } }),
       prisma.mendel_import_batches.findFirst({ orderBy: { importedAt: "desc" }, select: { importedAt: true, rowCount: true, insertedCount: true, updatedCount: true } }),
     ]);
+    const db:IntraDb={query:<T>(sql:string,values:unknown[]=[])=>prisma.$queryRawUnsafe<T[]>(sql,...values)};
+    const intra=await purchaseIntraStates(db,authorization.user,items);
     return NextResponse.json({
-      items, total, page, pageSize: 50,
+      items:items.map(item=>({...item,intra:intra.get(item.transactionId)})), total, page, pageSize: 50,
       summary: {
         totalTransactions: total,
         amountByCurrency: currencyAggregates.map((aggregate) => ({ currency: aggregate.currency, totalAmount: aggregate._sum.totalAmount?.toString() ?? "0" })),
