@@ -1,5 +1,13 @@
 # Contexto funcional — FNET System Tracker
 
+## Actualización 2026-10-19 — MENDEL-INTRA-01 (implementado localmente, publicación autorizada)
+
+El Registro de compras `/compras` prepara dos confirmaciones manuales independientes por transacción: **Subido a Intra** y **Descargado en Intra**, cada una Sí / No / Sin confirmar. Antes, la columna mostraba `Pendiente` fijo. Los controles conservan el acceso global existente de Admin y no autorizan gastos en Mendel ni suben archivos/mueven stock oficial.
+
+La persistencia y el historial reutilizan `ops_events` con una acción y clave de recurso propias. Se guardan autor, fecha, estado anterior/nuevo, versión y huella de los datos de compra; no requiere tablas nuevas, migraciones ni cambios de Prisma. Si cambia un dato relevante de la compra se pide revisión, sin borrar lo ya confirmado. Ver [diseño, límites y evidencia](reports/MENDEL_INTRA_01.md).
+
+Trabajo aislado en `feature/mendel-intra-manual`, basado en `13952b1`. No incluye ni modifica las mejoras pendientes de Guardias. Eugenia autorizó commit, push, PR, fusión y despliegue de este ajuste. Al preparar esta entrega, la publicación y su comprobación productiva siguen pendientes; las pruebas locales pasan 434/434. No se modificaron compras reales. La autorización no incluye guardar confirmaciones reales como prueba ni agregar migraciones.
+
 ## Actualización 2026-10-16 — MENDEL-02C
 
 El texto histórico del prototipo se preserva debajo. La bandeja `/compras/bandeja` agrega control por zona y confirmaciones internas persistentes, con acceso real Admin/coordinador. No es una integración automática con Mendel: Admin prepara CSV/XLSX en el navegador y comparte explícitamente los gastos filtrados. Los coordinadores solo acceden a zonas habilitadas para su cuenta por Admin; sin habilitación no ven datos. Respuestas: PENDIENTE, AUTORIZADO y NO_AUTORIZADO, con autor, fecha e historial. No modifican aprobaciones oficiales ni descuentos. Ver [informe y operación](reports/MENDEL_02C_ZONE_CONFIRMATIONS.md); la evidencia final de CI y despliegue se registra en el PR de esta entrega.

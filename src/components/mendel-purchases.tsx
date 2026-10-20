@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FileUp, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { MendelIntraControl } from './mendel-intra-control';
+import type { MendelIntraState } from '@/lib/mendel-intra';
 
 type Purchase = {
   transactionId: string;
@@ -20,6 +22,7 @@ type Purchase = {
   invoiceTotal: string | number | null;
   receiptStatus: string | null;
   reconciliationStatus: string;
+  intra?: MendelIntraState;
 };
 type Preview = { rowCount: number; insertedCount: number; updatedCount: number; duplicateRowsSkipped: number; invalidRows: number; errors: Array<{ line: number; fields: string[] }>; imported?: boolean; code?: string };
 type ResponseData = { items: Purchase[]; total: number; page: number; summary: { totalTransactions: number; amountByCurrency: Array<{ currency: string; totalAmount: string }>; pendingReceipt: number; overdueReceipt: number; pendingReconciliation: number }; latestImport: { importedAt: string; rowCount: number; insertedCount: number; updatedCount: number } | null };
@@ -136,14 +139,14 @@ export function MendelPurchases() {
       <article><span>Importe total</span><strong>{data?.summary.amountByCurrency.length ? data.summary.amountByCurrency.map((amount) => money(amount.totalAmount, amount.currency)).join(" · ") : "—"}</strong><small>Por moneda</small></article>
       <article><span>Sin comprobante</span><strong>{data?.summary.pendingReceipt ?? "—"}</strong><small>Requieren revisión</small></article>
       <button className={`mendel-metric-action ${overdueOnly ? "selected" : ""}`} type="button" onClick={() => { setOverdueOnly((value) => !value); setPage(1); }}><span>Falta comprobante · +30 días</span><strong>{data?.summary.overdueReceipt ?? "—"}</strong><small>{overdueOnly ? "Mostrar todas" : "Ver pendientes antiguos"}</small></button>
-      <article><span>Sin cruce con Intra</span><strong>{data?.summary.pendingReconciliation ?? "—"}</strong><small>Compras que esperan conciliación</small></article>
+      <article><span>Sin conciliación automática</span><strong>{data?.summary.pendingReconciliation ?? "—"}</strong><small>Distinta de las confirmaciones manuales de Intra</small></article>
     </section>
 
     <section className="mendel-table-card">
       <div className="mendel-table-heading"><div><h2>Transacciones</h2><p>{data ? `${data.total} resultados` : "Cargando…"}{data?.latestImport ? ` · última carga ${date(data.latestImport.importedAt)}` : ""}</p></div><div className="mendel-controls"><label className="mendel-search"><Search size={16} /><input aria-label="Buscar compras" placeholder="Persona, comercio o categoría" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></label><label className="mendel-month">Mes <input type="month" aria-label="Filtrar por mes" value={month} onChange={(event) => { setMonth(event.target.value); setPage(1); }} /></label></div></div>
-      <div className="mendel-table-wrap"><table><thead><tr><th>Fecha</th><th>Persona</th><th>Comercio</th><th>Detalle</th><th>Importe</th><th>Comprobante Mendel</th><th>Intraoperativa</th></tr></thead><tbody>{data?.items.map((item) => { const missing = missingReceipt(item); const days = missing ? ageDays(item.transactionDate) : 0; return <tr key={item.transactionId}><td>{date(item.transactionDate)}</td><td>{item.userName ?? "Sin persona"}</td><td>{item.merchant ?? "Sin comercio"}</td><td><strong>{item.transactionCategory ?? item.transactionType ?? "—"}</strong><small>{item.budget ?? ""}</small></td><td>{money(item.totalAmount, item.currency)}</td><td><span className={`mendel-badge ${missing ? "needs" : item.hasReceipt ? "good" : "needs"}`}>{missing && days > 30 ? `Falta · ${days} d` : item.hasReceipt ? "Declarado" : item.hasReceipt === false ? "Falta" : "Revisar"}</span><small>{item.receiptStatus ?? ""}</small></td><td><span className="mendel-badge pending">Pendiente</span></td></tr>; })}</tbody></table>{data?.items.length === 0 && <div className="mendel-empty">No hay transacciones. Importá un CSV de Mendel para comenzar.</div>}</div>
+      <div className="mendel-table-wrap"><table><thead><tr><th>Fecha</th><th>Persona</th><th>Comercio</th><th>Detalle</th><th>Importe</th><th>Comprobante Mendel</th><th>Intraoperativa · control manual</th></tr></thead><tbody>{data?.items.map((item) => { const missing = missingReceipt(item); const days = missing ? ageDays(item.transactionDate) : 0; return <tr key={item.transactionId}><td>{date(item.transactionDate)}</td><td>{item.userName ?? "Sin persona"}</td><td>{item.merchant ?? "Sin comercio"}</td><td><strong>{item.transactionCategory ?? item.transactionType ?? "—"}</strong><small>{item.budget ?? ""}</small></td><td>{money(item.totalAmount, item.currency)}</td><td><span className={`mendel-badge ${missing ? "needs" : item.hasReceipt ? "good" : "needs"}`}>{missing && days > 30 ? `Falta · ${days} d` : item.hasReceipt ? "Declarado" : item.hasReceipt === false ? "Falta" : "Revisar"}</span><small>{item.receiptStatus ?? ""}</small></td><td>{item.intra?<MendelIntraControl key={item.transactionId} transactionId={item.transactionId} state={item.intra} onSaved={next=>setData(previous=>previous?{...previous,items:previous.items.map(p=>p.transactionId===item.transactionId?{...p,intra:next}:p)}:previous)}/>:<span className="mendel-badge pending">Control no disponible</span>}</td></tr>; })}</tbody></table>{data?.items.length === 0 && <div className="mendel-empty">No hay transacciones. Importá un CSV de Mendel para comenzar.</div>}</div>
       {data && data.total > 50 && <div className="mendel-pagination"><button className="button secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button><span>Página {page} de {Math.ceil(data.total / 50)}</span><button className="button secondary" disabled={page >= Math.ceil(data.total / 50)} onClick={() => setPage((current) => current + 1)}>Siguiente</button></div>}
     </section>
-    <p className="mendel-footnote">La exportación actual no permite vincular automáticamente cada comprobante ni identificar los artículos descargados. El estado de Intraoperativa queda pendiente hasta contar con un cruce verificable; FNET no modifica el stock oficial.</p>
+    <p className="mendel-footnote">Las confirmaciones “Subido a Intra” y “Descargado en Intra” son manuales, independientes y compartidas en FNET con autor, fecha e historial. No suben archivos ni descargan materiales automáticamente, no modifican el stock oficial y no cambian las aprobaciones de Mendel.</p>
   </main>;
 }
