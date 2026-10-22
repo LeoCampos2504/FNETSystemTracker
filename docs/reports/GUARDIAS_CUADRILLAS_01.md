@@ -88,3 +88,16 @@ Revisión del SQL: únicamente CREATE TABLE de `ops_guard_crews` y `ops_guard_cr
 Se repitieron realmente las pruebas del árbol local previo a integrar main: **435/435**, 59 archivos. El primer intento aislado falló antes de descubrir casos por EPERM al renombrar temporales; la repetición autorizada fuera de ese aislamiento pasó sin cambiar Vitest. Base de conexión deliberadamente inválida y ninguna `.env.local` en el checkout; SQL ejecutado solo en PGlite con datos sintéticos.
 
 Siguiente paso de esta revisión: integrar main actual (que contiene Insumos/Mendel PR #55), repetir validaciones completas y CI antes de fusionar. No se declara todavía despliegue ni migración productiva ejecutados.
+
+### Validación de la integración con main actual
+
+Se integró `origin/main` en `5ab17fcc42ecf5a33106eece98e4e8c4d7690ff2`. Solo hubo conflictos documentales en API_CONTRACTS y PROJECT_CONTEXT; se conservaron las secciones de ambas entregas. Ningún conflicto de implementación ni cambio adicional de contratos de Mendel.
+
+- `npm test`: **492/492**, 68 archivos (32 casos netos de Guardias sobre los 460 de main).
+- `npm run build`: **PASS con el comando habitual y Turbopack**, incluida generación de cliente Prisma y comprobación de tipos. La conexión de prueba apunta deliberadamente al puerto local 1; no se cargó `.env.local` ni se ejecutó preparación de base.
+- `npx tsc --noEmit`: **PASS** posterior al build.
+- `npm run lint`: cero errores, cuatro advertencias preexistentes.
+- Revisión del diff: solo una migración nueva; Prisma schema y las migraciones aplicadas permanecen intactos. Escaneo de patrones de secretos del diff sin coincidencias; no equivale a una auditoría exhaustiva de seguridad.
+- Las pruebas SQL siguen siendo locales, sintéticas y descartables. Ninguna escritura de guardias/gastos reales fue usada como prueba.
+
+`LOCAL_INTEGRATED_VALIDATION=PASS`. Faltan CI del PR y comprobación independiente del despliegue/migración. El estado de publicación no debe inferirse de este resultado local.
