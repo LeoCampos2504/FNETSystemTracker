@@ -14,6 +14,12 @@ const row: TrayRow = {
 const render = (changes: Partial<TrayRow> = {}) => renderToStaticMarkup(createElement(MendelExpenseDetail, { row: { ...row, ...changes }, onSaved: async () => {} }));
 
 describe("compact expense detail presentation", () => {
+  it("shows conflicting PDF evidence as review, never as a missing document or automatic authorization",()=>{
+    const html=render({receipt:'NO',documentName:'example.pdf',receiptStatus:'FINALIZADA'});
+    expect(html).toContain('PDF informado · revisar');
+    expect(html).not.toContain('Falta comprobante');
+    expect(html).toContain('Pendiente de confirmar');
+  });
   it("uses the primary confirmation action instead of assigning every expense", () => {
     const html = render();
     expect(html).toContain("Confirmar respuesta");

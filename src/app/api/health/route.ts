@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export function getHealthStatus() {
+function getHealthStatus() {
   return { status: "ok", service: "fnet-system-tracker" } as const;
 }
 
