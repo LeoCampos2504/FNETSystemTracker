@@ -1,5 +1,13 @@
 # Contexto funcional — FNET System Tracker
 
+## Actualización 2026-10-22 — Insumos múltiples + evidencia CSV Mendel (local, NO publicado)
+
+Se implementaron controles por botones para Intra y número de factura común para hasta 50 insumos, con permisos existentes, versiones por registro, auditoría y guardado atómico. Las notas y archivos existentes se conservan; adjuntar un mismo PDF a varios registros no forma parte de este ajuste. Mendel agrega refresco explícito de notas/evidencia de gastos compartidos, incluso los ocultos, sin alterar respuestas de coordinación, e informa las contradicciones entre Hay ticket y Nombre PDF.
+
+Pruebas locales finales: 460/460. Build pendiente: Turbopack falló al iniciar un proceso CSS; Webpack compila pero detecta el export preexistente `getHealthStatus` en `/api/health`. No se modificó ese endpoint, no se desactivaron verificaciones y no hubo publicación. La rotación de credenciales por el incidente Railway sigue pendiente, no se ejecutó. Detalles, archivos y límites en [informe del ajuste](reports/SUPPLY_BULK_AND_MENDEL_CSV_REFRESH_20261022.md). Se preserva todo el contexto histórico siguiente.
+
+**Continuación autorizada:** Eugenia pidió publicar el ajuste. Se cerró el export no admitido de `/api/health` manteniendo intacta su respuesta. Pruebas 460/460, lint sin errores y build alternativo Webpack completo PASS; Turbopack local sigue fallando al iniciar su proceso CSS en Windows. CI debe pasar con el comando de build habitual antes de fusionar. La publicación productiva y la autenticación del conector Railway requieren comprobación independiente; no se afirma deploy exitoso ni credenciales rotadas. Ver el cierre posterior del mismo informe.
+
 ## Actualización 2026-10-19 — MENDEL-INTRA-01 (implementado localmente, publicación autorizada)
 
 El Registro de compras `/compras` prepara dos confirmaciones manuales independientes por transacción: **Subido a Intra** y **Descargado en Intra**, cada una Sí / No / Sin confirmar. Antes, la columna mostraba `Pendiente` fijo. Los controles conservan el acceso global existente de Admin y no autorizan gastos en Mendel ni suben archivos/mueven stock oficial.

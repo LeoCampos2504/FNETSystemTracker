@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import type { TrayRow } from "@/lib/mendel-bandeja";
+import type { SourceRefreshResult, SourceRefreshRow } from '@/lib/mendel-source-refresh';
 import { loadZoneHistory, type ZoneHistoryItem } from "@/lib/mendel-zone-history";
 import styles from "./mendel-zone-tray.module.css";
 export type ZoneCatalog = { rows: TrayRow[]; users: { id: string; name: string }[]; grants: { user_id: string; zone: string; enabled: boolean }[] };
@@ -12,7 +13,23 @@ export async function zonePost(input: unknown) {
   if (!response.ok) throw new Error(response.status === 401 ? "Tu sesión venció. Volvé a ingresar." : response.status === 403 ? "No tenés permiso para esta zona." : ["EXPENSE_CHANGED", "DECISION_CHANGED"].includes(result.code) ? "Otro usuario actualizó este gasto. Recargá la bandeja antes de responder." : result.code === "INPUT_TOO_LARGE" ? "El lote es demasiado grande." : `No se guardó el cambio (${result.code || response.status}).`);
   return result;
 }
-const payloadKeys = ["transactionId", "zone", "date", "person", "merchant", "amount", "currency", "budget", "notes", "approvalNotes", "receipt", "locality", "coordinator", "paymentStatus", "officialApproval", "zoneSource"] as const;
+const payloadKeys = ["transactionId", "zone", "date", "person", "merchant", "amount", "currency", "budget", "notes", "approvalNotes", "receipt", "locality", "coordinator", "paymentStatus", "officialApproval", "zoneSource", "documentName", "receiptStatus"] as const;
+export async function refreshZoneRows(rows: SourceRefreshRow[], progress: (result: SourceRefreshResult) => void) {
+  const total: SourceRefreshResult = { updated: 0, unchanged: 0, issues: [] };
+  let batch: SourceRefreshRow[] = [];
+  async function flush() {
+    if (!batch.length) return;
+    const result = await zonePost({ action: 'refresh', rows: batch }) as SourceRefreshResult;
+    total.updated += result.updated; total.unchanged += result.unchanged; total.issues.push(...result.issues);
+    progress({ ...total, issues: [...total.issues] }); batch = [];
+  }
+  for (const row of rows) {
+    if (new TextEncoder().encode(JSON.stringify({ action: 'refresh', rows: [row] })).length > 58000) throw new Error('Una nota supera el tamaño de actualización. No se recortó.');
+    if (batch.length >= 150 || new TextEncoder().encode(JSON.stringify({ action: 'refresh', rows: [...batch, row] })).length > 60000) await flush();
+    batch.push(row);
+  }
+  await flush(); return total;
+}
 export async function publishZoneRows(rows: TrayRow[], progress: (count: number) => void) {
   if (!rows.length || rows.some(r => !r.transactionId || !r.zone)) throw new Error("Cada gasto a compartir debe tener ID real de Mendel y zona asignada. Revisá los filtros y las zonas faltantes.");
   let batch: unknown[] = [], count = 0;

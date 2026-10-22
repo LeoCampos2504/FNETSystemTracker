@@ -190,10 +190,27 @@ export async function deleteReview(actor:OperationsActor,input:{key:string;versi
   });
 }
 export async function saveReview(actor:OperationsActor,input:ReviewInput){
-  const row=(await materials(actor)).find(r=>r.key===input.key);if(!row)fail('NOT_FOUND',404);
-  const c=await catalog(actor);if(!c.projects.includes(input.project))fail('FORBIDDEN_PROJECT',403);
+  const rows=await materials(actor),c=await catalog(actor);
+  validateReview(actor,input,rows,c);
+  return getPrismaClient().$transaction(tx=>writeReview(tx,actor,input));
+}
+/** One atomic batch: every row keeps its own quantity, source snapshot and version. */
+export async function saveReviews(actor:OperationsActor,reviews:ReviewInput[]){
+  if(!reviews.length||reviews.length>50||new Set(reviews.map(r=>r.key)).size!==reviews.length)fail('INPUT_INVALID',422);
+  if(reviews.some(r=>r.invoiceNumber!==reviews[0].invoiceNumber||r.classification!==reviews[0].classification||r.intraStatus!==reviews[0].intraStatus))fail('INPUT_INVALID',422);
+  const rows=await materials(actor),c=await catalog(actor);
+  for(const input of reviews)validateReview(actor,input,rows,c);
+  return getPrismaClient().$transaction(async tx=>{
+    for(const input of [...reviews].sort((a,b)=>a.key.localeCompare(b.key)))await writeReview(tx,actor,input);
+    return {saved:reviews.length};
+  });
+}
+function validateReview(actor:OperationsActor,input:ReviewInput,rows:Material[],c:OperationsCatalog){
+  const row=rows.find(r=>r.key===input.key);if(!row)fail('NOT_FOUND',404);
+  if(!c.projects.includes(input.project))fail('FORBIDDEN_PROJECT',403);
   if(actor.allowed!==null&&row.projects.length&& !row.projects.includes(input.project))fail('FORBIDDEN_PROJECT',403);
   if(row.hash!==input.sourceHash)fail('SOURCE_CHANGED');
+  if(input.intraStatus==='DESCARGADO'&&row.quantity===null)fail('QUANTITIES_DO_NOT_MATCH',422);
   if(input.intraStatus==='DESCARGADO'&&(input.countedQuantity===null||input.intraQuantity===null||Number(input.countedQuantity)!==Number(input.intraQuantity)||(row.quantity!==null&&Number(input.countedQuantity)!==Number(row.quantity))))fail('QUANTITIES_DO_NOT_MATCH',422);
   if(['DESCARGADO','NO_CORRESPONDE'].includes(input.intraStatus)&&input.classification==='PENDIENTE')fail('CLASSIFICATION_REQUIRED',422);
   // An included insumo always carries its invoice number.
@@ -201,9 +218,9 @@ export async function saveReview(actor:OperationsActor,input:ReviewInput){
   if(input.intraStatus==='DESCARGADO'&&input.classification==='NO_INCLUIDO'&&!input.invoiceNumber.trim())fail('INVOICE_NUMBER_REQUIRED',422);
   // A not-included insumo is not downloaded in Intra: it stays in the stock of the technician, and that is the reason.
   if(input.intraStatus==='NO_CORRESPONDE'&&input.classification!=='NO_INCLUIDO'&&!input.notes.trim())fail('REASON_REQUIRED',422);
-  return getPrismaClient().$transaction(async tx=>{
+}
+async function writeReview(tx:Db,actor:OperationsActor,input:ReviewInput){
     await tx.$executeRaw`INSERT INTO ops_supply_reviews(source_key,project,source_hash,updated_by) VALUES (${input.key},${input.project},${input.sourceHash},${actor.user.id}::uuid) ON CONFLICT DO NOTHING`;
     const updated=await tx.$executeRaw`UPDATE ops_supply_reviews SET project=${input.project},classification=${input.classification},intra_status=${input.intraStatus},invoice_number=${input.invoiceNumber},counted_quantity=${input.countedQuantity}::numeric,intra_quantity=${input.intraQuantity}::numeric,notes=${input.notes},source_hash=${input.sourceHash},version=version+1,updated_by=${actor.user.id}::uuid,updated_at=CURRENT_TIMESTAMP WHERE source_key=${input.key} AND version=${input.version}`;
     if(!updated)fail('STALE_VERSION');await audit(tx,actor,input.key,'INTRA_REVIEW_SAVED',input);return {saved:true};
-  });
 }

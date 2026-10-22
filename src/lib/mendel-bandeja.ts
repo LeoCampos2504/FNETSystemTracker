@@ -1,3 +1,4 @@
+import { mendelReceipt } from './mendel-receipt';
 // Presentation-only control. No approval decisions or official data mutations.
 export type TrayRow = {
   key: string; transactionId: string; date: string; person: string; merchant: string;
@@ -6,6 +7,8 @@ export type TrayRow = {
   paymentStatus: string; officialApproval: string; zoneSource: string;
   revision?: number; decisionId?: string | null; internalDecision?: string; needsReconfirmation?: boolean;
   decisionActor?: string; decisionAt?: string | null; decisionComment?: string;
+  documentName?: string | null; receiptStatus?: string | null;
+  snapshotHash?: string; sourceUpdatedAt?: string;
 };
 export type ZoneEntry = { person: string; zone: string; locality: string; coordinator: string; sourceRow: number };
 export type ZoneOverrides = Readonly<Record<string, string>>;
@@ -91,7 +94,7 @@ export function filterTray(rows: readonly TrayRow[], filters: TrayFilters): Tray
     && (!query || normalizeTrayText([row.person, row.merchant, row.notes, row.approvalNotes, row.budget, row.transactionId].join(" ")).includes(query))
     && (!filters.zone || (filters.zone === "__UNASSIGNED__" ? !row.zone : row.zone === filters.zone))
     && (!filters.person || row.person === filters.person) && (!filters.budget || row.budget === filters.budget)
-    && (!filters.receipt || row.receipt === filters.receipt)
+    && (!filters.receipt || (filters.receipt === 'NO' ? mendelReceipt(row).missing : filters.receipt === 'PDF' ? !!row.documentName?.trim() : filters.receipt === 'REVIEW' ? mendelReceipt(row).kind === 'REVIEW' : row.receipt === filters.receipt))
     && (!filters.from || (!!trayDateKey(row.date) && trayDateKey(row.date) >= filters.from))
     && (!filters.to || (!!trayDateKey(row.date) && trayDateKey(row.date) <= filters.to)))
     .sort((a, b) => trayDateKey(b.date).localeCompare(trayDateKey(a.date)) || a.key.localeCompare(b.key, "es", { numeric: true }));
@@ -118,7 +121,7 @@ export function trayMoney(raw: string, currency: string): string {
 }
 
 // CSV is read in the browser; full comments remain text, never parsed as approval.
-export function parseTrayCsv(input: string): { rows: TrayRow[]; notesAvailable: boolean } {
+export function parseTrayCsv(input: string) {
   let source = input.replace(/^\uFEFF/, ""), delimiter = ",";
   const explicit = source.match(/^sep=([,;\t])\r?\n/i);
   if (explicit) { delimiter = explicit[1]; source = source.slice(explicit[0].length); }
@@ -148,12 +151,14 @@ export function parseTrayCsv(input: string): { rows: TrayRow[]; notesAvailable: 
     if (required) throw new Error(`Falta la columna ${names[0]}.`); return -1;
   };
   const cols = { date: column(["fecha transaccion", "fecha de transaccion", "fecha"], true), person: column(["usuario", "persona"], true), merchant: column(["comercio", "merchant"], true), amount: column(["importe total", "total", "importe"], true), currency: column(["moneda", "currency"]), budget: column(["presupuesto", "budget"]), notes: column(["notas", "nota de la transaccion", "nota"]), approval: column(["nota de aprobacion", "notas de aprobacion"]), receipt: column(["hay ticket", "tiene ticket"]), id: column(["id transaccion", "id de transaccion"]), zone: column(["zona", "region"]), locality: column(["localidad (excel)", "localidad"]), coordinator: column(["coordinador"]), zoneSource: column(["fuente zona"]), payment: column(["estado transaccion", "estado de transaccion"]), official: column(["estado de aprobacion", "approval status"]) };
-  return { notesAvailable: cols.notes >= 0 || cols.approval >= 0, rows: matrix.map((cells, i): TrayRow => {
+  const document = column(['nombre pdf']), receiptStatus = column(['estado comprobacion']);
+  const sourceFields = ([['notes', cols.notes], ['approvalNotes', cols.approval], ['receipt', cols.receipt], ['documentName', document], ['receiptStatus', receiptStatus]] as const).filter(([, index]) => index >= 0).map(([field]) => field);
+  return { notesAvailable: cols.notes >= 0 || cols.approval >= 0, sourceFields, rows: matrix.map((cells, i): TrayRow => {
     const get = (index: number) => index < 0 ? "" : cells[index], receipt = normalizeTrayText(get(cols.receipt));
-    return { key: `csv-${i}`, transactionId: get(cols.id), date: get(cols.date), person: get(cols.person).trim(), merchant: get(cols.merchant), amount: get(cols.amount), currency: get(cols.currency), budget: get(cols.budget).trim(), notes: cols.notes >= 0 ? get(cols.notes) : null, approvalNotes: get(cols.approval), receipt: ["si", "yes", "true", "1"].includes(receipt) ? "SI" : ["no", "false", "0"].includes(receipt) ? "NO" : "SIN_DATO", zone: get(cols.zone).trim(), locality: get(cols.locality), coordinator: get(cols.coordinator), paymentStatus: get(cols.payment), officialApproval: get(cols.official), zoneSource: get(cols.zoneSource) || (get(cols.zone).trim() ? "Columna del CSV" : "") };
+    return { key: `csv-${i}`, transactionId: get(cols.id).trim(), date: get(cols.date), person: get(cols.person).trim(), merchant: get(cols.merchant), amount: get(cols.amount), currency: get(cols.currency), budget: get(cols.budget).trim(), notes: cols.notes >= 0 ? get(cols.notes) : null, approvalNotes: get(cols.approval), receipt: ["si", "yes", "true", "1"].includes(receipt) ? "SI" : ["no", "false", "0"].includes(receipt) ? "NO" : "SIN_DATO", zone: get(cols.zone).trim(), locality: get(cols.locality), coordinator: get(cols.coordinator), paymentStatus: get(cols.payment), officialApproval: get(cols.official), zoneSource: get(cols.zoneSource) || (get(cols.zone).trim() ? "Columna del CSV" : ""), ...(document >= 0 ? { documentName: get(document).trim() || null } : {}), ...(receiptStatus >= 0 ? { receiptStatus: get(receiptStatus).trim() || null } : {}) };
   }) };
 }
 
 export function trayMessage(rows: readonly TrayRow[], title: string): string {
-  return `Hola, paso pendientes de Mendel.\n${title}\n\n` + rows.map(row => `• ${trayDate(row.date)} | ${row.person || "Sin persona"} | ${row.merchant || "Sin comercio"} | ${trayMoney(row.amount, row.currency)} | ${row.budget || "Sin presupuesto"} | Ticket: ${row.receipt === "SI" ? "Sí" : row.receipt === "NO" ? "No" : "Sin dato"}`).join("\n") + "\n\n¿Me confirmás si fueron autorizados y quién dio el OK? En los que dicen Ticket: No, por favor pedí la rendición del comprobante. Sin dato no significa que falte.";
+  return `Hola, paso pendientes de Mendel.\n${title}\n\n` + rows.map(row => `• ${trayDate(row.date)} | ${row.person || "Sin persona"} | ${row.merchant || "Sin comercio"} | ${trayMoney(row.amount, row.currency)} | ${row.budget || "Sin presupuesto"} | Comprobante: ${mendelReceipt(row).label}`).join("\n") + "\n\n¿Me confirmás si fueron autorizados y quién dio el OK? Pedí rendición solo donde dice No informado en CSV. Los PDF informados y los datos contradictorios requieren revisión; Sin dato no significa que falte.";
 }
