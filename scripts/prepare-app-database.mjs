@@ -22,8 +22,10 @@ const ownedMigrations = [
   "20261008_add_task_dates",
   "20261008_add_site_answers",
   "20261016_add_mendel_zone_control",
+  "20261018_add_guard_crews",
 ];
 const ownedTables = new Set([
+  "ops_guard_crews", "ops_guard_crew_changes",
   "fnet_mendel_zone_expenses", "fnet_mendel_zone_access", "fnet_mendel_zone_decisions",
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
   "app_login_attempts", "mendel_transactions", "mendel_import_batches",

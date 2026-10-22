@@ -5,10 +5,14 @@ import { requireOperationsSession } from '@/server/operations-http';
 import { daySchema } from '@/server/operations-input';
 import { addGuardPeriod, addHoliday, guardOverview, removeGuardPeriod, removeHoliday, setVisitHours, updateGuardPeriod } from '@/server/services/guard-duty';
 import { privateHeaders, readInput, supplyFailure } from '@/server/supply-http';
+import { addGuardCrew, replaceGuardCrew } from '@/server/services/guard-crews';
 export const dynamic = 'force-dynamic';
 const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const text = z.string().trim().min(1).max(200);
+const localTime = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
 const schema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('addCrew'), requestKey: z.string().uuid(), zone: text, technicians: z.array(text).length(2), startAt: localTime, endAt: localTime, legacyIds: z.array(z.string().uuid()).max(2).default([]) }).strict(),
+  z.object({ action: z.literal('replaceCrew'), requestKey: z.string().uuid(), id: z.string().uuid(), version: z.number().int().positive(), outgoing: text, incoming: text, effectiveAt: localTime, reason: z.string().trim().min(1).max(500) }).strict(),
   z.object({ action: z.literal('addPeriod'), technician: text, from: daySchema, to: daySchema }).strict(),
   z.object({ action: z.literal('updatePeriod'), id: z.string().uuid(), technician: text, from: daySchema, to: daySchema }).strict(),
   z.object({ action: z.literal('removePeriod'), id: z.string().uuid() }).strict(),
@@ -30,7 +34,7 @@ export async function POST(request: Request) {
   const a = await requireOperationsSession(); if (!a.ok) return a.response;
   try {
     const input = await readInput(request, schema);
-    const result = input.action === 'addPeriod' ? await addGuardPeriod(a.actor, input) : input.action === 'updatePeriod' ? await updateGuardPeriod(a.actor, input) : input.action === 'removePeriod' ? await removeGuardPeriod(a.actor, input.id)
+    const result = input.action === 'addCrew' ? await addGuardCrew(a.actor, input) : input.action === 'replaceCrew' ? await replaceGuardCrew(a.actor, input) : input.action === 'addPeriod' ? await addGuardPeriod(a.actor, input) : input.action === 'updatePeriod' ? await updateGuardPeriod(a.actor, input) : input.action === 'removePeriod' ? await removeGuardPeriod(a.actor, input.id)
       : input.action === 'addHoliday' ? await addHoliday(a.actor, input) : input.action === 'removeHoliday' ? await removeHoliday(a.actor, input.day) : await setVisitHours(a.actor, input);
     return NextResponse.json(result, { headers: privateHeaders });
   } catch (e) { return supplyFailure(e); }

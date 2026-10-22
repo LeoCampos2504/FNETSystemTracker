@@ -31,7 +31,12 @@ No hay "cambios chicos que no ameritan pasar por acá": si toca
 
 ## Pendientes
 
-_(vacío — agregar acá)_
+### [Pendiente de revisión técnica 2026-10-18] Guardias por cuadrilla y relevo
+
+- Quién lo pide: Eugenia, en esta conversación.
+- Cambio aditivo: `GuardOverview` incorpora cuadrillas, disponibilidad de almacenamiento y zonas habilitadas; `GuardPeriod` admite instantes efectivos para el resumen por integrante. Se conservan los campos existentes y no cambia `Api`.
+- Motivo: cargar dos técnicos juntos por zona, contar [inicio 08:00, relevo 08:00), conservar reemplazos efectivos y corregir el conteo histórico sin reescribir sus filas.
+- Impacto: pantalla Guardias/CTIC, endpoint existente de guardias, resumen/Excel, pruebas y migración interna nueva preparada localmente. Sin Prisma schema, Sytex ni integraciones. Publicación/migración NO autorizadas todavía.
 
 ## Resueltos
 

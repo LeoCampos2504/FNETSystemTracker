@@ -7,10 +7,10 @@ export type Material = SourceMaterial & { review:MaterialReview|null; files:{id:
 export type Favorite = { name:string; projects:string[] };
 export type OperationsCatalog = { projects:string[]; allProjects:string[]; favorites:Favorite[]; admin:boolean; tasks:{code:string;type:string;project:string;siteCode:string;siteName:string;description:string;technicians:string[];status?:string;planDate?:string|null}[]; technicians:string[] };
 export type SiteMaintenance = { kind:'SERVICE_GE'|'FILTROS_AA'; lastDate:string; dueDate:string; due:boolean; formCode:string };
-export type GuardPeriod = { id:string; technician:string; from:string; to:string };
+export type GuardPeriod = { id:string; technician:string; from:string; to:string; startAt?:string; endAt?:string; crewId?:string };
 export type Holiday = { day:string; name:string };
 export type OffHoursVisit = { id:string; day:string; project:string; siteCode:string; siteName:string; taskCode:string; technicians:string[]; status:VisitStatus; outcome:string; hours:number|null };
-export type GuardOverview = { ctic:boolean; from:string; to:string; periods:GuardPeriod[]; holidays:Holiday[]; offHours:OffHoursVisit[]; technicians:string[] };
+export type GuardOverview = { ctic:boolean; from:string; to:string; periods:GuardPeriod[]; holidays:Holiday[]; offHours:OffHoursVisit[]; technicians:string[]; crews?:import('./guard-crew').GuardCrew[]; crewStorageReady?:boolean; zones?:string[]; canManageCrews?:boolean; canManageLegacy?:boolean };
 export type SiteContext = { maintenance:SiteMaintenance[]; forms:OperationsCatalog['tasks']; pending:string[]; previous:{day:string;project:string;taskType:string;status:VisitStatus;outcome:string}[] };
 
 /** Site control: generator service, air conditioner filters and fuel loads of every site, read from Sytex. */

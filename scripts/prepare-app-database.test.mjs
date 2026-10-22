@@ -13,6 +13,7 @@ describe("Railway application database preparation", () => {
   it("only prepares owned tables and preserves the Sytex sources", () => {
     const migrations = readAppMigrations();
     expect(migrations.flatMap((migration) => migration.tables.map((table) => table.name)).sort()).toEqual([
+      "ops_guard_crews", "ops_guard_crew_changes",
       "fnet_mendel_zone_expenses", "fnet_mendel_zone_access", "fnet_mendel_zone_decisions",
       "app_login_attempts", "app_sessions", "app_users", "mendel_form_references",
       "mendel_import_batches", "mendel_transactions", "task_assignment_history", "task_assignments",

@@ -83,6 +83,21 @@ Cualquier cambio de forma acá implica cambiar `src/contracts/api.ts` primero
 
 ## Notas de implementación (Leo)
 
+### Guardias por cuadrilla — 2026-10-18, preparación local
+
+Endpoint existente `GET/POST /api/operations/guard`, sesión real obligatoria, JSON estricto, origen validado y respuestas privadas `no-store`.
+
+- GET conserva `from`, `to`, `periods`, `holidays`, `offHours`, `technicians`. Añade `crews`, `crewStorageReady`, `zones`, `canManageCrews`, `canManageLegacy`. Los períodos derivados de una cuadrilla incluyen `crewId`, `startAt`, `endAt`.
+- POST `addCrew`: `{action, requestKey:uuid, zone, technicians:[nombre1,nombre2], startAt:'YYYY-MM-DDT08:00', endAt:'YYYY-MM-DDT08:00', legacyIds:uuid[]}`. Solo 0 o 2 fuentes históricas; su vinculación explícita requiere Admin, mismas fechas e integrantes. No se borran las fuentes.
+- POST `replaceCrew`: `{action, requestKey:uuid, id:uuid, version:integer, outgoing, incoming, effectiveAt:'YYYY-MM-DDTHH:mm', reason}`. Se sustituye un integrante del último tramo; timestamp estrictamente posterior a su inicio y anterior al fin. Se rechazan timestamps duplicados, reescrituras de tramos anteriores, versiones viejas y superposiciones. La hora es Argentina, se persiste UTC.
+- Los técnicos son nombres reales del catálogo de operaciones autorizado, no IDs ficticios. La pareja solo existe para esa guardia. No se infieren identidades equivalentes entre nombre/email ni zonas desconocidas.
+- Admin o coordinador con proyectos explícitos puede crear/reemplazar dentro de sus zonas; el catálogo del coordinador permanece limitado a sus proyectos. Una cuenta sin proyectos explícitos no obtiene acceso global al nuevo módulo. CTIC solo lee.
+- Las cargas históricas sin zona son visibles únicamente para Admin/CTIC. Su edición de fechas requiere Admin y registra antes/después; las ya vinculadas se bloquean. `removePeriod` se rechaza para preservar historial. `addPeriod` queda como compatibilidad histórica de Admin, sin formulario nuevo y con control contra superposición de cuadrillas.
+- Nuevos códigos: `GUARD_STORAGE_PENDING` (503), `GUARD_TECHNICIAN_UNKNOWN` / `GUARD_PERIOD_INVALID` / `GUARD_LEGACY_INVALID` / `GUARD_CHANGE_ORDER` (422); `GUARD_OVERLAP`, `GUARD_LEGACY_OVERLAP`, `GUARD_LEGACY_LINKED`, `STALE_VERSION`, `REQUEST_KEY_REUSED` (409); `GUARD_HISTORY_PRESERVED` (422).
+- Reporte mensual y CTIC usan el mismo intervalo [inicio 08:00, relevo 08:00). `daysBetween` de feriados conserva ambos extremos incluidos. Los tramos parciales se muestran como cobertura real (horas/24), **no como regla de liquidación de remuneraciones**.
+
+Migración interna nueva preparada, no ejecutada: `20261018_add_guard_crews`. No cambia Prisma schema ni las migraciones anteriores.
+
 ### Control manual de Intra para compras Mendel — MENDEL-INTRA-01
 
 Extensión aditiva del Registro de compras, preparada localmente el 19/10/2026; no cambia la interfaz `Api` ni los contratos compartidos del prototipo.
