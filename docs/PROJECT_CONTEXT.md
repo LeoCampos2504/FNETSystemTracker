@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## Continuación 2026-10-22 — Guardias autorizadas para revisión y publicación
+
+Eugenia autorizó explícitamente integrar Guardias con main actual y, solo si pasan las validaciones, publicar con sus dos tablas internas nuevas. La implementación histórica siguiente se conserva; el estado final depende de CI y del despliegue verificado, no solo de la autorización. No se permite crear guardias reales como prueba ni cambiar permisos de usuarios. Ver la continuación del informe GUARDIAS_CUADRILLAS_01.
+
 ## Actualización 2026-10-18 — GUARDIAS-CUADRILLAS-01 (local, no publicada)
 
 Preparada en `feature/guard-crews-handover`: guardias por zona con dos integrantes, selector semanal visual y fechas escritas, relevo a las 08:00 Argentina y reemplazos efectivos con historial. Del 14 a las 08:00 al 21 a las 08:00 son siete días (cinco hábiles/dos de fin de semana si no hay feriados). El conteo histórico se corrige al leer y exportar, sin backfill ni modificación automática de filas reales. Las semanas antiguas lunes–domingo terminan el lunes siguiente a las 08:00; las cargas individuales no se emparejan automáticamente.
@@ -7,6 +11,22 @@ Preparada en `feature/guard-crews-handover`: guardias por zona con dos integrant
 Los reemplazos conservan los tramos previos, actor, motivo y fecha registrada/efectiva; la escritura y auditoría son una única transacción. Las cargas antiguas pueden vincularse explícitamente de a dos por Admin sin borrarlas. No existe pareja permanente. Los relevos parciales muestran cobertura temporal, sin definir importes ni una política salarial nueva.
 
 Necesita dos tablas internas nuevas (`ops_guard_crews`, `ops_guard_crew_changes`). Se preparó la migración y su registro en el preparador, pero **no se ejecutó sobre Railway, no hubo commit/push/deploy y todavía no está disponible en Producción**. No usa BizFlow/Sytex live, no cambia n8n ni Prisma schema. Ver [alcance, pruebas, limitaciones y publicación pendiente](reports/GUARDIAS_CUADRILLAS_01.md). La certificación histórica de P1-T02 se conserva como antecedente; esta revisión requiere su propia verificación publicada.
+
+## Actualización 2026-10-22 — Insumos múltiples + evidencia CSV Mendel (local, NO publicado)
+
+Se implementaron controles por botones para Intra y número de factura común para hasta 50 insumos, con permisos existentes, versiones por registro, auditoría y guardado atómico. Las notas y archivos existentes se conservan; adjuntar un mismo PDF a varios registros no forma parte de este ajuste. Mendel agrega refresco explícito de notas/evidencia de gastos compartidos, incluso los ocultos, sin alterar respuestas de coordinación, e informa las contradicciones entre Hay ticket y Nombre PDF.
+
+Pruebas locales finales: 460/460. Build pendiente: Turbopack falló al iniciar un proceso CSS; Webpack compila pero detecta el export preexistente `getHealthStatus` en `/api/health`. No se modificó ese endpoint, no se desactivaron verificaciones y no hubo publicación. La rotación de credenciales por el incidente Railway sigue pendiente, no se ejecutó. Detalles, archivos y límites en [informe del ajuste](reports/SUPPLY_BULK_AND_MENDEL_CSV_REFRESH_20261022.md). Se preserva todo el contexto histórico siguiente.
+
+**Continuación autorizada:** Eugenia pidió publicar el ajuste. Se cerró el export no admitido de `/api/health` manteniendo intacta su respuesta. Pruebas 460/460, lint sin errores y build alternativo Webpack completo PASS; Turbopack local sigue fallando al iniciar su proceso CSS en Windows. CI debe pasar con el comando de build habitual antes de fusionar. La publicación productiva y la autenticación del conector Railway requieren comprobación independiente; no se afirma deploy exitoso ni credenciales rotadas. Ver el cierre posterior del mismo informe.
+
+## Actualización 2026-10-19 — MENDEL-INTRA-01 (implementado localmente, publicación autorizada)
+
+El Registro de compras `/compras` prepara dos confirmaciones manuales independientes por transacción: **Subido a Intra** y **Descargado en Intra**, cada una Sí / No / Sin confirmar. Antes, la columna mostraba `Pendiente` fijo. Los controles conservan el acceso global existente de Admin y no autorizan gastos en Mendel ni suben archivos/mueven stock oficial.
+
+La persistencia y el historial reutilizan `ops_events` con una acción y clave de recurso propias. Se guardan autor, fecha, estado anterior/nuevo, versión y huella de los datos de compra; no requiere tablas nuevas, migraciones ni cambios de Prisma. Si cambia un dato relevante de la compra se pide revisión, sin borrar lo ya confirmado. Ver [diseño, límites y evidencia](reports/MENDEL_INTRA_01.md).
+
+Trabajo aislado en `feature/mendel-intra-manual`, basado en `13952b1`. No incluye ni modifica las mejoras pendientes de Guardias. Eugenia autorizó commit, push, PR, fusión y despliegue de este ajuste. Al preparar esta entrega, la publicación y su comprobación productiva siguen pendientes; las pruebas locales pasan 434/434. No se modificaron compras reales. La autorización no incluye guardar confirmaciones reales como prueba ni agregar migraciones.
 
 ## Actualización 2026-10-16 — MENDEL-02C
 

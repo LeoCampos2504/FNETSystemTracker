@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { daySchema,inputSchema } from '@/server/operations-input';
 import { requireOperationsSession } from '@/server/operations-http';
-import { addVisit, catalog, closeDay, deleteReview, history, materials, saveFavorite, saveReview, siteContext, updateVisit, visits } from '@/server/services/operations';
+import { addVisit, catalog, closeDay, deleteReview, history, materials, saveFavorite, saveReview, saveReviews, siteContext, updateVisit, visits } from '@/server/services/operations';
 import { siteControl } from '@/server/services/site-control';
 import { privateHeaders, readInput, supplyFailure } from '@/server/supply-http';
 export const dynamic='force-dynamic';
@@ -11,5 +11,5 @@ export async function GET(request:Request){const a=await requireOperationsSessio
   return NextResponse.json(value,{headers:privateHeaders});
  }catch(e){return supplyFailure(e);}}
 export async function POST(request:Request){const a=await requireOperationsSession();if(!a.ok)return a.response;
- try{const input=await readInput(request,inputSchema);const result=input.action==='favorite'?await saveFavorite(a.actor,input):input.action==='visit'?await addVisit(a.actor,input):input.action==='updateVisit'?await updateVisit(a.actor,input):input.action==='close'?await closeDay(a.actor,input.day,input.projects):input.action==='deleteReview'?await deleteReview(a.actor,input):await saveReview(a.actor,input);
+ try{const input=await readInput(request,inputSchema);const result=input.action==='favorite'?await saveFavorite(a.actor,input):input.action==='visit'?await addVisit(a.actor,input):input.action==='updateVisit'?await updateVisit(a.actor,input):input.action==='close'?await closeDay(a.actor,input.day,input.projects):input.action==='deleteReview'?await deleteReview(a.actor,input):input.action==='reviewBatch'?await saveReviews(a.actor,input.reviews):await saveReview(a.actor,input);
  return NextResponse.json(result,{headers:privateHeaders});}catch(e){return supplyFailure(e);}}

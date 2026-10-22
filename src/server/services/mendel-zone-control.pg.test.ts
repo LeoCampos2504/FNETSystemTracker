@@ -20,6 +20,37 @@ beforeEach(async () => {
 });
 afterEach(async () => { await pg.close(); });
 async function publishAndGrant() { await write(admin, { action: "publish", rows: [row] }); await write(admin, { action: "access", userId: coord.id, zone: row.zone, enabled: true }); }
+async function refreshInput(patch: object = {notes:'Nota corregida',documentName:'example.pdf',receiptStatus:'FINALIZADA'}) {
+  const current=(await zoneOverview(db,admin)).rows.find(r=>r.transactionId===row.transactionId)!;
+  return zoneActionSchema.parse({action:'refresh',rows:[{transactionId:row.transactionId,date:row.date,person:row.person,merchant:row.merchant,amount:row.amount,currency:row.currency,budget:row.budget,expectedSnapshotHash:current.snapshotHash,patch}]});
+}
+describe('evidence-only CSV refresh on actual SQL',()=>{
+  it('preserves approval revision, author, zone, amount and full decision history',async()=>{
+    await publishAndGrant();await write(coord,decision());const before=(await zoneOverview(db,admin)).rows[0];
+    expect(await write(admin,await refreshInput())).toMatchObject({updated:1,unchanged:0,issues:[]});
+    const after=(await zoneOverview(db,admin)).rows[0];
+    expect(after).toMatchObject({revision:before.revision,internalDecision:'AUTORIZADO',decisionId:before.decisionId,decisionActor:before.decisionActor,zone:row.zone,amount:row.amount,notes:'Nota corregida',documentName:'example.pdf'});
+    expect(after.snapshotHash).not.toBe(before.snapshotHash);expect(after.sourceUpdatedAt).toBeTruthy();expect(await zoneHistory(db,coord,row.transactionId)).toHaveLength(1);
+  });
+  it('makes retries idempotent and rejects overwriting another refreshed snapshot',async()=>{
+    await publishAndGrant();const first=await refreshInput();await write(admin,first);
+    expect(await write(admin,first)).toMatchObject({updated:0,unchanged:1});
+    if(first.action!=='refresh')throw Error('bad fixture');
+    expect(await write(admin,{...first,rows:first.rows.map(r=>({...r,patch:{notes:'Stale'}}))})).toMatchObject({updated:0,issues:[{reason:'SOURCE_CHANGED'}]});
+  });
+  it('requires Admin, existing exact identity, and never creates a missing row',async()=>{
+    await publishAndGrant();const input=await refreshInput();await expect(write(coord,input)).rejects.toMatchObject({code:'FORBIDDEN'});
+    if(input.action!=='refresh')throw Error('bad fixture');
+    expect(await write(admin,{...input,rows:input.rows.map(r=>({...r,amount:'999'}))})).toMatchObject({updated:0,issues:[{reason:'SOURCE_FACTS_CHANGED'}]});
+    expect(await write(admin,{...input,rows:input.rows.map(r=>({...r,transactionId:'MISSING'}))})).toMatchObject({updated:0,issues:[{reason:'NOT_SHARED'}]});
+    expect((await zoneOverview(db,admin)).rows).toHaveLength(1);
+  });
+  it('rejects patches that smuggle zone, amount, approvals or author fields',async()=>{
+    await publishAndGrant();const input=await refreshInput();
+    if(input.action!=='refresh')throw Error('bad fixture');
+    for(const patch of [{zone:'OTHER'},{amount:'0'},{internalDecision:'AUTORIZADO'},{actorId:coord.id},{}])expect(zoneActionSchema.safeParse({...input,rows:[{...input.rows[0],patch}]}).success).toBe(false);
+  });
+});
 describe("persistent Mendel control with real SQL on synthetic data", () => {
   it("fails closed for coordinator without grants, even when no project restrictions exist", async () => { await write(admin, { action: "publish", rows: [row] }); expect((await zoneOverview(db, coord)).rows).toEqual([]); });
   it("grants only the selected real account and zone", async () => { await publishAndGrant(); await write(admin, { action: "publish", rows: [{ ...row, transactionId: "EXAMPLE-002", zone: "BAM" }] }); expect((await zoneOverview(db, coord)).rows.map(r => r.zone)).toEqual(["NOA"]); expect((await zoneOverview(db, other)).rows).toEqual([]); });

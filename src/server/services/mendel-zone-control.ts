@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import type { User } from "@/contracts";
 import type { TrayRow } from "@/lib/mendel-bandeja";
+import { sameMendelExpense, type SourceRefreshResult } from '@/lib/mendel-source-refresh';
 import type { ZoneAction } from "@/server/mendel-zone-input";
 
 export type ZoneDb = { query<T>(sql: string, values?: unknown[]): Promise<T[]> };
@@ -15,14 +17,17 @@ async function assertZone(db: ZoneDb, user: User, zone: string) {
   if (!allowed.length) fail("FORBIDDEN", 403);
 }
 type Expense = { transaction_id: string; zone: string; payload: Omit<TrayRow, "key">; revision: number };
+function sourceSnapshotHash(row: Expense) {
+  return createHash('sha256').update(JSON.stringify([row.zone, row.revision, Object.entries(row.payload).sort(([a], [b]) => a.localeCompare(b))])).digest('hex');
+}
 async function expenseForActor(db: ZoneDb, user: User, id: string, lock = false): Promise<Expense> {
   const [row] = await db.query<Expense>(`SELECT transaction_id,zone,payload,revision FROM fnet_mendel_zone_expenses WHERE transaction_id=$1${lock ? " FOR UPDATE" : " FOR SHARE"}`, [id]);
   if (!row) fail("NOT_FOUND", 404); await assertZone(db, user, row.zone); return row;
 }
 export async function zoneOverview(db: ZoneDb, user: User) {
   assertZoneRole(user);
-  const rows = await db.query<Expense & { decision: string | null; comment: string | null; actor_name: string | null; decision_at: Date | null; decision_id: string | null; decision_revision: number | null }>(`
-    SELECT e.transaction_id,e.zone,e.payload,e.revision,d.decision,d.comment,d.expense_revision AS decision_revision,
+  const rows = await db.query<Expense & { updated_at: Date; decision: string | null; comment: string | null; actor_name: string | null; decision_at: Date | null; decision_id: string | null; decision_revision: number | null }>(`
+    SELECT e.transaction_id,e.zone,e.payload,e.revision,e.updated_at,d.decision,d.comment,d.expense_revision AS decision_revision,
       d.id::text AS decision_id,d.created_at AS decision_at,u.name AS actor_name
     FROM fnet_mendel_zone_expenses e
     LEFT JOIN LATERAL (SELECT * FROM fnet_mendel_zone_decisions WHERE transaction_id=e.transaction_id ORDER BY id DESC LIMIT 1) d ON TRUE
@@ -32,6 +37,7 @@ export async function zoneOverview(db: ZoneDb, user: User) {
     ORDER BY e.updated_at DESC,e.transaction_id LIMIT 5001`, [user.id, user.role === "ADMIN"]);
   if (rows.length > 5000) fail("DATASET_TOO_LARGE", 422);
   const result = rows.map(r => ({ ...r.payload, key: r.transaction_id, transactionId: r.transaction_id, zone: r.zone,
+    snapshotHash: sourceSnapshotHash(r), sourceUpdatedAt: new Date(r.updated_at).toISOString(),
     revision: r.revision, decisionId: r.decision_id, internalDecision: r.decision_revision === r.revision ? r.decision ?? "PENDIENTE" : "PENDIENTE",
     needsReconfirmation: r.decision_revision !== null && r.decision_revision !== r.revision,
     decisionComment: r.comment ?? "", decisionActor: r.actor_name ?? "", decisionAt: r.decision_at,
@@ -49,6 +55,24 @@ export async function zoneHistory(db: ZoneDb, user: User, id: string) {
 /** Call only inside one database transaction: permission check + lock + history append are atomic. */
 export async function zoneWrite(db: ZoneDb, user: User, input: ZoneAction) {
   assertZoneRole(user);
+  if (input.action === 'refresh') {
+    await assertAdmin(user);
+    if (new Set(input.rows.map(r => r.transactionId)).size !== input.rows.length) fail('DUPLICATE_TRANSACTION', 422);
+    const result: SourceRefreshResult = { updated: 0, unchanged: 0, issues: [] };
+    for (const incoming of [...input.rows].sort((a, b) => a.transactionId.localeCompare(b.transactionId))) {
+      const [current] = await db.query<Expense>('SELECT transaction_id,zone,payload,revision FROM fnet_mendel_zone_expenses WHERE transaction_id=$1 FOR UPDATE', [incoming.transactionId]);
+      if (!current) { result.issues.push({ transactionId: incoming.transactionId, reason: 'NOT_SHARED' }); continue; }
+      if (!sameMendelExpense(current.payload, incoming)) { result.issues.push({ transactionId: incoming.transactionId, reason: 'SOURCE_FACTS_CHANGED' }); continue; }
+      const changed = Object.entries(incoming.patch).some(([key, value]) => current.payload[key as keyof typeof incoming.patch] !== value);
+      if (!changed) { result.unchanged++; continue; } // Safe idempotent retry after an uncertain network result.
+      if (sourceSnapshotHash(current) !== incoming.expectedSnapshotHash) { result.issues.push({ transactionId: incoming.transactionId, reason: 'SOURCE_CHANGED' }); continue; }
+      // Evidence-only refresh: never change zone, financial facts, approval revision or decisions/history.
+      await db.query(`UPDATE fnet_mendel_zone_expenses SET payload=payload || $2::jsonb,published_by=$3::uuid,updated_at=CURRENT_TIMESTAMP
+        WHERE transaction_id=$1 RETURNING transaction_id`, [incoming.transactionId, JSON.stringify(incoming.patch), user.id]);
+      result.updated++;
+    }
+    return result;
+  }
   if (input.action === "publish") {
     await assertAdmin(user);
     if (new Set(input.rows.map(r => r.transactionId)).size !== input.rows.length) fail("DUPLICATE_TRANSACTION", 422);
