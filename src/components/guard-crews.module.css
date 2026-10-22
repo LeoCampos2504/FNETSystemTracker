@@ -1,0 +1,71 @@
+.board { display:grid; gap:24px; color:#18304c; min-width:0; }
+.board * { box-sizing:border-box; }
+.board label,.replaceForm label { display:grid; gap:6px; min-width:0; font-size:13px; font-weight:600; }
+.board.board input,.board.board select { width:100%; min-width:0; min-height:40px; border:1px solid #d7e1ed; border-radius:10px; background:white; color:#17304e; padding:10px 12px; font:inherit; font-size:14px; }
+.board button { font:inherit; cursor:pointer; }
+.board button:focus-visible { outline:3px solid #84b9ff; outline-offset:3px; }
+.board button:disabled { opacity:.5; cursor:not-allowed; }
+.editor,.crewCard,.legacy { background:white; border:1px solid #dce5ef; border-radius:18px; padding:22px; min-width:0; }
+.editor { background:linear-gradient(125deg,#fff 50%,#f4f8ff); box-shadow:0 5px 22px #173c6410; }
+.sectionTitle { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
+.board h2 { font-size:19px; line-height:1.3; margin:4px 0 0; letter-spacing:-.3px; }
+.board h3 { margin:0; font-size:16px; line-height:1.5; display:flex; gap:9px; align-items:flex-start; overflow-wrap:anywhere; }
+.eyebrow { font-size:10px; font-weight:800; letter-spacing:1.5px; color:#5680aa; }
+.editorGrid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:26px; }
+.members { display:grid; gap:13px; align-content:start; min-width:0; }
+.hint,.board p,.crewCard small { font-size:12px; color:#647991; line-height:1.55; }
+.hint { margin:0; }
+.weekPicker { min-width:0; }
+.board .weekButton { display:flex; justify-content:flex-start; align-items:center; gap:12px; width:100%; padding:13px; border:1px solid #bcd0ef; border-radius:12px; color:#214da0; background:#eef4ff; text-align:left; flex-wrap:wrap; }
+.weekButton > span:nth-child(2) { display:grid; gap:4px; flex:1; }
+.weekButton small { font-size:9px; font-weight:800; letter-spacing:1px; }
+.weekButton strong { font-size:20px; letter-spacing:-.6px; white-space:nowrap; }
+.timeBadge { font-size:10px; font-weight:600; color:#506d95; }
+.dateFields,.twoColumns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px; }
+.board .textButton { background:none; border:0; min-height:30px; color:#2957ad; padding:8px 0; font-size:12px!important; text-align:left; }
+.calendar { margin-top:10px; padding:14px; background:white; border:1px solid #dce6f3; border-radius:12px; }
+.calendarHead { display:flex; justify-content:space-between; align-items:center; gap:8px; text-transform:capitalize; font-size:13px; }
+.board .calendarHead button { background:#f1f5fa; border:0; border-radius:8px; min-height:30px; padding:7px; display:flex; color:#48617e; }
+.calendarGrid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px; margin:10px 0; text-align:center; }
+.calendarGrid small { font-size:10px; color:#8393a7; padding:5px; }
+.board .calendarGrid button { border:0; border-radius:7px; min-height:30px; background:transparent; color:#23415f; padding:8px 0; font-size:12px; }
+.board .calendarGrid .inRange { background:#e7efff; color:#2852a6; }
+.board .calendarGrid .rangeStart { background:#2556ba; color:white; }
+.calendarGrid .handover { box-shadow:inset 0 0 0 1px #4773c5; }
+.calendar > small { font-size:11px; color:#71849a; line-height:1.5; display:block; }
+.saveBar { border-top:1px solid #e3eaf3; margin-top:18px; padding-top:17px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.saveBar > div { display:grid; gap:5px; }
+.saveBar strong { font-size:16px; }
+.saveBar small { color:#667c95; display:flex; align-items:center; gap:5px; font-size:11px; line-height:1.5; flex-wrap:wrap; }
+.board .primary { background:#2457bd!important; color:white!important; border:1px solid #2457bd!important; border-radius:10px; min-height:42px; padding:11px 17px; display:inline-flex; justify-content:center; align-items:center; gap:7px; font-weight:650!important; font-size:13px!important; flex-shrink:0; }
+.filter { min-width:160px!important; }
+.filter select { padding:8px 10px; }
+.crewGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; }
+.crewCard { padding:19px; }
+.cardTop { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; gap:12px; }
+.zone { font-size:11px; font-weight:800; color:#2856a9; background:#eaf1ff; padding:5px 9px; border-radius:7px; }
+.status,.current { font-size:10px; font-weight:650; border-radius:20px; padding:5px 9px; background:#f0f3f7; color:#647991; }
+.current { background:#e6f7ef; color:#207650; }
+.period { display:flex; align-items:center; gap:7px; margin:8px 0 1px; flex-wrap:wrap; }
+.timeline { list-style:none; padding:0; margin:18px 0; display:grid; gap:0; }
+.timeline li { display:flex; gap:10px; padding-bottom:14px; position:relative; min-width:0; }
+.timeline li:not(:last-child)::before { content:''; position:absolute; top:11px; bottom:0; left:4px; width:1px; background:#d5e1ee; }
+.dot { width:9px; height:9px; border-radius:50%; background:#7396cc; margin-top:5px; flex-shrink:0; }
+.timeline li > div { display:grid; gap:3px; min-width:0; }
+.timeline strong { font-size:12px; overflow-wrap:anywhere; }
+.timeline small { font-size:10px; }
+.board .replaceButton { display:inline-flex; align-items:center; gap:7px; background:white; border:1px solid #d5e1ef; border-radius:9px; min-height:36px; padding:9px 12px; color:#325785; font-size:12px!important; }
+.replaceForm { padding-top:14px; border-top:1px solid #e1e8f2; }
+.actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.actions > button:not(.primary) { background:white; border:1px solid #d5e1ef; padding:9px 12px; border-radius:9px; }
+.warning { background:#fff8e7; border:1px solid #f0d594; border-radius:12px; padding:14px; color:#805d20!important; }
+.empty { padding:25px; text-align:center; background:#f4f7fb; border:1px dashed #d4dfed; border-radius:14px; }
+.legacy summary { font-size:13px; font-weight:650; cursor:pointer; }
+.legacyRow { padding:11px 0; border-top:1px solid #e5ebf2; }
+.legacyRow > label { display:flex; align-items:center; gap:10px; }
+.board .legacyRow input[type=checkbox] { width:17px; height:17px; min-height:17px; accent-color:#2457bd; }
+.legacyRow span { display:grid; gap:4px; }
+.legacyRow small { color:#6c8098; font-size:11px; }
+.legacyEdit { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+@media(max-width:760px) { .editorGrid,.crewGrid { grid-template-columns:minmax(0,1fr); } .editor,.crewCard,.legacy { padding:16px; } .saveBar { align-items:stretch; flex-direction:column; } .primary { width:100%; } .board h2 { font-size:17px; } .editorGrid { gap:16px; } }
+@media(max-width:400px) { .twoColumns { grid-template-columns:minmax(0,1fr); } .weekButton strong { font-size:18px; } .dateFields { gap:8px; } .board.board input[type=date] { padding:9px 6px; font-size:12px; } }

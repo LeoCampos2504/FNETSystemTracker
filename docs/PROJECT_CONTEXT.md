@@ -1,5 +1,13 @@
 # Contexto funcional — FNET System Tracker
 
+## Actualización 2026-10-18 — GUARDIAS-CUADRILLAS-01 (local, no publicada)
+
+Preparada en `feature/guard-crews-handover`: guardias por zona con dos integrantes, selector semanal visual y fechas escritas, relevo a las 08:00 Argentina y reemplazos efectivos con historial. Del 14 a las 08:00 al 21 a las 08:00 son siete días (cinco hábiles/dos de fin de semana si no hay feriados). El conteo histórico se corrige al leer y exportar, sin backfill ni modificación automática de filas reales. Las semanas antiguas lunes–domingo terminan el lunes siguiente a las 08:00; las cargas individuales no se emparejan automáticamente.
+
+Los reemplazos conservan los tramos previos, actor, motivo y fecha registrada/efectiva; la escritura y auditoría son una única transacción. Las cargas antiguas pueden vincularse explícitamente de a dos por Admin sin borrarlas. No existe pareja permanente. Los relevos parciales muestran cobertura temporal, sin definir importes ni una política salarial nueva.
+
+Necesita dos tablas internas nuevas (`ops_guard_crews`, `ops_guard_crew_changes`). Se preparó la migración y su registro en el preparador, pero **no se ejecutó sobre Railway, no hubo commit/push/deploy y todavía no está disponible en Producción**. No usa BizFlow/Sytex live, no cambia n8n ni Prisma schema. Ver [alcance, pruebas, limitaciones y publicación pendiente](reports/GUARDIAS_CUADRILLAS_01.md). La certificación histórica de P1-T02 se conserva como antecedente; esta revisión requiere su propia verificación publicada.
+
 ## Actualización 2026-10-16 — MENDEL-02C
 
 El texto histórico del prototipo se preserva debajo. La bandeja `/compras/bandeja` agrega control por zona y confirmaciones internas persistentes, con acceso real Admin/coordinador. No es una integración automática con Mendel: Admin prepara CSV/XLSX en el navegador y comparte explícitamente los gastos filtrados. Los coordinadores solo acceden a zonas habilitadas para su cuenta por Admin; sin habilitación no ven datos. Respuestas: PENDIENTE, AUTORIZADO y NO_AUTORIZADO, con autor, fecha e historial. No modifican aprobaciones oficiales ni descuentos. Ver [informe y operación](reports/MENDEL_02C_ZONE_CONFIRMATIONS.md); la evidencia final de CI y despliegue se registra en el PR de esta entrega.
