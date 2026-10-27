@@ -31,6 +31,10 @@
 .dialogBody { max-height: calc(90dvh - 83px); overflow-y: auto; overscroll-behavior: contain; padding: 18px; }.dialogBody p { font-size: 13px; line-height: 1.5; }.dialogBody .field { margin: 14px 0; }
 .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }.facts dt { color: #64748b; font-size: 12px; }.facts dd { margin: 3px 0 0; font-size: 14px; overflow-wrap: anywhere; }.fullNote { white-space: pre-wrap; overflow-wrap: anywhere; padding: 14px; background: #f4f7fb; border: 1px solid #e0e7f0; border-radius: 9px; line-height: 1.6; font-size: 14px; }.message { width: 100%; min-height: 240px; line-height: 1.5; resize: vertical; }.preview { display: block; width: 100%; height: auto; margin-top: 15px; border: 1px solid #e1e7ef; }
 .compactDialog { width: min(780px, calc(100vw - 24px)); }
+.receiptQuick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 7px; min-width: 0; }
+.receiptQuick button { padding: 7px 10px; min-height: 36px; font-size: 12px; }
+.receiptQuick small { display: block; width: 100%; overflow-wrap: anywhere; }
+.receiptQuick .receiptUndo { color: #176543; border-color: #b5ddc7; background: #e4f5ec; }
 .compactDialog > header { align-items: center; padding: 12px 18px; }
 .compactDialog .dialogBody { max-height: calc(90dvh - 67px); }
 .expenseSummary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }

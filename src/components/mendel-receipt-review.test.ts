@@ -15,3 +15,16 @@ it('shows reviewer and undo without turning a receipt into approval', () => {
   expect(html).toContain('Deshacer OK manual'); expect(html).toContain('Admin sintético');
   expect(html).toContain('No autoriza el gasto'); expect(html).not.toContain('Marcar comprobante OK');
 });
+it('provides a single compact action without a form, dropdown or modal', () => {
+  const html = renderToStaticMarkup(createElement(MendelReceiptReview, { row, canReview: true, compact: true, onSaved: async () => {} }));
+  expect(html).toContain('Comprobante OK');
+  expect(html.match(/<button/g)).toHaveLength(1);
+  expect(html).not.toMatch(/<(form|select|textarea|dialog)\b/);
+  expect(html).toContain('no autoriza el gasto');
+});
+it('turns the compact action into undo after an OK and hides it for non-admin users', () => {
+  const reviewed = { ...row, receiptCheck: { ok: true, actor: 'Admin sintético', needsReview: false } } as TrayRow;
+  const html = renderToStaticMarkup(createElement(MendelReceiptReview, { row: reviewed, canReview: true, compact: true, onSaved: async () => {} }));
+  expect(html).toContain('Deshacer OK'); expect(html.match(/<button/g)).toHaveLength(1);
+  expect(renderToStaticMarkup(createElement(MendelReceiptReview, { row, canReview: false, compact: true, onSaved: async () => {} }))).toBe('');
+});
