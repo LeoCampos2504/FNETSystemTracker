@@ -9,6 +9,7 @@ export type TrayRow = {
   decisionActor?: string; decisionAt?: string | null; decisionComment?: string;
   documentName?: string | null; receiptStatus?: string | null;
   snapshotHash?: string; sourceUpdatedAt?: string;
+  receiptCheck?: { ok: boolean; eventId: string | null; version: number; actor: string; at: string | null; needsReview: boolean };
 };
 export type ZoneEntry = { person: string; zone: string; locality: string; coordinator: string; sourceRow: number };
 export type ZoneOverrides = Readonly<Record<string, string>>;
@@ -94,7 +95,7 @@ export function filterTray(rows: readonly TrayRow[], filters: TrayFilters): Tray
     && (!query || normalizeTrayText([row.person, row.merchant, row.notes, row.approvalNotes, row.budget, row.transactionId].join(" ")).includes(query))
     && (!filters.zone || (filters.zone === "__UNASSIGNED__" ? !row.zone : row.zone === filters.zone))
     && (!filters.person || row.person === filters.person) && (!filters.budget || row.budget === filters.budget)
-    && (!filters.receipt || (filters.receipt === 'NO' ? mendelReceipt(row).missing : filters.receipt === 'PDF' ? !!row.documentName?.trim() : filters.receipt === 'REVIEW' ? mendelReceipt(row).kind === 'REVIEW' : row.receipt === filters.receipt))
+    && (!filters.receipt || (filters.receipt === 'NO' ? mendelReceipt(row).missing : filters.receipt === 'MANUAL_OK' ? mendelReceipt(row).kind === 'MANUAL_OK' : filters.receipt === 'PDF' ? !!row.documentName?.trim() : filters.receipt === 'REVIEW' ? mendelReceipt(row).kind === 'REVIEW' : row.receipt === filters.receipt))
     && (!filters.from || (!!trayDateKey(row.date) && trayDateKey(row.date) >= filters.from))
     && (!filters.to || (!!trayDateKey(row.date) && trayDateKey(row.date) <= filters.to)))
     .sort((a, b) => trayDateKey(b.date).localeCompare(trayDateKey(a.date)) || a.key.localeCompare(b.key, "es", { numeric: true }));

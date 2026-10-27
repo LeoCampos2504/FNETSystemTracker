@@ -16,6 +16,7 @@ const sourceRefreshRow = sharedExpenseSchema.pick({ transactionId: true, date: t
   patch: sharedExpenseSchema.pick({ notes: true, approvalNotes: true, receipt: true, documentName: true, receiptStatus: true }).partial().strict().refine(value => Object.keys(value).length > 0),
 }).strict();
 export const zoneActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal('receipt'), transactionId, ok: z.boolean(), expectedEventId: z.string().uuid().nullable(), expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/), requestId: z.string().uuid() }).strict(),
   z.object({ action: z.literal("publish"), rows: z.array(sharedExpenseSchema).min(1).max(200) }).strict(),
   z.object({ action: z.literal('refresh'), rows: z.array(sourceRefreshRow).min(1).max(200) }).strict(),
   z.object({ action: z.literal("decide"), transactionId, revision: z.number().int().positive(), expectedDecisionId: z.string().regex(/^\d+$/).nullable(), requestId: z.string().uuid(), decision: z.enum(["PENDIENTE", "AUTORIZADO", "NO_AUTORIZADO"]), comment: text(1000) }).strict(),
