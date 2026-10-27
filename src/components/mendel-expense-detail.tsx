@@ -5,8 +5,9 @@ import { trayDate, trayMoney, type TrayRow } from "@/lib/mendel-bandeja";
 import { mendelReceipt } from '@/lib/mendel-receipt';
 import { ZoneDecisionEditor } from "./mendel-zone-actions";
 import styles from "./mendel-zone-tray.module.css";
+import { MendelReceiptReview } from './mendel-receipt-review';
 
-export function MendelExpenseDetail({ row, onSaved }: { row: TrayRow; onSaved: () => Promise<void> }) {
+export function MendelExpenseDetail({ row, onSaved, canReviewReceipt = false }: { row: TrayRow; onSaved: () => Promise<void>; canReviewReceipt?: boolean }) {
   const receipt = mendelReceipt(row);
   return <>
     <div className={styles.expenseSummary}>
@@ -28,6 +29,7 @@ export function MendelExpenseDetail({ row, onSaved }: { row: TrayRow; onSaved: (
       </div>
       <ZoneDecisionEditor row={row} onSaved={onSaved} />
     </div>
+    <MendelReceiptReview row={row} canReview={canReviewReceipt} onSaved={onSaved} />
     <details className={styles.sourceDetails}>
       <summary>Información de origen</summary>
       <dl className={styles.facts}>

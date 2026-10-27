@@ -15,6 +15,8 @@ const decision = (overrides: object = {}) => ({ action: "decide", transactionId:
 beforeEach(async () => {
   pg = new PGlite(); db = { query: async <T>(sql: string, params: unknown[] = []) => (await pg.query<T>(sql, params)).rows };
   await pg.exec("CREATE TABLE app_users(id UUID PRIMARY KEY,name TEXT,role TEXT,active BOOLEAN); CREATE TABLE ops_ctic_users(user_id UUID PRIMARY KEY);");
+  const ops = readFileSync(new URL('../../../prisma/migrations/20261005_add_coordinator_operations/migration.sql', import.meta.url), 'utf8');
+  await pg.exec(ops.match(/CREATE TABLE "ops_events" \([\s\S]*?\n\);/)![0]);
   for (const u of [admin, coord, other]) await pg.query("INSERT INTO app_users VALUES($1,$2,$3,true)", [u.id, u.name, u.role]);
   await pg.exec(readFileSync(new URL("../../../prisma/migrations/20261016_add_mendel_zone_control/migration.sql", import.meta.url), "utf8"));
 });
@@ -24,6 +26,65 @@ async function refreshInput(patch: object = {notes:'Nota corregida',documentName
   const current=(await zoneOverview(db,admin)).rows.find(r=>r.transactionId===row.transactionId)!;
   return zoneActionSchema.parse({action:'refresh',rows:[{transactionId:row.transactionId,date:row.date,person:row.person,merchant:row.merchant,amount:row.amount,currency:row.currency,budget:row.budget,expectedSnapshotHash:current.snapshotHash,patch}]});
 }
+
+async function receiptInput(ok = true) {
+  const current = (await zoneOverview(db, admin)).rows[0];
+  return zoneActionSchema.parse({ action: 'receipt', transactionId: current.transactionId, ok, expectedEventId: current.receiptCheck.eventId,
+    expectedSnapshotHash: current.snapshotHash, requestId: crypto.randomUUID() });
+}
+
+describe('manual document review, persisted separately from source and approvals', () => {
+  it('shares OK across accounts, records actor/date, preserves CSV and approval history, and supports undo', async () => {
+    await publishAndGrant(); await write(coord, decision());
+    await write(admin, await receiptInput());
+    const current = (await zoneOverview(db, coord)).rows[0];
+    expect(current.receipt).toBe('NO');
+    expect(current.receiptCheck).toMatchObject({ ok: true, actor: admin.name, version: 1, needsReview: false });
+    expect(current.receiptCheck.at).toBeTruthy(); expect(current.internalDecision).toBe('AUTORIZADO');
+    expect(await zoneHistory(db, coord, row.transactionId)).toHaveLength(1);
+    await write(admin, await receiptInput(false));
+    expect((await zoneOverview(db, admin)).rows[0].receiptCheck).toMatchObject({ ok: false, version: 2 });
+    const events = await db.query<{ detail: { before: boolean | null; ok: boolean } }>("SELECT detail FROM ops_events WHERE action='MENDEL_RECEIPT_REVIEWED' ORDER BY (detail->>'version')::integer");
+    expect(events.map(e => e.detail)).toMatchObject([{ before: null, ok: true }, { before: true, ok: false }]);
+  });
+  it('does not allow coordinators to self-certify receipts, even within an enabled zone', async () => {
+    await publishAndGrant(); const input = await receiptInput();
+    await expect(write(coord, input)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await db.query('SELECT id FROM ops_events')).toHaveLength(0);
+  });
+  it('rejects stale manual changes, accepts identical retry, and rejects reused request IDs', async () => {
+    await publishAndGrant(); const input = await receiptInput(); await write(admin, input);
+    expect(await write(admin, input)).toMatchObject({ alreadySaved: true });
+    if (input.action !== 'receipt') throw Error('fixture');
+    await expect(write(admin, { ...input, ok: false })).rejects.toMatchObject({ code: 'REQUEST_KEY_REUSED' });
+    await expect(write(admin, { ...input, requestId: crypto.randomUUID() })).rejects.toMatchObject({ code: 'RECEIPT_CHANGED' });
+    expect(await db.query('SELECT id FROM ops_events')).toHaveLength(1);
+  });
+  it('preserves manual OK on repeat CSV publication and note refresh, but asks review after changed document evidence', async () => {
+    await publishAndGrant(); await write(admin, await receiptInput());
+    await write(admin, { action: 'publish', rows: [row] });
+    await write(admin, await refreshInput({ notes: 'Nota nueva sintética' }));
+    expect((await zoneOverview(db, admin)).rows[0].receiptCheck).toMatchObject({ ok: true, needsReview: false });
+    const stale = await receiptInput(false);
+    await write(admin, await refreshInput({ documentName: 'new-synthetic.pdf' }));
+    expect((await zoneOverview(db, admin)).rows[0].receiptCheck).toMatchObject({ ok: true, needsReview: true });
+    await expect(write(admin, stale)).rejects.toMatchObject({ code: 'EXPENSE_CHANGED' });
+    await write(admin, await receiptInput());
+    expect((await zoneOverview(db, admin)).rows[0].receiptCheck).toMatchObject({ ok: true, needsReview: false, version: 2 });
+  });
+  it('rolls back receipt evidence if the surrounding transaction fails', async () => {
+    await publishAndGrant(); const input = await receiptInput();
+    await expect(pg.transaction(async tx => {
+      await zoneWrite({ query: async <T>(s: string, p: unknown[] = []) => (await tx.query<T>(s, p)).rows }, admin, input);
+      throw Error('synthetic rollback');
+    })).rejects.toThrow('synthetic rollback');
+    expect(await db.query('SELECT id FROM ops_events')).toHaveLength(0);
+  });
+  it('does not accept a forged reviewer, date, or document status inside imported source', () => {
+    expect(sharedExpenseSchema.safeParse({ ...row, receiptCheck: { ok: true } }).success).toBe(false);
+    expect(zoneActionSchema.safeParse({ action: 'receipt', transactionId: row.transactionId, ok: true, expectedEventId: null, expectedSnapshotHash: 'a'.repeat(64), requestId: crypto.randomUUID(), actorId: admin.id }).success).toBe(false);
+  });
+});
 describe('evidence-only CSV refresh on actual SQL',()=>{
   it('preserves approval revision, author, zone, amount and full decision history',async()=>{
     await publishAndGrant();await write(coord,decision());const before=(await zoneOverview(db,admin)).rows[0];

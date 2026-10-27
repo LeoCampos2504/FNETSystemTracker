@@ -10,7 +10,7 @@ export const decisionLabel = (value?: string) => ({ AUTORIZADO: "Autorizado", NO
 export async function zonePost(input: unknown) {
   const response = await fetch("/api/mendel/zone-control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
   const result = await response.json();
-  if (!response.ok) throw new Error(response.status === 401 ? "Tu sesión venció. Volvé a ingresar." : response.status === 403 ? "No tenés permiso para esta zona." : ["EXPENSE_CHANGED", "DECISION_CHANGED"].includes(result.code) ? "Otro usuario actualizó este gasto. Recargá la bandeja antes de responder." : result.code === "INPUT_TOO_LARGE" ? "El lote es demasiado grande." : `No se guardó el cambio (${result.code || response.status}).`);
+  if (!response.ok) throw new Error(response.status === 401 ? "Tu sesión venció. Volvé a ingresar." : response.status === 403 ? "No tenés permiso para esta acción o zona." : ["EXPENSE_CHANGED", "DECISION_CHANGED", "RECEIPT_CHANGED"].includes(result.code) ? "Otro usuario actualizó este gasto. Recargá la bandeja antes de responder." : result.code === "INPUT_TOO_LARGE" ? "El lote es demasiado grande." : `No se guardó el cambio (${result.code || response.status}).`);
   return result;
 }
 const payloadKeys = ["transactionId", "zone", "date", "person", "merchant", "amount", "currency", "budget", "notes", "approvalNotes", "receipt", "locality", "coordinator", "paymentStatus", "officialApproval", "zoneSource", "documentName", "receiptStatus"] as const;

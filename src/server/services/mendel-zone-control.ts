@@ -3,6 +3,7 @@ import type { User } from "@/contracts";
 import type { TrayRow } from "@/lib/mendel-bandeja";
 import { sameMendelExpense, type SourceRefreshResult } from '@/lib/mendel-source-refresh';
 import type { ZoneAction } from "@/server/mendel-zone-input";
+import { RECEIPT_ACTION, receiptDetail, receiptEvents, receiptResource, receiptSourceHash, receiptState, type ReceiptEvent } from './mendel-receipt-control';
 
 export type ZoneDb = { query<T>(sql: string, values?: unknown[]): Promise<T[]> };
 export class ZoneError extends Error { constructor(public code: string, public status = 409) { super(code); } }
@@ -36,7 +37,9 @@ export async function zoneOverview(db: ZoneDb, user: User) {
       AND NOT EXISTS (SELECT 1 FROM ops_ctic_users c WHERE c.user_id=$1::uuid))
     ORDER BY e.updated_at DESC,e.transaction_id LIMIT 5001`, [user.id, user.role === "ADMIN"]);
   if (rows.length > 5000) fail("DATASET_TOO_LARGE", 422);
+  const receiptReviews = new Map((await receiptEvents(db, rows.map(r => r.transaction_id))).map(e => [e.resource_key, e]));
   const result = rows.map(r => ({ ...r.payload, key: r.transaction_id, transactionId: r.transaction_id, zone: r.zone,
+    receiptCheck: receiptState(r.payload, receiptReviews.get(receiptResource(r.transaction_id))),
     snapshotHash: sourceSnapshotHash(r), sourceUpdatedAt: new Date(r.updated_at).toISOString(),
     revision: r.revision, decisionId: r.decision_id, internalDecision: r.decision_revision === r.revision ? r.decision ?? "PENDIENTE" : "PENDIENTE",
     needsReconfirmation: r.decision_revision !== null && r.decision_revision !== r.revision,
@@ -55,6 +58,25 @@ export async function zoneHistory(db: ZoneDb, user: User, id: string) {
 /** Call only inside one database transaction: permission check + lock + history append are atomic. */
 export async function zoneWrite(db: ZoneDb, user: User, input: ZoneAction) {
   assertZoneRole(user);
+  if (input.action === 'receipt') {
+    await assertAdmin(user); // Document corrections are not coordination approval decisions.
+    const row = await expenseForActor(db, user, input.transactionId, true);
+    const [previous] = await db.query<ReceiptEvent>('SELECT id::text,actor_id::text,resource_key,action,detail FROM ops_events WHERE id=$1::uuid', [input.requestId]);
+    if (previous) {
+      const saved = receiptDetail.safeParse(previous.detail);
+      if (previous.action !== RECEIPT_ACTION || previous.resource_key !== receiptResource(input.transactionId) || previous.actor_id !== user.id || !saved.success || saved.data.ok !== input.ok || saved.data.expectedEventId !== input.expectedEventId || saved.data.expectedSnapshotHash !== input.expectedSnapshotHash) fail('REQUEST_KEY_REUSED');
+      return { saved: true, alreadySaved: true };
+    }
+    const [latest] = await receiptEvents(db, [input.transactionId]);
+    if ((latest?.id ?? null) !== input.expectedEventId) fail('RECEIPT_CHANGED');
+    if (sourceSnapshotHash(row) !== input.expectedSnapshotHash) fail('EXPENSE_CHANGED');
+    const current = receiptState(row.payload, latest);
+    const detail = { ok: input.ok, before: latest ? current.ok : null, version: current.version + 1,
+      sourceHash: receiptSourceHash(row.payload), expectedEventId: input.expectedEventId, expectedSnapshotHash: input.expectedSnapshotHash };
+    await db.query('INSERT INTO ops_events(id,resource_key,action,actor_id,detail) VALUES($1::uuid,$2,$3,$4::uuid,$5::jsonb) RETURNING id',
+      [input.requestId, receiptResource(input.transactionId), RECEIPT_ACTION, user.id, JSON.stringify(detail)]);
+    return { saved: true };
+  }
   if (input.action === 'refresh') {
     await assertAdmin(user);
     if (new Set(input.rows.map(r => r.transactionId)).size !== input.rows.length) fail('DUPLICATE_TRANSACTION', 422);

@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-10-27 — Revisión manual de comprobantes Mendel (local, no publicada)
+
+Analista queda pausado en su checkout, sin mezclarlo con este ajuste aislado. Admin puede marcar/deshacer OK manual de comprobantes de gastos compartidos, con actor, fecha e historial en ops_events; no modifica CSV, aprobación ni Mendel. Estado compartido por cuenta/PC y usado en filtros/prints, con revisión si cambia la evidencia. Sin tablas nuevas ni migraciones. Ver [alcance y validación](reports/MENDEL_RECEIPT_MANUAL_20261027.md). Publicación no ejecutada.
+
 ## Continuación 2026-10-22 — Guardias autorizadas para revisión y publicación
 
 Eugenia autorizó explícitamente integrar Guardias con main actual y, solo si pasan las validaciones, publicar con sus dos tablas internas nuevas. La implementación histórica siguiente se conserva; el estado final depende de CI y del despliegue verificado, no solo de la autorización. No se permite crear guardias reales como prueba ni cambiar permisos de usuarios. Ver la continuación del informe GUARDIAS_CUADRILLAS_01.
