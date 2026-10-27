@@ -27,3 +27,11 @@ No se certificó visualmente en producción ni se guardaron comprobantes de prue
 ## Continuación de publicación autorizada
 
 Eugenia autorizó publicar este ajuste. Preflight: main e3eb717, servicio FNETSystemTracker del proyecto de Leo sublime-mindfulness fijado al mismo commit, sin cambios pendientes en ese servicio. Se publica exclusivamente esta mejora; Analista sigue pausado. No hay migraciones nuevas: el preparador de despliegue existente conserva --migrations-only y no debe importar datos fuente. La autorización no incluye marcar gastos reales como prueba. La comprobación de CI, commit publicado y despliegue se registrará en el PR y en el acta final de entrega.
+
+## Publicación inicial y simplificación a un clic
+
+PR #57 integrado en main db68cca6ee3763145ac4f921a682b6f3ff63aaa6. CI 503/503 y todos los pasos aprobados. Railway 3e4744b8-3207-49b4-9580-ffe05b20bc0d SUCCESS el 27/10/2026 a las 09:22:46 Argentina; healthcheck aprobado. Bandeja compartida y botón del detalle verificados con sesión Admin, sin pulsar confirmaciones ni guardar gastos de prueba. Captura de evidencia conservada fuera del repositorio para no publicar datos operativos.
+
+Eugenia solicitó simplificar el flujo durante el cierre: botón **Comprobante OK** directamente en la columna de comprobante y en cada tarjeta móvil, sin abrir detalle/formulario. Luego ofrece **Deshacer OK**. Reutiliza exactamente el mismo servidor, permisos, historial, transacción y conflictos; no hay nuevas reglas de aprobación ni cambios en la API. Recarga compartida conserva filtros y página; el gasto sale del filtro de faltantes al quedar OK. El detalle y la información de origen siguen disponibles como consulta opcional. CSV local no permite persistir un OK hasta usar el control compartido.
+
+Validación local del ajuste de presentación: 505/505 tests (70 archivos), incluyendo acción única sin form/select/textarea/modal y ocultamiento para no-admin. npm run build y npx tsc --noEmit PASS; npm run lint sin errores, cuatro advertencias preexistentes; diff --check PASS considerando CRLF. Analista continúa excluido. No se realizaron escrituras de prueba sobre gastos reales.
