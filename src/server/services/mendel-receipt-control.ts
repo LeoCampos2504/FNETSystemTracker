@@ -9,6 +9,7 @@ export const receiptDetail = z.object({
   ok: z.boolean(), version: z.number().int().positive(), sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
   expectedEventId: z.string().uuid().nullable(), expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
   before: z.boolean().nullable(),
+  manual: z.literal(true).optional(),
 }).strict();
 export type ReceiptEvent = { id: string; actor_id: string; actor_name: string; resource_key: string; action: string; detail: z.infer<typeof receiptDetail>; created_at: string | Date };
 export function receiptSourceHash(row: Omit<TrayRow, 'key'>) {
@@ -26,5 +27,6 @@ export function receiptState(row: Omit<TrayRow, 'key'>, event?: ReceiptEvent): N
   const saved = event ? receiptDetail.parse(event.detail) : null;
   return { ok: saved?.ok ?? false, eventId: event?.id ?? null, version: saved?.version ?? 0,
     actor: event?.actor_name ?? '', at: event ? new Date(event.created_at).toISOString() : null,
-    needsReview: !!saved?.ok && saved.sourceHash !== receiptSourceHash(row) };
+    choice: saved && (saved.ok || saved.manual) ? saved.ok : null,
+    needsReview: !!saved && (saved.ok || !!saved.manual) && saved.sourceHash !== receiptSourceHash(row) };
 }

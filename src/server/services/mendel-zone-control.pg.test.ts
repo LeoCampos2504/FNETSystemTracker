@@ -34,6 +34,14 @@ async function receiptInput(ok = true) {
 }
 
 describe('manual document review, persisted separately from source and approvals', () => {
+  it('persists explicit No independently of a source that says SI', async () => {
+    await publishAndGrant(); await write(admin, { action: 'publish', rows: [{ ...row, receipt: 'SI' }] });
+    await write(admin, await receiptInput(false));
+    const current = (await zoneOverview(db, admin)).rows[0];
+    expect(current.receipt).toBe('SI'); expect(current.receiptCheck).toMatchObject({ choice: false, ok: false, needsReview: false });
+    await write(admin, await receiptInput(true));
+    expect((await zoneOverview(db, admin)).rows[0].receiptCheck.choice).toBe(true);
+  });
   it('shares OK across accounts, records actor/date, preserves CSV and approval history, and supports undo', async () => {
     await publishAndGrant(); await write(coord, decision());
     await write(admin, await receiptInput());
