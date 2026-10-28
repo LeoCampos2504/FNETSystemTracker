@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-10-28 — Descuentos, notas de auditoría y actualidad de Mendel (local)
+
+CSV actual verificado: 507 filas hasta el 28/10, sin pérdida de filas del lector; la vista publicada consultaba otro registro compartido y excluía firmados. Corregida localmente la omisión de Notas de auditoria y agregado Solo descuentos incluyendo firmados, fecha del último gasto cargado y Rendido Sí/No editable en ambos sentidos con historial. No hay conexión automática Mendel ni importación real realizada. Sin migración, Analista sigue pausado. Ver [diagnóstico, semántica y validación](reports/MENDEL_DISCOUNTS_FRESHNESS_20261028.md).
+
 ## 2026-10-27 — Revisión manual de comprobantes Mendel (local, no publicada)
 
 Analista queda pausado en su checkout, sin mezclarlo con este ajuste aislado. Admin puede marcar/deshacer OK manual de comprobantes de gastos compartidos, con actor, fecha e historial en ops_events; no modifica CSV, aprobación ni Mendel. Estado compartido por cuenta/PC y usado en filtros/prints, con revisión si cambia la evidencia. Sin tablas nuevas ni migraciones. Ver [alcance y validación](reports/MENDEL_RECEIPT_MANUAL_20261027.md). Publicación no ejecutada.

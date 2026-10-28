@@ -1,6 +1,6 @@
 import { trayDateKey, type TrayRow } from './mendel-bandeja';
 
-export const EVIDENCE_FIELDS = ['notes', 'approvalNotes', 'receipt', 'documentName', 'receiptStatus'] as const;
+export const EVIDENCE_FIELDS = ['notes', 'approvalNotes', 'auditNotes', 'receipt', 'documentName', 'receiptStatus'] as const;
 export type EvidenceField = typeof EVIDENCE_FIELDS[number];
 export type SourcePatch = Partial<Pick<TrayRow, EvidenceField>>;
 export type SourceRefreshRow = Pick<TrayRow, 'transactionId' | 'date' | 'person' | 'merchant' | 'amount' | 'currency' | 'budget'> & { expectedSnapshotHash: string; patch: SourcePatch };

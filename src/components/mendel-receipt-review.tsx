@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { TrayRow } from '@/lib/mendel-bandeja';
 import { zonePost } from './mendel-zone-actions';
 import styles from './mendel-zone-tray.module.css';
+import { renditionLabel } from '@/lib/mendel-receipt';
 
 export function MendelReceiptReview({ row, canReview, onSaved, compact = false }: { row: TrayRow; canReview: boolean; onSaved: () => Promise<void>; compact?: boolean }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -20,12 +21,12 @@ export function MendelReceiptReview({ row, canReview, onSaved, compact = false }
   }
   if (compact) {
     if (!canReview || !row.revision || !row.snapshotHash) return null;
-    const confirmed = check?.ok && !check.needsReview;
+    const confirmed = renditionLabel(row) === 'Sí';
     return <div className={styles.receiptQuick}>
       <button type="button" className={confirmed ? styles.receiptUndo : styles.primary} disabled={busy}
-        aria-label={`${confirmed ? 'Deshacer OK del comprobante' : 'Marcar comprobante OK'} · ${row.person} · ${row.merchant}`}
-        title={confirmed ? `Revisado por ${check.actor}. Deshacer retira solo el OK manual, no el ticket.` : 'Ya revisé la foto/PDF en Mendel. Guardar OK interno; no autoriza el gasto.'}
-        onClick={() => void save(!confirmed)}>{busy ? 'Guardando…' : confirmed ? '✓ Deshacer OK' : 'Comprobante OK'}</button>
+        aria-label={`Cambiar rendido a ${confirmed ? 'No' : 'Sí'} · ${row.person} · ${row.merchant}`}
+        title={`Rendido: ${confirmed ? 'Sí' : 'No'}. Un clic cambia a ${confirmed ? 'No' : 'Sí'}. No autoriza el gasto. ${check?.actor ? 'Revisado por ' + check.actor : 'Según datos del CSV; No incluye datos sin confirmar.'}`}
+        onClick={() => void save(!confirmed)}>{busy ? '…' : confirmed ? 'Sí' : 'No'}</button>
       {check?.needsReview && <small>Dato cambiado: revisar antes de marcar OK.</small>}
       {error && <small className={styles.error} role="alert">{error}</small>}
     </div>;
@@ -33,11 +34,11 @@ export function MendelReceiptReview({ row, canReview, onSaved, compact = false }
   return <section className={styles.decisionPanel} aria-label="Revisión manual del comprobante">
     <h3>Control de comprobante</h3>
     <p className={styles.detailHint}>Si ya viste la foto o el PDF en Mendel, marcá OK aquí. No autoriza el gasto ni modifica Mendel o el CSV.</p>
-    {check?.at && <p className={styles.detailHint}>{check.ok ? 'Marcado OK' : 'OK manual retirado'} por {check.actor} · {new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(check.at))} · Argentina</p>}
+    {check?.at && <p className={styles.detailHint}>{check.ok ? 'Rendido: Sí' : check.choice === false ? 'Rendido: No' : 'OK manual retirado'} por {check.actor} · {new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date(check.at))} · Argentina</p>}
     {check?.needsReview && <p className={styles.reconfirmation}>Cambió la información del comprobante o del gasto. Revisalo antes de volver a confirmar.</p>}
     {canReview && row.revision && row.snapshotHash ? <div className={styles.actions}>
       {(!check?.ok || check.needsReview) && <button type="button" className={styles.primary} disabled={busy} onClick={() => void save(true)}>{busy ? 'Guardando…' : 'Marcar comprobante OK'}</button>}
-      {check?.ok && <button type="button" disabled={busy} onClick={() => void save(false)}>Deshacer OK manual</button>}
+      {check?.ok && <button type="button" disabled={busy} onClick={() => void save(false)}>Marcar no rendido</button>}
     </div> : canReview ? <p className={styles.detailHint}>Primero compartí el gasto y abrilo desde el control compartido para guardar una revisión.</p> : null}
     {error && <p className={styles.error} role="alert">{error}</p>}
   </section>;

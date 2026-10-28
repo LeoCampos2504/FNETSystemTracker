@@ -1,5 +1,5 @@
 import { trayDate, trayMoney, type TrayRow } from "./mendel-bandeja";
-import { mendelReceipt } from './mendel-receipt';
+import { mendelReceipt, renditionLabel } from './mendel-receipt';
 
 function wrap(ctx: CanvasRenderingContext2D, value: string, width: number): string[] {
   const result: string[] = [];
@@ -12,11 +12,11 @@ function wrap(ctx: CanvasRenderingContext2D, value: string, width: number): stri
 }
 
 export function drawTrayPrint(rows: readonly TrayRow[], zone: string, page: number, pages: number, source: string): HTMLCanvasElement {
-  const widths = [108, 88, 175, 195, 145, 145, 450, 160], headers = ["Fecha", "Zona", "Usuario", "Comercio", "Total", "Presupuesto", "Notas", "Comprobante"];
+  const widths = [108, 88, 175, 195, 145, 145, 450, 160], headers = ["Fecha", "Zona", "Usuario", "Comercio", "Total", "Presupuesto", "Notas", "Rendido"];
   const canvas = document.createElement("canvas"); canvas.width = widths.reduce((a, b) => a + b, 0);
   let ctx = canvas.getContext("2d"); if (!ctx) throw new Error("No se puede generar la imagen en este navegador."); ctx.font = "16px Arial";
   const prepared = rows.map(row => {
-    const values = [trayDate(row.date), row.zone || "Sin zona", row.person || "Sin persona", row.merchant, trayMoney(row.amount, row.currency), row.budget, (row.notes ?? "Notas no disponibles") + (row.approvalNotes ? `\n\nNota de aprobación (fuente):\n${row.approvalNotes}` : ""), mendelReceipt(row).label];
+    const values = [trayDate(row.date), row.zone || "Sin zona", row.person || "Sin persona", row.merchant, trayMoney(row.amount, row.currency), row.budget, (row.notes ?? "Notas no disponibles") + (row.approvalNotes ? `\n\nNota de aprobación (fuente):\n${row.approvalNotes}` : "") + (row.auditNotes ? `\n\nNota de auditoría (Mendel):\n${row.auditNotes}` : ""), renditionLabel(row)];
     const lines = values.map((value, i) => wrap(ctx!, value || "—", widths[i] - 24));
     return { lines, height: Math.max(46, ...lines.map(line => line.length * 22 + 24)) };
   });

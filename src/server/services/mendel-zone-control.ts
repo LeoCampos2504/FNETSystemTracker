@@ -71,7 +71,7 @@ export async function zoneWrite(db: ZoneDb, user: User, input: ZoneAction) {
     if ((latest?.id ?? null) !== input.expectedEventId) fail('RECEIPT_CHANGED');
     if (sourceSnapshotHash(row) !== input.expectedSnapshotHash) fail('EXPENSE_CHANGED');
     const current = receiptState(row.payload, latest);
-    const detail = { ok: input.ok, before: latest ? current.ok : null, version: current.version + 1,
+    const detail = { ok: input.ok, manual: true as const, before: latest ? current.ok : null, version: current.version + 1,
       sourceHash: receiptSourceHash(row.payload), expectedEventId: input.expectedEventId, expectedSnapshotHash: input.expectedSnapshotHash };
     await db.query('INSERT INTO ops_events(id,resource_key,action,actor_id,detail) VALUES($1::uuid,$2,$3,$4::uuid,$5::jsonb) RETURNING id',
       [input.requestId, receiptResource(input.transactionId), RECEIPT_ACTION, user.id, JSON.stringify(detail)]);

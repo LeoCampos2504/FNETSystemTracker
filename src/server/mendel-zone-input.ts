@@ -10,10 +10,11 @@ export const sharedExpenseSchema = z.object({
   receipt: z.enum(["SI", "NO", "SIN_DATO"]), locality: text(200), coordinator: text(250),
   paymentStatus: text(200), officialApproval: text(200), zoneSource: text(250),
   documentName: text(250).nullable().optional(), receiptStatus: text(200).nullable().optional(),
+  auditNotes: text(10000).nullable().optional(),
 }).strict();
 const sourceRefreshRow = sharedExpenseSchema.pick({ transactionId: true, date: true, person: true, merchant: true, amount: true, currency: true, budget: true }).extend({
   expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
-  patch: sharedExpenseSchema.pick({ notes: true, approvalNotes: true, receipt: true, documentName: true, receiptStatus: true }).partial().strict().refine(value => Object.keys(value).length > 0),
+  patch: sharedExpenseSchema.pick({ notes: true, approvalNotes: true, auditNotes: true, receipt: true, documentName: true, receiptStatus: true }).partial().strict().refine(value => Object.keys(value).length > 0),
 }).strict();
 export const zoneActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal('receipt'), transactionId, ok: z.boolean(), expectedEventId: z.string().uuid().nullable(), expectedSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/), requestId: z.string().uuid() }).strict(),

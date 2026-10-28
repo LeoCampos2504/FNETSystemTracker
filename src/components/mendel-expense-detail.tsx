@@ -25,6 +25,7 @@ export function MendelExpenseDetail({ row, onSaved, canReviewReceipt = false }: 
         <h3><MessageSquareText size={16} aria-hidden="true" /> Nota de la transacción</h3>
         <div className={`${styles.fullNote} ${styles.detailNote}`}>{row.notes ?? "Notas no disponibles en esta fuente."}</div>
         {row.approvalNotes && <><h3>Nota de aprobación de la fuente</h3><div className={`${styles.fullNote} ${styles.detailNote}`}>{row.approvalNotes}</div></>}
+        {row.auditNotes && <><h3>Nota de auditoría (Mendel)</h3><div className={`${styles.fullNote} ${styles.detailNote}`}>{row.auditNotes}</div></>}
         <p className={styles.detailHint}>Leé las notas completas antes de confirmar. Un comentario no cambia por sí solo la aprobación oficial.</p>
       </div>
       <ZoneDecisionEditor row={row} onSaved={onSaved} />

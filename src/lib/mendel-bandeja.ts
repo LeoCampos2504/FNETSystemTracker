@@ -1,4 +1,4 @@
-import { mendelReceipt } from './mendel-receipt';
+import { mendelReceipt, renditionLabel } from './mendel-receipt';
 // Presentation-only control. No approval decisions or official data mutations.
 export type TrayRow = {
   key: string; transactionId: string; date: string; person: string; merchant: string;
@@ -8,12 +8,13 @@ export type TrayRow = {
   revision?: number; decisionId?: string | null; internalDecision?: string; needsReconfirmation?: boolean;
   decisionActor?: string; decisionAt?: string | null; decisionComment?: string;
   documentName?: string | null; receiptStatus?: string | null;
+  auditNotes?: string | null;
   snapshotHash?: string; sourceUpdatedAt?: string;
-  receiptCheck?: { ok: boolean; eventId: string | null; version: number; actor: string; at: string | null; needsReview: boolean };
+  receiptCheck?: { ok: boolean; eventId: string | null; version: number; actor: string; at: string | null; needsReview: boolean; choice?: boolean | null };
 };
 export type ZoneEntry = { person: string; zone: string; locality: string; coordinator: string; sourceRow: number };
 export type ZoneOverrides = Readonly<Record<string, string>>;
-export type TrayFilters = { query: string; zone: string; person: string; budget: string; receipt: string; from: string; to: string; hideSigned: boolean };
+export type TrayFilters = { query: string; zone: string; person: string; budget: string; receipt: string; from: string; to: string; hideSigned: boolean; discountsOnly?: boolean };
 export const EMPTY_TRAY_FILTERS: TrayFilters = { query: "", zone: "", person: "", budget: "", receipt: "", from: "", to: "", hideSigned: true };
 export const normalizeTrayText = (value: unknown) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[_-]/g, " ").replace(/\s+/g, " ").trim();
 const nameKey = (value: string) => normalizeTrayText(value).replace(/[.,]/g, " ").replace(/\s+/g, " ").trim();
@@ -69,8 +70,18 @@ export function decorateTrayRows(rows: readonly TrayRow[], directory: readonly Z
   });
 }
 
-export function hasTraySignature(row: Pick<TrayRow, "notes" | "approvalNotes">): boolean {
-  return [row.notes, row.approvalNotes].some(value => /\b(?:eugenia salto|salto eugenia)\b/.test(normalizeTrayText(value)));
+export function hasTraySignature(row: Pick<TrayRow, "notes" | "approvalNotes" | "auditNotes">): boolean {
+  return [row.notes, row.approvalNotes, row.auditNotes].some(value => /\b(?:eugenia salto|salto eugenia)\b/.test(normalizeTrayText(value)));
+}
+
+/** A mention for human review, never a payroll calculation or approval. */
+export function hasTrayDiscount(row: Pick<TrayRow, 'notes' | 'approvalNotes' | 'auditNotes'>): boolean {
+  return [row.notes, row.approvalNotes, row.auditNotes].some(value => /\bdescuentos?\b/.test(normalizeTrayText(value)));
+}
+
+export function traySourcePeriod(rows: readonly Pick<TrayRow, 'date'>[]) {
+  const dates = rows.map(r => trayDateKey(r.date)).filter(Boolean).sort();
+  return { first: dates[0] ?? '', last: dates.at(-1) ?? '', invalidDates: rows.length - dates.length };
 }
 
 export function trayDateKey(value: string): string {
@@ -91,11 +102,12 @@ export function trayDate(value: string): string { const day = trayDateKey(value)
 
 export function filterTray(rows: readonly TrayRow[], filters: TrayFilters): TrayRow[] {
   const query = normalizeTrayText(filters.query);
-  return rows.filter(row => (!filters.hideSigned || !hasTraySignature(row))
-    && (!query || normalizeTrayText([row.person, row.merchant, row.notes, row.approvalNotes, row.budget, row.transactionId].join(" ")).includes(query))
+  return rows.filter(row => (!filters.discountsOnly || hasTrayDiscount(row))
+    && (!filters.hideSigned || filters.discountsOnly || !hasTraySignature(row))
+    && (!query || normalizeTrayText([row.person, row.merchant, row.notes, row.approvalNotes, row.auditNotes, row.budget, row.transactionId].join(" ")).includes(query))
     && (!filters.zone || (filters.zone === "__UNASSIGNED__" ? !row.zone : row.zone === filters.zone))
     && (!filters.person || row.person === filters.person) && (!filters.budget || row.budget === filters.budget)
-    && (!filters.receipt || (filters.receipt === 'NO' ? mendelReceipt(row).missing : filters.receipt === 'MANUAL_OK' ? mendelReceipt(row).kind === 'MANUAL_OK' : filters.receipt === 'PDF' ? !!row.documentName?.trim() : filters.receipt === 'REVIEW' ? mendelReceipt(row).kind === 'REVIEW' : row.receipt === filters.receipt))
+    && (!filters.receipt || (filters.receipt === 'NO' ? renditionLabel(row) === 'No' : filters.receipt === 'SI' ? renditionLabel(row) === 'Sí' : filters.receipt === 'MANUAL_OK' ? mendelReceipt(row).kind === 'MANUAL_OK' : filters.receipt === 'PDF' ? !!row.documentName?.trim() : filters.receipt === 'REVIEW' ? mendelReceipt(row).kind === 'REVIEW' : row.receipt === filters.receipt))
     && (!filters.from || (!!trayDateKey(row.date) && trayDateKey(row.date) >= filters.from))
     && (!filters.to || (!!trayDateKey(row.date) && trayDateKey(row.date) <= filters.to)))
     .sort((a, b) => trayDateKey(b.date).localeCompare(trayDateKey(a.date)) || a.key.localeCompare(b.key, "es", { numeric: true }));
@@ -153,10 +165,11 @@ export function parseTrayCsv(input: string) {
   };
   const cols = { date: column(["fecha transaccion", "fecha de transaccion", "fecha"], true), person: column(["usuario", "persona"], true), merchant: column(["comercio", "merchant"], true), amount: column(["importe total", "total", "importe"], true), currency: column(["moneda", "currency"]), budget: column(["presupuesto", "budget"]), notes: column(["notas", "nota de la transaccion", "nota"]), approval: column(["nota de aprobacion", "notas de aprobacion"]), receipt: column(["hay ticket", "tiene ticket"]), id: column(["id transaccion", "id de transaccion"]), zone: column(["zona", "region"]), locality: column(["localidad (excel)", "localidad"]), coordinator: column(["coordinador"]), zoneSource: column(["fuente zona"]), payment: column(["estado transaccion", "estado de transaccion"]), official: column(["estado de aprobacion", "approval status"]) };
   const document = column(['nombre pdf']), receiptStatus = column(['estado comprobacion']);
-  const sourceFields = ([['notes', cols.notes], ['approvalNotes', cols.approval], ['receipt', cols.receipt], ['documentName', document], ['receiptStatus', receiptStatus]] as const).filter(([, index]) => index >= 0).map(([field]) => field);
-  return { notesAvailable: cols.notes >= 0 || cols.approval >= 0, sourceFields, rows: matrix.map((cells, i): TrayRow => {
+  const auditNotes = column(['notas de auditoria', 'nota de auditoria']);
+  const sourceFields = ([['notes', cols.notes], ['approvalNotes', cols.approval], ['auditNotes', auditNotes], ['receipt', cols.receipt], ['documentName', document], ['receiptStatus', receiptStatus]] as const).filter(([, index]) => index >= 0).map(([field]) => field);
+  return { notesAvailable: cols.notes >= 0 || cols.approval >= 0 || auditNotes >= 0, sourceFields, rows: matrix.map((cells, i): TrayRow => {
     const get = (index: number) => index < 0 ? "" : cells[index], receipt = normalizeTrayText(get(cols.receipt));
-    return { key: `csv-${i}`, transactionId: get(cols.id).trim(), date: get(cols.date), person: get(cols.person).trim(), merchant: get(cols.merchant), amount: get(cols.amount), currency: get(cols.currency), budget: get(cols.budget).trim(), notes: cols.notes >= 0 ? get(cols.notes) : null, approvalNotes: get(cols.approval), receipt: ["si", "yes", "true", "1"].includes(receipt) ? "SI" : ["no", "false", "0"].includes(receipt) ? "NO" : "SIN_DATO", zone: get(cols.zone).trim(), locality: get(cols.locality), coordinator: get(cols.coordinator), paymentStatus: get(cols.payment), officialApproval: get(cols.official), zoneSource: get(cols.zoneSource) || (get(cols.zone).trim() ? "Columna del CSV" : ""), ...(document >= 0 ? { documentName: get(document).trim() || null } : {}), ...(receiptStatus >= 0 ? { receiptStatus: get(receiptStatus).trim() || null } : {}) };
+    return { key: `csv-${i}`, transactionId: get(cols.id).trim(), date: get(cols.date), person: get(cols.person).trim(), merchant: get(cols.merchant), amount: get(cols.amount), currency: get(cols.currency), budget: get(cols.budget).trim(), notes: cols.notes >= 0 ? get(cols.notes) : null, approvalNotes: get(cols.approval), receipt: ["si", "yes", "true", "1"].includes(receipt) ? "SI" : ["no", "false", "0"].includes(receipt) ? "NO" : "SIN_DATO", zone: get(cols.zone).trim(), locality: get(cols.locality), coordinator: get(cols.coordinator), paymentStatus: get(cols.payment), officialApproval: get(cols.official), zoneSource: get(cols.zoneSource) || (get(cols.zone).trim() ? "Columna del CSV" : ""), ...(auditNotes >= 0 ? { auditNotes: get(auditNotes) } : {}), ...(document >= 0 ? { documentName: get(document).trim() || null } : {}), ...(receiptStatus >= 0 ? { receiptStatus: get(receiptStatus).trim() || null } : {}) };
   }) };
 }
 

@@ -13,7 +13,7 @@ export async function zonePost(input: unknown) {
   if (!response.ok) throw new Error(response.status === 401 ? "Tu sesión venció. Volvé a ingresar." : response.status === 403 ? "No tenés permiso para esta acción o zona." : ["EXPENSE_CHANGED", "DECISION_CHANGED", "RECEIPT_CHANGED"].includes(result.code) ? "Otro usuario actualizó este gasto. Recargá la bandeja antes de responder." : result.code === "INPUT_TOO_LARGE" ? "El lote es demasiado grande." : `No se guardó el cambio (${result.code || response.status}).`);
   return result;
 }
-const payloadKeys = ["transactionId", "zone", "date", "person", "merchant", "amount", "currency", "budget", "notes", "approvalNotes", "receipt", "locality", "coordinator", "paymentStatus", "officialApproval", "zoneSource", "documentName", "receiptStatus"] as const;
+const payloadKeys = ["transactionId", "zone", "date", "person", "merchant", "amount", "currency", "budget", "notes", "approvalNotes", "receipt", "locality", "coordinator", "paymentStatus", "officialApproval", "zoneSource", "documentName", "receiptStatus", "auditNotes"] as const;
 export async function refreshZoneRows(rows: SourceRefreshRow[], progress: (result: SourceRefreshResult) => void) {
   const total: SourceRefreshResult = { updated: 0, unchanged: 0, issues: [] };
   let batch: SourceRefreshRow[] = [];
