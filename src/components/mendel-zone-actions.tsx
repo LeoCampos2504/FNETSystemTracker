@@ -30,10 +30,10 @@ export async function refreshZoneRows(rows: SourceRefreshRow[], progress: (resul
   }
   await flush(); return total;
 }
-export async function publishZoneRows(rows: TrayRow[], progress: (count: number) => void) {
+export async function publishZoneRows(rows: TrayRow[], progress: (count: number) => void, newOnly = false) {
   if (!rows.length || rows.some(r => !r.transactionId || !r.zone)) throw new Error("Cada gasto a compartir debe tener ID real de Mendel y zona asignada. Revisá los filtros y las zonas faltantes.");
   let batch: unknown[] = [], count = 0;
-  async function flush() { if (!batch.length) return; await zonePost({ action: "publish", rows: batch }); count += batch.length; progress(count); batch = []; }
+  async function flush() { if (!batch.length) return; const result = await zonePost({ action: "publish", rows: batch, newOnly }); count += result.saved; progress(count); batch = []; }
   for (const row of rows) {
     const payload = Object.fromEntries(payloadKeys.map(key => [key, row[key]]));
     const size = new TextEncoder().encode(JSON.stringify({ action: "publish", rows: [...batch, payload] })).length;

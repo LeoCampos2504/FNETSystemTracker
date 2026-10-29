@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-10-29 — Importación autoservicio Mendel (local, pendiente de publicación)
+
+Corregido el flujo que actualizaba solo existentes y descartaba los nuevos al volver al control: Guardar CSV en FNET procesa existentes y nuevos con zona de todo el archivo, sin depender de filtros/firmas, conserva CSV y asignaciones si hay pendientes y verifica persistencia. Inserción newOnly protegida en servidor, sin sobrescribir registros concurrentes ni autorizaciones. Sin migración ni cambio de permisos. Ver [causa, alcance, validación y operación](reports/MENDEL_SELF_SERVICE_IMPORT_20261029.md). Esta corrección todavía no está publicada; se conserva el histórico siguiente.
+
 ## 2026-10-28 — Descuentos, notas de auditoría y actualidad de Mendel (local)
 
 CSV actual verificado: 507 filas hasta el 28/10, sin pérdida de filas del lector; la vista publicada consultaba otro registro compartido y excluía firmados. Corregida localmente la omisión de Notas de auditoria y agregado Solo descuentos incluyendo firmados, fecha del último gasto cargado y Rendido Sí/No editable en ambos sentidos con historial. No hay conexión automática Mendel ni importación real realizada. Sin migración, Analista sigue pausado. Ver [diagnóstico, semántica y validación](reports/MENDEL_DISCOUNTS_FRESHNESS_20261028.md).

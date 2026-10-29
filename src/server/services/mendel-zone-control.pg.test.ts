@@ -94,6 +94,16 @@ describe('manual document review, persisted separately from source and approvals
   });
 });
 describe('evidence-only CSV refresh on actual SQL',()=>{
+  it('inserts new CSV IDs only: retries and concurrent existing IDs never overwrite zone, facts, revision or decisions', async () => {
+    await publishAndGrant(); await write(coord, decision());
+    const before = (await zoneOverview(db, admin)).rows[0];
+    const input = { action: 'publish', newOnly: true, rows: [{ ...row, zone: 'OTHER', amount: '999' }, { ...row, transactionId: 'NEW-29', date: '2026-10-29' }] } as const;
+    expect(await write(admin, { ...input, rows: [...input.rows] })).toEqual({ saved: 1 });
+    expect(await write(admin, { ...input, rows: [...input.rows] })).toEqual({ saved: 0 });
+    expect((await zoneOverview(db, admin)).rows.find(r => r.transactionId === row.transactionId)).toMatchObject({ zone: before.zone, amount: before.amount, revision: before.revision, internalDecision: 'AUTORIZADO', decisionId: before.decisionId });
+    expect(await zoneHistory(db, coord, row.transactionId)).toHaveLength(1);
+    await expect(write(coord, { ...input, rows: [...input.rows] })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
   it('preserves approval revision, author, zone, amount and full decision history',async()=>{
     await publishAndGrant();await write(coord,decision());const before=(await zoneOverview(db,admin)).rows[0];
     expect(await write(admin,await refreshInput())).toMatchObject({updated:1,unchanged:0,issues:[]});

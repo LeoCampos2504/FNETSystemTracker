@@ -98,6 +98,16 @@ export async function zoneWrite(db: ZoneDb, user: User, input: ZoneAction) {
   if (input.action === "publish") {
     await assertAdmin(user);
     if (new Set(input.rows.map(r => r.transactionId)).size !== input.rows.length) fail("DUPLICATE_TRANSACTION", 422);
+    if (input.newOnly) {
+      let saved = 0;
+      for (const r of [...input.rows].sort((a, b) => a.transactionId.localeCompare(b.transactionId))) {
+        const inserted = await db.query(`INSERT INTO fnet_mendel_zone_expenses(transaction_id,zone,payload,published_by)
+          VALUES($1,$2,$3::jsonb,$4::uuid) ON CONFLICT(transaction_id) DO NOTHING RETURNING transaction_id`,
+          [r.transactionId, r.zone, JSON.stringify(r), user.id]);
+        saved += inserted.length;
+      }
+      return { saved };
+    }
     for (const r of [...input.rows].sort((a, b) => a.transactionId.localeCompare(b.transactionId))) {
       await db.query(`INSERT INTO fnet_mendel_zone_expenses(transaction_id,zone,payload,published_by)
         VALUES($1,$2,$3::jsonb,$4::uuid) ON CONFLICT(transaction_id) DO UPDATE SET zone=EXCLUDED.zone,payload=EXCLUDED.payload,
