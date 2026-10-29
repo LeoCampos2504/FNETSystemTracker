@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-10-29 — Control de auditorías de seguridad física (local)
+
+Preparado /auditorias con consulta para todos los usuarios activos y edición/importación/adjuntos solo ADMIN, según confirmación de Eugenia. Usa su planilla de 66 personas, historial persistente por registro, archivos privados, fechas a tres meses con excepciones y avisos dentro de la pantalla. Descarga Excel completo/filtrado con fechas nativas y CUIL enmascarado para lectores. Requiere tres tablas internas nuevas; la migración está preparada y NO ejecutada. No hay publicación ni carga real. El rol Analista permanece fuera de alcance. Ver [diseño, seguridad, pruebas y habilitación pendiente](reports/PHYSICAL_AUDITS_01.md).
+
 ## 2026-10-29 — Importación autoservicio Mendel (local, pendiente de publicación)
 
 Corregido el flujo que actualizaba solo existentes y descartaba los nuevos al volver al control: Guardar CSV en FNET procesa existentes y nuevos con zona de todo el archivo, sin depender de filtros/firmas, conserva CSV y asignaciones si hay pendientes y verifica persistencia. Inserción newOnly protegida en servidor, sin sobrescribir registros concurrentes ni autorizaciones. Sin migración ni cambio de permisos. Ver [causa, alcance, validación y operación](reports/MENDEL_SELF_SERVICE_IMPORT_20261029.md). Esta corrección todavía no está publicada; se conserva el histórico siguiente.
