@@ -10,7 +10,8 @@ import { decisionLabel, publishZoneRows, refreshZoneRows, ZoneAccessEditor, type
 import { MendelExpenseDetail } from "./mendel-expense-detail";
 import { MendelReceiptReview } from './mendel-receipt-review';
 import { mendelReceipt, renditionLabel } from '@/lib/mendel-receipt';
-import { buildMendelSyncPlan, type EvidenceField, type SourceRefreshResult } from '@/lib/mendel-source-refresh';
+import { buildMendelSyncPlan, type EvidenceField } from '@/lib/mendel-source-refresh';
+import { planMendelImport, saveMendelImport } from '@/lib/mendel-csv-import';
 
 const PAGE_SIZE = 50, PRINT_SIZE = 10;
 const values = (list: string[]) => [...new Set(list.filter(Boolean))].sort((a, b) => a.localeCompare(b, "es", { numeric: true }));
@@ -56,6 +57,10 @@ export function MendelZoneTray({ admin = false }: { admin?: boolean }) {
     catch (e) { return { updates: [], newRows: [], error: e instanceof Error ? e.message : 'No se pudo preparar la actualización.' }; }
   }, [sourceRows, catalog.rows, visible, sourceFields]);
   const shareRows = csvMode ? syncPlan.newRows : visible;
+  const importPlan = useMemo(() => {
+    try { return { ...planMendelImport(rows, catalog.rows, sourceFields), error: '' }; }
+    catch (e) { return { updates: [], ready: [], pending: [], error: e instanceof Error ? e.message : 'Revisá el CSV.' }; }
+  }, [rows, catalog.rows, sourceFields]);
   const selected = rows.find(row => row.key === selectedKey);
   const zones = values(rows.map(row => row.zone)), people = values(rows.map(row => row.person)), budgets = values(rows.map(row => row.budget));
   const hidden = !filters.discountsOnly && filters.hideSigned && notesAvailable ? rows.filter(hasTraySignature).length : 0;
@@ -113,18 +118,29 @@ export function MendelZoneTray({ admin = false }: { admin?: boolean }) {
     catch (e) { setError(`${e instanceof Error ? e.message : "No se pudo compartir."} ${saved} gastos guardados; los restantes no se guardaron. Podés reintentar sin duplicarlos.`); }
     finally { setBusy(false); }
   }
-  async function refreshSource() {
+  async function importCsv() {
     if (refreshLocked.current) return;
-    if (syncPlan.error) { setError(syncPlan.error); return; }
-    if (!window.confirm(`Se revisarán ${syncPlan.updates.length} gastos ya compartidos incluidos en este CSV, también los ocultos por filtros o firma. Solo se actualizan notas y comprobantes. No se cambian zonas, importes ni respuestas de coordinación, y no se comparten gastos nuevos. ¿Continuar?`)) return;
+    if (importPlan.error) { setError(importPlan.error); return; }
+    if (!window.confirm(`Guardar CSV completo en FNET: actualizar notas y comprobantes de los existentes y agregar los nuevos con zona. No depende de los filtros. Se conservan autorizaciones; los conflictos y gastos sin zona quedan pendientes. ¿Continuar?`)) return;
     refreshLocked.current = true; setBusy(true); setError('');
-    let progress: SourceRefreshResult = { updated: 0, unchanged: 0, issues: [] };
     try {
-      const result = await refreshZoneRows(syncPlan.updates, next => { progress = next; setStatus(`${next.updated} actualizados · ${next.unchanged} sin cambios…`); });
-      await loadRegistry(true);
-      setStatus(`${result.updated} gastos actualizados · ${result.unchanged} sin cambios. Las respuestas de coordinación se conservaron.`);
-      if (result.issues.length) setError(`${result.issues.length} gastos NO actualizados por cambios de datos o versión: ${result.issues.slice(0, 8).map(issue => issue.transactionId).join(', ')}. Recargá el control y revisá esos casos; no se reemplazaron sus datos.`);
-    } catch (e) { setError(`${e instanceof Error ? e.message : 'No se pudo actualizar.'} ${progress.updated} actualizados en lotes confirmados; el resto no se informó como guardado. Podés recargar el control y reintentar.`); }
+      const read = async () => {
+        const response = await fetch('/api/mendel/zone-control', { cache: 'no-store' });
+        if (!response.ok) throw new Error('No se pudo verificar el control compartido. No se informa la importación como completa.');
+        const next = await response.json() as ZoneCatalog; setCatalog(next); return next.rows;
+      };
+      const result = await saveMendelImport(rows, sourceFields, { read,
+        refresh: updates => refreshZoneRows(updates, next => setStatus(`${next.updated} actualizados · ${next.unchanged} sin cambios…`)),
+        insert: next => publishZoneRows(next, count => setStatus(`${count} nuevos guardados…`), true),
+      });
+      setStatus(`Guardado en FNET: ${result.inserted} nuevos · ${result.updated} actualizados · ${result.unchanged} sin cambios · ${result.pending.length} nuevos sin zona · ${result.issues.length} conflictos. Autorizaciones conservadas.`);
+      if (result.issues.length) setError(`${result.issues.length} gastos existentes requieren revisión; no se sobrescribieron. Los nuevos con zona sí se procesaron. IDs: ${result.issues.map(i => `${i.transactionId} (${i.reason === 'SOURCE_FACTS_CHANGED' ? 'datos distintos' : 'versión distinta'})`).join(', ')}`);
+      if (!result.pending.length && !result.issues.length) {
+        sourceMode.current = 'SHARED'; setSourceRows(result.shared); setSource('Control compartido FNET'); setSourceFields([]);
+        setFilters({ ...EMPTY_TRAY_FILTERS, hideSigned: false }); setDecisionFilter(''); setPage(0);
+      }
+      // Keep the CSV and manual zone assignments available when something still needs attention.
+    } catch (e) { setError(`${e instanceof Error ? e.message : 'No se pudo guardar.'} Puede haber lotes guardados. El CSV se conserva: reintentá Guardar CSV en FNET sin duplicar gastos.`); }
     finally { refreshLocked.current = false; setBusy(false); }
   }
   function assign(person: string) {
@@ -152,12 +168,12 @@ export function MendelZoneTray({ admin = false }: { admin?: boolean }) {
       {admin && <label className={styles.fileButton}>Cargar CSV<input aria-label="Cargar CSV de gastos" type="file" accept=".csv,.tsv" disabled={busy} onChange={event => { void loadCsv(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></label>}
       <button type="button" disabled={busy} onClick={() => void loadRegistry()}>Cargar control compartido</button>
       {admin && <label className={styles.fileButton}>Cargar planilla de zonas<input aria-label="Cargar planilla de zonas" type="file" accept=".xlsx" disabled={busy} onChange={event => { void loadDirectory(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></label>}
-      {admin && csvMode && <button type="button" className={styles.primary} disabled={busy || !!syncPlan.error || !syncPlan.updates.length} onClick={() => void refreshSource()}>Actualizar {syncPlan.updates.length} ya compartidos desde CSV</button>}
-      {admin && <button type="button" className={csvMode ? '' : styles.primary} disabled={busy || !shareRows.length || (csvMode && !!syncPlan.error)} onClick={() => void publish()}>Compartir {shareRows.length} {csvMode ? 'nuevos filtrados' : 'gastos filtrados'}</button>}
+      {admin && csvMode && <button type="button" className={styles.primary} disabled={busy || !!importPlan.error || (!importPlan.updates.length && !importPlan.ready.length)} onClick={() => void importCsv()}>Guardar CSV en FNET</button>}
+      {admin && !csvMode && <button type="button" className={styles.primary} disabled={busy || !shareRows.length} onClick={() => void publish()}>Compartir {shareRows.length} gastos filtrados</button>}
     </div></header>
     <p className={styles.source}><strong>Fuente:</strong> {source || "Elegí un CSV real o el registro importado de FNET. No hay datos demo."}<br />{directoryFile ? `Zonas: ${directoryFile}. Se usa Operación para agrupar y Zona como localidad.` : "Cargá la planilla de zonas o asignalas manualmente. No se deducen del presupuesto."}</p>
-    <p className={styles.notice}>No hay conexión automática a Mendel. El CSV se previsualiza en tu navegador. “Actualizar ya compartidos” guarda notas y comprobantes de los IDs existentes, incluidos los ocultos, sin cambiar zonas ni respuestas. “Compartir nuevos filtrados” incorpora solo gastos nuevos con zona. Un nombre de PDF informado no prueba que su contenido esté validado.</p>
-    {csvMode && <p className={styles.source}>Vista previa CSV: {syncPlan.updates.length} IDs ya compartidos disponibles para actualizar, independientemente de los filtros. {syncPlan.newRows.length} nuevos visibles para compartir. Para marcar un comprobante OK manualmente, abrí el gasto desde “Cargar control compartido”. {syncPlan.error}</p>}
+    <p className={styles.notice}>1. Cargá el CSV actualizado de Mendel. 2. Cargá la planilla de zonas si hay personas nuevas, o resolvé las zonas faltantes. 3. Pulsá “Guardar CSV en FNET”. Se procesa todo el archivo, aunque haya filtros o comentarios firmados. No hay conexión automática a Mendel. Un nombre de PDF informado no prueba que su contenido esté validado.</p>
+    {csvMode && <p className={styles.source}>CSV cargado: {importPlan.updates.length} existentes · {importPlan.ready.length} nuevos listos · {importPlan.pending.length} nuevos pendientes de zona. Cargar el archivo no es guardarlo: pulsá “Guardar CSV en FNET”. El control guardado llega al {traySourcePeriod(catalog.rows).last || 'sin datos'}. {importPlan.error}</p>}
     {admin && <ZoneAccessEditor catalog={catalog} onSaved={loadRegistry} />}
     {error && <p className={styles.error} role="alert">{error}</p>}{busy && <p role="status">Procesando…</p>}<p className={styles.status} role="status">{status}</p>
     {!!source && !notesAvailable && <p className={styles.notice}>Esta fuente no tiene notas disponibles: NO se puede aplicar la exclusión por comentario. Para revisar y ocultar esas filas, cargá un CSV que incluya Notas. No se asumió que los comentarios estuvieran vacíos.</p>}
