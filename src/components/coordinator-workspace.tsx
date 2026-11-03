@@ -1,5 +1,6 @@
 "use client";
 import { useEffect,useState,type ReactNode } from 'react';
+import Link from 'next/link';
 import type { GuardOverview } from '@/contracts/operations';
 import { CticView } from './guard-duty';
 import { opCall } from './operations-common';
@@ -8,5 +9,5 @@ export function CticGate({onLogout,children}:{onLogout:()=>void;children:ReactNo
  const [ctic,setCtic]=useState<boolean|null>(null);
  useEffect(()=>{let active=true;opCall<GuardOverview>('/api/operations/guard').then(o=>{if(active)setCtic(o.ctic);}).catch(()=>{if(active)setCtic(false);});return()=>{active=false;};},[]);
  if(ctic===null)return <main className="auth-loading">Cargando…</main>;
- return ctic?<CticView onLogout={onLogout}/>:<>{children}</>;
+ return ctic?<><nav aria-label="Consulta de auditorías"><Link className="button secondary" href="/auditorias">Control de auditorías · consulta</Link></nav><CticView onLogout={onLogout}/></>:<>{children}</>;
 }

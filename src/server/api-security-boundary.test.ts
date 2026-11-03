@@ -24,7 +24,9 @@ describe("API security boundaries", () => {
     expect(protectedRoutes.length).toBeGreaterThan(0);
     for (const path of protectedRoutes) {
       const source = readFileSync(path, "utf8");
-      expect(source.includes("requireAdminSession()") || source.includes("requireOperationsSession()") || source.includes("requireGlobalDataSession()"), relative(apiRoot, path)).toBe(true);
+      const route = relative(apiRoot, path).replaceAll('\\', '/');
+      const auditRoute = ['auditorias/route.ts', 'auditorias/files/route.ts', 'auditorias/export/route.ts'].includes(route);
+      expect(source.includes("requireAdminSession()") || source.includes("requireOperationsSession()") || source.includes("requireGlobalDataSession()") || (auditRoute && source.includes('requireAuditSession()')), route).toBe(true);
     }
   });
 
