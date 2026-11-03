@@ -40,3 +40,11 @@ Cierre local: **543/543 tests, 78 archivos** (baseline 519/519). Incluye reinten
 ## Continuación: publicación autorizada
 
 El 29/10/2026 Eugenia autorizó «autorizo, yo lo pruebo» a la propuesta explícita de commit, push, PR y publicación en FNET de Leo, creando únicamente las tres tablas internas de este módulo y condicionado a CI exitoso. Se conserva la preparación transaccional existente con --migrations-only, sin reimportar fuentes iniciales ni tocar datos Sytex/n8n. No se cambia ninguna migración histórica. La prueba manual y la importación de la planilla/archivos reales quedan a cargo de la usuaria. Los resultados de CI, fusión y despliegue se registrarán en el PR; esta autorización no equivale a certificación manual ni verificación de backups.
+
+## Continuación 03/11/2026 — Interfaz compacta y fácil de manejar
+
+Eugenia pidió retomar Auditorías y mejorar su presentación/usabilidad. Se integró main con el Excel de Mendel publicado en PR #62 para conservarlo, sin alterar esa funcionalidad. El PR #61 de Auditorías seguía abierto y no desplegado.
+
+Cambios exclusivamente de interfaz: resumen con cinco tarjetas clicables para filtrar por vencimiento, encabezado compacto, tabla más clara, tarjetas en celulares y ficha lateral con diálogo nativo (foco/modal/escape). Registrar auditoría prioriza fechas y notas, sin mezclar la edición de identidad; la excepción aparece cuando corresponde. Editar persona sigue separado. Historial y archivos quedan en la misma ficha; los errores de guardado se muestran dentro del diálogo, no detrás de él. Se conservan API, permisos, tablas y SQL preparados; no hay nuevas migraciones respecto de la autorización original.
+
+Pruebas integradas con Mendel: 548/548 (79 archivos), incluido resumen visual renderizado y permisos. TypeScript y lint sin errores; cuatro advertencias previas. Build alternativo Webpack local PASS. Se exige CI habitual del nuevo HEAD antes de fusionar. Se generó una vista previa del componente real sin datos personales fuera del repositorio, pero el navegador rechazó abrir archivos locales; no se intentó eludir la restricción ni se certificó CSS, móvil o interacción visual. La validación manual de la usuaria continúa pendiente. No se cargó la nómina real ni se escribieron auditorías de prueba en producción.

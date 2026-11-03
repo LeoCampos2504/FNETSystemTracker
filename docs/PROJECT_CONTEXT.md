@@ -2,6 +2,8 @@
 
 ## 2026-10-29 — Control de auditorías de seguridad física (local)
 
+Continuación 03/11: reanudado PR #61 con presentación compacta, resúmenes clicables, tarjetas móviles y ficha lateral para edición/historial/adjuntos. Integrado main para preservar el Excel de Mendel (#62). Misma autorización de publicación y tres tablas; sin nuevas ampliaciones de permisos. 548 pruebas locales aprobadas; certificación visual a cargo de la usuaria. El resultado de publicación se registra en el PR.
+
 Preparado /auditorias con consulta para todos los usuarios activos y edición/importación/adjuntos solo ADMIN, según confirmación de Eugenia. Usa su planilla de 66 personas, historial persistente por registro, archivos privados, fechas a tres meses con excepciones y avisos dentro de la pantalla. Descarga Excel completo/filtrado con fechas nativas y CUIL enmascarado para lectores. Requiere tres tablas internas nuevas; la migración está preparada y NO ejecutada. No hay publicación ni carga real. El rol Analista permanece fuera de alcance. Ver [diseño, seguridad, pruebas y habilitación pendiente](reports/PHYSICAL_AUDITS_01.md).
 
 ## 2026-10-29 — Importación autoservicio Mendel (local, pendiente de publicación)
