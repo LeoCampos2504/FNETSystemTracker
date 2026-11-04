@@ -8,6 +8,7 @@ import { fuelInDateRange, reviewedFuelByOperation } from "@/lib/site-fuel-loads"
 import { OPERATIONAL_TIMEZONE, operationalDateTimeToDate } from "@/lib/operational-timezone";
 import s from "./operations.module.css";
 import c from "./site-control.module.css";
+import { IntraStockControl } from './intra-stock-control';
 
 type Tab = "summary" | "service" | "air" | "fuel";
 const tabs: { key: Tab; label: string }[] = [
@@ -125,6 +126,7 @@ export function SiteControlView() {
         <p className={s.note}>Marcá OK para sumar esa carga. El control se guarda en FNET y se puede desmarcar. Estos totales respetan los filtros de arriba.</p>
         <div className={c.cards} aria-live="polite">{checkedTotals.map(t=><div key={t.operation}><span>{t.operation}</span><strong>{liters(t.liters)}</strong><small>{t.count} cargas OK{t.unknownLiters?` · ${t.unknownLiters} sin litros informados`:""}</small></div>)}</div>
         {!checkedTotals.length&&<p className={s.note}>Todavía no hay cargas marcadas OK en este filtro.</p>}
+        {zones.data?.admin && data && <IntraStockControl fuelRevision={data.fuel} />}
         {fuel.some(f=>f.possibleDuplicate)&&<p className={s.note} role="status">Hay registros de ambas fuentes para un mismo formulario sin coincidencia exacta. Se conservan para revisión; el total puede incluir duplicados. Revisalos antes de marcar OK.</p>}
         <FuelLoads rows={fuel} onOpen={setOpen} onToggle={toggleFuel} savingId={savingId} />
       </>}

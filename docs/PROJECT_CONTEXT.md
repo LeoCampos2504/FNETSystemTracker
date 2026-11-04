@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-11-04 — Cruce Excel de Intra con combustible e insumos (local)
+
+INTRA-STOCK-01 prepara, para Administración, importación compartida del Excel de pendientes de Intra, vínculos explícitos a cargas OK/insumos y resumen de combustible por operación. La usuaria confirmó que las filas desaparecen al descargar en Intra y pidió historial permanente: se conserva lo importado y sus vínculos aunque deje de figurar, con trazabilidad de importaciones y retiros. No se restan todos los OK históricos del Excel actual ni se confirma una descarga por una ausencia. Usa ops_events existente, sin migraciones ni modificaciones externas. 625 pruebas locales aprobadas; autorizada la publicación solo si pasa CI, sin importaciones/OK reales de prueba. El resultado del despliegue se registra en el PR. Ver [contrato, capacidades, protección y validación](reports/INTRA_STOCK_USAGE_01.md).
+
 ## 2026-11-04 — Fecha de realización del combustible (corrección)
 
 Se identificó que el fallback de combustible mostraba la última edición de respuestas, que puede ocurrir al aprobar, en lugar de la realización. Se conservan las preguntas de inicio del FO y se usan tras la fecha específica de carga; la fuente se indica en pantalla. Si falta esa evidencia no se inventa una fecha. Es necesario refrescar las respuestas después de publicar. El historial de OK se conserva y se pide revisar los controles cuyo hash cambió. Sin migraciones ni cambios en n8n; el cruce nuevo con Intra se desarrolla por separado. Ver [alcance y validación](reports/FUEL_REALIZATION_DATE_20261104.md).
