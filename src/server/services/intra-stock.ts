@@ -86,13 +86,17 @@ export async function saveIntraSnapshot(actor: OperationsActor, rows: IntraLine[
 export async function changeIntraLink(actor: OperationsActor, raw: z.infer<typeof intraChange>, load: () => Promise<IntraTarget[]>) {
   assertIntraAdmin(actor);
   const input = intraChange.parse(raw);
+  // Like fuel-review, load source evidence before locking the local ledger. These
+  // broad reads use the shared client, not the transaction's snapshot, and must not
+  // spend its timeout or hold every other importer behind a slow source read.
+  const targets = input.action === 'link' ? await load() : [];
   return writeState(actor, input.version, async state => {
     if (input.action === 'unlink') {
       const previous = state.allocations.find(a => a.id === input.id && a.active);
       if (!previous) fail('INTRA_LINK_NOT_FOUND', 404);
       return { state: { ...state, allocations: state.allocations.map(a => a.id === input.id ? { ...a, active: false, removedAt: new Date().toISOString(), removedBy: actor.user.name } : a) }, change: `Vínculo retirado: ${previous.formCode} · ${previous.quantity}` };
     }
-    const targets = await load(), target = targets.find(t => t.id === input.targetId && t.kind === input.targetKind && t.hash === input.targetHash);
+    const target = targets.find(t => t.id === input.targetId && t.kind === input.targetKind && t.hash === input.targetHash);
     const row = state.records.find(r => r.id === input.lineId);
     if (!row || !target) fail('INTRA_SOURCE_CHANGED');
     const overview: IntraOverview = { ...state, targets };
