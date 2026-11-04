@@ -42,3 +42,9 @@ La vista local de revisión usa el componente real y un servidor en memoria con 
 Resultado local final: **625/625 pruebas en 89 archivos**, TypeScript sin errores, ESLint sin errores (cuatro advertencias previas) y build Webpack aprobado. La vista de revisión comprobó vínculo de 40 contra factura de 100, quedando 60 pendientes, y visibilidad simultánea de la factura ausente en historial. Ancho documental medido 1265/1265 en la vista local; no es una certificación mobile. Falta el build habitual de CI antes de publicar.
 
 No se modifica Intra, Sytex, n8n, Mendel ni inventario real. No se marcan OK de prueba. La corrección de fechas de combustible se publicó por separado en PR #65; esta funcionalidad nueva no está incluida allí.
+
+## Continuación R1 — reservar cantidades pendientes de revisión
+
+Durante el cierre se identificó un caso de borde: un vínculo activo cuya fuente cambiara dejaba de sumar como evidencia válida y liberaba capacidad para otra asignación. Si luego la fuente volvía al valor anterior, ambos vínculos podían sumar. Se separan evidencia válida y capacidad reservada: **todo vínculo activo conserva su reserva de factura y de uso**, aunque necesite revisión. Solo Quitar vínculo libera esa cantidad, con historial. La interfaz usa esa capacidad disponible para proponer cantidades y explica el bloqueo. Sin backfill, migraciones ni modificación de registros reales. Se agregan tres regresiones de dominio y una SQL descartable; la validación final de esta continuación se registra en su PR. Los 625 casos anteriores se conservan.
+
+R1 local: **629/629 en los mismos 89 archivos** (625 anteriores + 4 nuevos), TypeScript y ESLint sin errores (cuatro advertencias previas), build Webpack aprobado. Build habitual de CI y publicación final pendientes de verificar.

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { IntraHistory, IntraLine, IntraOverview, IntraRecord, IntraTarget } from '@/contracts/intra-stock';
 import type { SiteFuelLoad } from '@/contracts/operations';
-import { allocationLimits, intraFuelTotals, lineUse, milli, validAllocation } from '@/lib/intra-stock';
+import { allocationLimits, intraFuelTotals, lineUse, targetAvailable, validAllocation } from '@/lib/intra-stock';
 import { fold } from '@/lib/filters';
 import { operationalDateKey } from '@/lib/operational-timezone';
 import { notifySessionExpired } from './operations-common';
@@ -126,20 +126,21 @@ function LinkPanel({ row, data, busy, onClose, onChange }: { row: IntraRecord; d
   useEffect(() => { panel.current?.scrollIntoView({ block: 'nearest' }); panel.current?.focus({ preventScroll: true }); }, []);
   const candidates = data.targets.filter(t => t.operation === row.operation && (t.kind === 'FUEL') === row.fuel && (row.fuel || fold(t.description) === fold(row.product)) && (!t.invoice || t.invoice.replace(/\s|-/g, '').toUpperCase() === row.invoice.replace(/\s|-/g, '').toUpperCase()));
   const target = candidates.find(t => t.kind + ':' + t.id === picked);
-  const remaining = (t: IntraTarget) => (milli(t.quantity) - data.allocations.filter(a => a.targetId === t.id && a.targetKind === t.kind && validAllocation(a, data.targets, data.records)).reduce((s, a) => s + milli(a.quantity), 0)) / 1000;
+  const remaining = (t: IntraTarget) => targetAvailable(data, t);
   const options = candidates.filter(t => remaining(t) > 0 && fold([t.formCode,t.siteCode,t.description].join(' ')).includes(fold(search)));
   const numeric = Number(amount.replace(',', '.'));
   return <div ref={panel} className={s.linkPanel} tabIndex={-1} role="region" aria-label={'Vincular factura ' + row.invoice}>
     <div className={s.heading}><div><h3>{row.invoice} · {row.product}</h3><p>{row.scope} · {quantity(row.quantity, row.fuel)}</p></div><button disabled={busy} onClick={onClose}>Cerrar detalle</button></div>
     <p className={s.hint}>Primera importación {day(row.firstSeen)} · última presencia {day(row.lastSeen)}{row.missingSince ? ' · no figura desde ' + day(row.missingSince) : ''}. Liquidada: {row.liquidated || 'sin dato'}.</p>
     {data.allocations.filter(a => a.lineId === row.id).map(a => <div className={s.link} key={a.id}><span><strong>{a.formCode} · {quantity(a.quantity, row.fuel)}</strong><small>{a.createdBy} · {day(a.createdAt)} · {!a.active ? `Vínculo retirado por ${a.removedBy ?? 'Administración'} el ${day(a.removedAt ?? null)}` : validAllocation(a, data.targets, data.records) ? 'Uso vinculado' : 'Revisar: cambió el uso o su OK'}</small></span>{a.active && <button disabled={busy} onClick={() => void onChange({ action: 'unlink', version: data.version, id: a.id })}>Quitar vínculo</button>}</div>)}
-    {row.present && !row.duplicate && lineUse(row, data).remaining > 0 && <>
+    {lineUse(row, data).invalid && <p className={s.error}>Las cantidades de vínculos pendientes de revisión siguen reservadas. Quitá el vínculo que necesitás corregir antes de volver a asignar esa cantidad.</p>}
+    {row.present && !row.duplicate && lineUse(row, data).available > 0 && <>
       <p>{row.fuel ? 'Elegí una carga marcada OK y la cantidad que corresponde a esta factura. Podés vincular varias facturas al mismo FO.' : 'Se muestran insumos declarados del mismo producto y operación. Revisá su uso antes de vincular; no se cambia el control original de Insumos.'}</p>
       <div className={s.filters}>
         <label>Buscar uso<input value={search} placeholder="FO o sitio" onChange={e => { setSearch(e.target.value); setPicked(''); setAmount(''); }} /></label>
         <label>Carga / insumo<select value={picked} onChange={e => {
           setPicked(e.target.value); const t = candidates.find(t => t.kind + ':' + t.id === e.target.value);
-          setAmount(t ? String(Math.min(remaining(t), lineUse(row, data).remaining)) : '');
+          setAmount(t ? String(Math.min(remaining(t), lineUse(row, data).available)) : '');
         }}><option value="">Seleccionar…</option>{options.slice(0, 100).map(t => <option key={t.kind + ':' + t.id} value={t.kind + ':' + t.id}>{t.formCode} · {t.siteCode} · {quantity(remaining(t), row.fuel)} pendientes de vincular</option>)}</select></label>
         <label>{row.fuel ? 'Litros de esta factura' : 'Cantidad de este producto'}<input inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} /></label>
       </div>

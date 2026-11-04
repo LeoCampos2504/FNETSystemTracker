@@ -2,6 +2,8 @@
 
 ## 2026-11-04 — Cruce Excel de Intra con combustible e insumos (local)
 
+Continuación de cierre R1: un vínculo desactualizado conserva su reserva hasta retirarlo expresamente, evitando reutilizar una cantidad que podría reactivarse si vuelve la fuente anterior. Se conserva historial y se agregan cuatro regresiones sobre esa situación, sin cambios de esquema ni datos reales. Misma autorización de publicación condicionada a CI; el resultado se documenta en el PR de corrección.
+
 INTRA-STOCK-01 prepara, para Administración, importación compartida del Excel de pendientes de Intra, vínculos explícitos a cargas OK/insumos y resumen de combustible por operación. La usuaria confirmó que las filas desaparecen al descargar en Intra y pidió historial permanente: se conserva lo importado y sus vínculos aunque deje de figurar, con trazabilidad de importaciones y retiros. No se restan todos los OK históricos del Excel actual ni se confirma una descarga por una ausencia. Usa ops_events existente, sin migraciones ni modificaciones externas. 625 pruebas locales aprobadas; autorizada la publicación solo si pasa CI, sin importaciones/OK reales de prueba. El resultado del despliegue se registra en el PR. Ver [contrato, capacidades, protección y validación](reports/INTRA_STOCK_USAGE_01.md).
 
 ## 2026-11-04 — Fecha de realización del combustible (corrección)
