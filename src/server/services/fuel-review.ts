@@ -19,7 +19,7 @@ export async function attachFuelReviews(rows:SiteFuelLoad[]):Promise<SiteFuelLoa
   const saved = new Map(events.map(e=>[e.resource_key,e]));
   return rows.map(row=>{
     const event=saved.get(key(row.id)), sourceHash=fuelReviewHash(row);
-    return {...row,review:{ok:event?.detail.sourceHash===sourceHash&&event.detail.ok===true,version:event?.detail.version??0,sourceHash,updatedAt:event?.created_at.toISOString()??null,updatedBy:event?.name??null}};
+    return {...row,review:{ok:event?.detail.sourceHash===sourceHash&&event.detail.ok===true,changed:!!event&&event.detail.sourceHash!==sourceHash,version:event?.detail.version??0,sourceHash,updatedAt:event?.created_at.toISOString()??null,updatedBy:event?.name??null}};
   });
 }
 export async function saveFuelReview(actor:OperationsActor,input:z.infer<typeof fuelReviewInput>,load:()=>Promise<SiteFuelLoad[]>) {

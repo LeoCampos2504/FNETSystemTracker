@@ -5,6 +5,7 @@ import { catalog, yearlyMaintenance, type OperationsActor } from "./operations";
 import { operationalDateTimeToUtc } from "@/lib/operational-timezone";
 import { reconcileFuelLoads } from "@/lib/site-fuel-loads";
 import { attachFuelReviews } from "./fuel-review";
+import { isFormStartQuestion } from '@/lib/form-execution-date';
 
 /** One stored Sytex answer of the site control (sytex_site_answers). */
 export type StoredAnswer = { formCode: string; siteCode: string; siteName: string; topic: string; groupName: string; position: string; question: string; answer: string; reportedAt: string };
@@ -32,6 +33,7 @@ const repeat = (group: string) => group.match(/^\[#(\d+)\]/)?.[1] ?? "";
  * A report timestamp is explicitly marked as such; it must not pretend to be the physical load date.
  */
 export function fuelLoadsFromAnswers(rows: StoredAnswer[]): Omit<SiteFuelLoad, "project" | "link" | "origin">[] {
+  const executionDates = formExecutionDates(rows);
   const groups = new Map<string, StoredAnswer[]>();
   for (const row of rows) if (row.topic === "COMBUSTIBLE") { const key = JSON.stringify([row.formCode, row.siteCode, repeat(row.groupName)]); groups.set(key, [...(groups.get(key) ?? []), row]); }
   const hourmeters = new Map<string, StoredAnswer[]>(), amounts = new Map<string, number>();
@@ -59,7 +61,7 @@ export function fuelLoadsFromAnswers(rows: StoredAnswer[]): Omit<SiteFuelLoad, "
     const after = find((q) => /posterior|final|despues|salida/.test(q) && /nivel|porcentaje|%/.test(q));
     loads.push({
       id: "sytex:" + JSON.stringify([key, amount.groupName, amount.position]), formCode: first.formCode, siteCode: first.siteCode, siteName: first.siteName,
-      date: loadDate ?? fuelDate(first.reportedAt), dateBasis: loadDate ? "LOAD" : "REPORTED", liters,
+      date: loadDate ?? executionDates.get(formSite) ?? null, dateBasis: loadDate ? "LOAD" : executionDates.has(formSite) ? "FORM_START" : "UNVERIFIED", reportedAt: fuelDate(first.reportedAt), liters,
       fuel: find((q) => q.includes("tipo de combustible") || q.includes("combustible utilizado")),
       levelBefore: find((q) => (q.includes("nivel de combustible") || /inicial|antes|previo/.test(q) && /nivel|porcentaje/.test(q)) && !/posterior|final|despues/.test(q)),
       levelAfter: after,
@@ -68,6 +70,16 @@ export function fuelLoadsFromAnswers(rows: StoredAnswer[]): Omit<SiteFuelLoad, "
     });
   }
   return loads;
+}
+
+/** A conflicting start answer is not resolved by picking the last edit or an approval. */
+export function formExecutionDates(rows: StoredAnswer[]) {
+  const dates = new Map<string, Set<string>>();
+  for (const row of rows) if (row.topic === 'EJECUCION' && isFormStartQuestion(row.question)) {
+    const date = fuelDate(row.answer);
+    if (date) { const key = JSON.stringify([row.formCode, row.siteCode]); dates.set(key, new Set([...(dates.get(key) ?? []), date])); }
+  }
+  return new Map([...dates].filter(([, values]) => values.size === 1).map(([key, values]) => [key, [...values][0]]));
 }
 
 function fuelDate(value: string | null): string | null {
@@ -163,9 +175,11 @@ export async function siteControl(actor: OperationsActor): Promise<SiteControl> 
 
   const typeOfForm = new Map(c.tasks.map((t) => [t.code, t.type]));
   const fromSytex: SiteFuelLoad[] = fuelLoadsFromAnswers(answers).map((load) => ({ ...load, origin: typeOfForm.get(load.formCode) ?? "Sytex", project: projectOf(load.formCode, load.siteCode), link: link.get(load.formCode) ?? null }));
+  const executionDates = formExecutionDates(answers);
   const fromN8n: SiteFuelLoad[] = legacy.map((r) => {
     const siteCode = (r.codigo_sitio ?? "").trim().toUpperCase();
-    return { id: "n8n:" + r.id.toString(), formCode: r.formulario, siteCode, siteName: r.nombre_sitio ?? "", project: projectOf(r.formulario, siteCode), date: r.fecha_evento?.toISOString() ?? null, liters: r.litros_cargados === null ? null : Number(r.litros_cargados), fuel: r.combustible, levelBefore: r.nivel_antes?.toString() ?? null, levelAfter: r.nivel_final?.toString() ?? null, hourmeter: r.horometro?.toString() ?? null, origin: r.origen, source: "n8n" as const, link: link.get(r.formulario) ?? null };
+    const date = executionDates.get(JSON.stringify([r.formulario, siteCode])) ?? null;
+    return { id: "n8n:" + r.id.toString(), formCode: r.formulario, siteCode, siteName: r.nombre_sitio ?? "", project: projectOf(r.formulario, siteCode), date, dateBasis: date ? 'FORM_START' as const : 'UNVERIFIED' as const, reportedAt: r.fecha_evento?.toISOString() ?? null, liters: r.litros_cargados === null ? null : Number(r.litros_cargados), fuel: r.combustible, levelBefore: r.nivel_antes?.toString() ?? null, levelAfter: r.nivel_final?.toString() ?? null, hourmeter: r.horometro?.toString() ?? null, origin: r.origen, source: "n8n" as const, link: link.get(r.formulario) ?? null };
   });
   const fuel = await attachFuelReviews(reconcileFuelLoads([...fromSytex, ...fromN8n].filter((load) => visible(load.project))));
 

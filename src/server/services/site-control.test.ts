@@ -72,13 +72,13 @@ describe("site control answers from Sytex", () => {
       row("CARGA DE COMBUSTIBLE","3","Cantidad de aceite","8"),
       row("CARGA DE COMBUSTIBLE","4","Cantidad de combustible comprado","500"),
     ]));
-    expect(loads).toHaveLength(1);expect(loads[0]).toMatchObject({liters:80,dateBasis:"REPORTED",date:"2026-10-03T13:00:00.000Z"});
+    expect(loads).toHaveLength(1);expect(loads[0]).toMatchObject({liters:80,dateBasis:"UNVERIFIED",date:null,reportedAt:"2026-10-03T13:00:00.000Z"});
   });
   it("keeps independent positive amount answers without inventing shared event dates",()=>{
     const loads=fuelLoadsFromAnswers(stored([
       row("Carga de combustible","1","Litros cargados","30"),row("Carga de combustible","2","Litros cargados","45"),row("Carga de combustible","3","Fecha de carga","02/11/2026"),
     ]));
-    expect(loads.map(r=>r.liters)).toEqual([30,45]);expect(loads.every(r=>r.dateBasis==="REPORTED")).toBe(true);
+    expect(loads.map(r=>r.liters)).toEqual([30,45]);expect(loads.every(r=>r.dateBasis==="UNVERIFIED"&&r.date===null)).toBe(true);
   });
   it("builds the fuel load of a generator preventive with the level before and after", () => {
     const loads = fuelLoadsFromAnswers(stored([

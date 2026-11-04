@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-11-04 — Fecha de realización del combustible (corrección)
+
+Se identificó que el fallback de combustible mostraba la última edición de respuestas, que puede ocurrir al aprobar, en lugar de la realización. Se conservan las preguntas de inicio del FO y se usan tras la fecha específica de carga; la fuente se indica en pantalla. Si falta esa evidencia no se inventa una fecha. Es necesario refrescar las respuestas después de publicar. El historial de OK se conserva y se pide revisar los controles cuyo hash cambió. Sin migraciones ni cambios en n8n; el cruce nuevo con Intra se desarrolla por separado. Ver [alcance y validación](reports/FUEL_REALIZATION_DATE_20261104.md).
+
 ## 2026-11-04 — Correctivos con carga por tanque (corrección del control publicado)
 
 Dos casos reales aportados por Eugenia demostraron que FT-00691 guarda litros/niveles bajo `[#n] Tanque`, sin repetir combustible: el lector los descartaba aunque el formulario estuviera sincronizado. Se corrige esa lectura y se preservan los tres decimales numéricos exportados por Sytex, que se confundían con miles. Requiere refrescar las respuestas desde Sytex tras publicar; no se crean cargas manuales ni se cambian respuestas externas. Misma autorización de publicación del control, condicionada a CI; resultados pendientes de registrar en el PR. Ver [causas, alcance y verificación](reports/FUEL_TANK_CORRECTIVES_20261104.md). Se conserva el histórico siguiente.
