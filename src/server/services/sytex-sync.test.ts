@@ -27,7 +27,7 @@ beforeEach(() => { vi.clearAllMocks(); mocks.save.mockResolvedValue({ importId: 
 
 describe("direct Sytex synchronization", () => {
   it("persists a batch containing fuel loads without insumos",async()=>{
-    const fuel=[answerHeaders,["FO-26-000001","Carga de combustible","1","Litros cargados","40","ST00001"]];
+    const fuel=[answerHeaders,["FO-26-000001","[#1] Tanque","1.5A.3","Litros cargados","40","ST00001"]];
     const result=await runSytexSync("user-id",config,sytex({...projects,"/api/formdata/?org_id=1&plan_date__gte=2026-10-01&project=7":nonForms,"/api/entryanswerdata/?org_id=1&plan_date__gte=2026-10-01&project=7":fuel}),new Date("2026-10-05T15:00:00Z"));
     expect(result).toMatchObject({items:0,changed:true});expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({items:[],siteAnswers:[expect.objectContaining({answer:"40"})]}),expect.any(String),expect.any(String),"user-id");
   });

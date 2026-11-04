@@ -344,6 +344,9 @@ export function siteTopic(group: string, question: string): SytexSiteTopic | nul
   if (q.includes("fecha de reemplazo de los filtros") || q.startsWith("el filtro de aire fue") || (g.startsWith("aire acondicionado") && q.includes("filtro"))) return "FILTROS_AA";
   if (q.includes("gas refrigerante")) return null;
   if (q.includes("horometro")) return "HOROMETRO";
+  // Correctivo Civil FT-00691 reports each fuel load in [#n] Tanque: its questions
+  // say "Litros cargados" / "Nivel Antes", without repeating "combustible".
+  if (/^tanques?$/.test(g) && /^(?:se carga a\b|nivel antes\b|litros cargados\b|nivel final\b|el grupo electrogeno\b)/.test(q)) return "COMBUSTIBLE";
   if (!/filtro|aceite|refrigerante|agua/.test(q) && (q.includes("combustible") ||
     (/combustible|carga de gasoil|carga de diesel/.test(g) && /litro|\blts?\b|cantidad|fecha|nivel|porcentaje|tipo/.test(q)))) return "COMBUSTIBLE";
   if (g.includes("service")) return "SERVICE_GE";

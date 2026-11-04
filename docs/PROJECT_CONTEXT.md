@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-11-04 — Correctivos con carga por tanque (corrección del control publicado)
+
+Dos casos reales aportados por Eugenia demostraron que FT-00691 guarda litros/niveles bajo `[#n] Tanque`, sin repetir combustible: el lector los descartaba aunque el formulario estuviera sincronizado. Se corrige esa lectura y se preservan los tres decimales numéricos exportados por Sytex, que se confundían con miles. Requiere refrescar las respuestas desde Sytex tras publicar; no se crean cargas manuales ni se cambian respuestas externas. Misma autorización de publicación del control, condicionada a CI; resultados pendientes de registrar en el PR. Ver [causas, alcance y verificación](reports/FUEL_TANK_CORRECTIVES_20261104.md). Se conserva el histórico siguiente.
+
 ## 2026-11-04 — Combustible por carga y OK por operación (local)
 
 Preparado Control de sitios → Combustible con cada carga individual por fecha, sin consolidar por sitio ni truncar a doce en el detalle. Corrige la exclusión completa de n8n por formulario, reconoce preguntas de litros en grupos de combustible y conserva lotes con respuestas de sitio aunque no tengan insumos. Botón OK de un clic, reversible y compartido, con historial en ops_events y totales controlados por operación según filtros. Sin migraciones nuevas ni escritura real. Cobertura limitada a fuentes guardadas/proyectos sincronizados; no se certifica todo el histórico externo. Eugenia autorizó commit, push, PR, fusión y despliegue en FNET de Leo solo si pasa CI, sin migraciones ni cargas reales de prueba. 573 pruebas locales aprobadas; resultado de publicación pendiente de verificar y registrar en el PR. Ver [causas, permisos, límites y pruebas](reports/FUEL_LOADS_CONTROL_20261104.md). Se conserva el histórico siguiente.
