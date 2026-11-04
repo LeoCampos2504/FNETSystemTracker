@@ -5,7 +5,7 @@ const asDate = (value?: string) => value ? new Date(value + "T00:00:00Z") : null
 
 export async function saveSytexSupplyExport(parsed: SytexSupplyExport, fileHash: string, fileName: string, importedBy: string) {
   if (parsed.errors.length) throw new Error("SYTEX_EXPORT_HAS_CONFLICTS");
-  if (!parsed.items.length) throw new Error("SYTEX_EXPORT_NO_ITEMS");
+  if (!parsed.items.length && !parsed.siteAnswers?.length && !parsed.maintenance?.length) throw new Error("SYTEX_EXPORT_NO_ITEMS");
   const prisma = getPrismaClient();
   const previous = await prisma.sytex_supply_imports.findUnique({ where: { fileHash }, select: { id: true } });
   if (previous) return { importId: previous.id, alreadyImported: true };

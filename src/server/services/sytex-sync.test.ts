@@ -26,6 +26,11 @@ const nonAnswers = [answerHeaders, ["FO-26-000001", "[#1] Insumo", "1.17A.1", "D
 beforeEach(() => { vi.clearAllMocks(); mocks.save.mockResolvedValue({ importId: "00000000-0000-4000-8000-00000000000a", alreadyImported: false }); });
 
 describe("direct Sytex synchronization", () => {
+  it("persists a batch containing fuel loads without insumos",async()=>{
+    const fuel=[answerHeaders,["FO-26-000001","Carga de combustible","1","Litros cargados","40","ST00001"]];
+    const result=await runSytexSync("user-id",config,sytex({...projects,"/api/formdata/?org_id=1&plan_date__gte=2026-10-01&project=7":nonForms,"/api/entryanswerdata/?org_id=1&plan_date__gte=2026-10-01&project=7":fuel}),new Date("2026-10-05T15:00:00Z"));
+    expect(result).toMatchObject({items:0,changed:true});expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({items:[],siteAnswers:[expect.objectContaining({answer:"40"})]}),expect.any(String),expect.any(String),"user-id");
+  });
   it("covers the two closed months and the current one in Argentina time", () => {
     expect(syncWindowStart(new Date("2026-10-05T15:00:00Z"))).toBe("2026-08-01");
     expect(syncWindowStart(new Date("2026-01-01T02:00:00Z"))).toBe("2025-10-01");

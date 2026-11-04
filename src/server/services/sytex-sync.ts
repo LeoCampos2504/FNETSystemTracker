@@ -206,7 +206,7 @@ export async function runSytexSync(userId: string, config: Config, fetcher: Fetc
   const skipped = contradictory.filter((code): code is string => !!code).sort();
   if (skipped.length) { parsed.items = parsed.items.filter((item) => !skipped.includes(item.formulario)); parsed.errors = []; }
   const skippedInfo = { ...(skipped.length ? { skipped } : {}), ...(incomplete.length ? { incomplete: incomplete.length } : {}) };
-  if (!parsed.items.length) return { projects: activeProjects, forms, items: 0, changed: false, since, ...skippedInfo };
+  if (!parsed.items.length && !parsed.siteAnswers?.length && !parsed.maintenance?.length) return { projects: activeProjects, forms, items: 0, changed: false, since, ...skippedInfo };
   // Identity of the content, not of the files: an unchanged Sytex produces no new rows.
   const identity = createHash("sha256").update(JSON.stringify([
     parsed.items.map((item) => [item.formulario, item.grupo, item.indice, item.description, item.quantity, item.provider, item.image, item.imageDeclared, item.siteCode, item.status]).sort(),

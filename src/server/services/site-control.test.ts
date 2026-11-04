@@ -26,6 +26,29 @@ describe("site control answers from Sytex", () => {
     expect(answerNumber("1.709,4")).toBe(1709.4);
     expect(answerNumber("No informado")).toBeNull();
   });
+  it("keeps repeated loads and their own dates, instead of summing all amounts in a form",()=>{
+    const loads=fuelLoadsFromAnswers(stored([
+      row("[#1] Carga de combustible","1","Litros cargados","40"),row("[#1] Carga de combustible","2","Fecha de carga","01/11/2026"),
+      row("[#2] Carga de combustible","1","Litros cargados","70"),row("[#2] Carga de combustible","2","Fecha de carga","03/11/2026"),
+    ]));
+    expect(loads.map(r=>[r.liters,r.date,r.dateBasis])).toEqual([[40,"2026-11-01","LOAD"],[70,"2026-11-03","LOAD"]]);
+    expect(new Set(loads.map(r=>r.id)).size).toBe(2);
+  });
+  it("recognizes fuel-group questions without the word combustible and excludes capacity and other fluids",()=>{
+    const loads=fuelLoadsFromAnswers(stored([
+      row("CARGA DE COMBUSTIBLE","1","Cantidad de litros cargados","80"),
+      row("CARGA DE COMBUSTIBLE","2","Capacidad en litros","2000"),
+      row("CARGA DE COMBUSTIBLE","3","Cantidad de aceite","8"),
+      row("CARGA DE COMBUSTIBLE","4","Cantidad de combustible comprado","500"),
+    ]));
+    expect(loads).toHaveLength(1);expect(loads[0]).toMatchObject({liters:80,dateBasis:"REPORTED",date:"2026-10-03T13:00:00.000Z"});
+  });
+  it("keeps independent positive amount answers without inventing shared event dates",()=>{
+    const loads=fuelLoadsFromAnswers(stored([
+      row("Carga de combustible","1","Litros cargados","30"),row("Carga de combustible","2","Litros cargados","45"),row("Carga de combustible","3","Fecha de carga","02/11/2026"),
+    ]));
+    expect(loads.map(r=>r.liters)).toEqual([30,45]);expect(loads.every(r=>r.dateBasis==="REPORTED")).toBe(true);
+  });
   it("builds the fuel load of a generator preventive with the level before and after", () => {
     const loads = fuelLoadsFromAnswers(stored([
       row("GENERADOR", "1.2.5", "HOROMETRO [Hs]", "45,5"),

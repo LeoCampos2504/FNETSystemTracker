@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { SiteControl, SiteControlRow, SiteFuelLoad, SiteMaintenance, SiteServiceReport } from "@/contracts/operations";
 import { Feedback, matchesZone, opCall, projectLabel, useCatalog, useZoneSelection, ZoneFilter } from "./operations-common";
 import { useDateRange } from "./screen-filters";
 import { fold, inDateRange, isoDay } from "@/lib/filters";
+import { fuelInDateRange, reviewedFuelByOperation } from "@/lib/site-fuel-loads";
+import { OPERATIONAL_TIMEZONE, operationalDateTimeToDate } from "@/lib/operational-timezone";
 import s from "./operations.module.css";
 import c from "./site-control.module.css";
 
@@ -29,11 +31,11 @@ const dueTone: Record<Due, string> = { overdue: c.bad, soon: c.warn, ok: c.good,
 const date = (value: string | null | undefined) => value ? value.slice(0, 10).split("-").reverse().join("/") : "—";
 const dateTime = (value: string | null | undefined) => {
   if (!value) return "—";
-  const d = new Date(value);
+  const d = operationalDateTimeToDate(value.length <= 10 ? value + "T00:00" : value);
   if (Number.isNaN(d.getTime()) || value.length <= 10) return date(value);
-  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("es-AR", { timeZone: OPERATIONAL_TIMEZONE, day: "2-digit", month: "2-digit", year: "numeric" }) + " " + d.toLocaleTimeString("es-AR", { timeZone: OPERATIONAL_TIMEZONE, hour: "2-digit", minute: "2-digit" });
 };
-const liters = (value: number | null | undefined) => value === null || value === undefined ? "—" : value.toLocaleString("es-AR", { maximumFractionDigits: 2 }) + " L";
+const liters = (value: number | null | undefined) => value === null || value === undefined ? "—" : value.toLocaleString("es-AR", { maximumFractionDigits: 3 }) + " L";
 const percent = (value: string | null) => { const n = value === null ? NaN : Number(value.replace(",", ".").replace(/[^\d.-]/g, "")); return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null; };
 
 function DueBadge({ job }: { job: SiteMaintenance | null }) {
@@ -58,6 +60,18 @@ function FormLink({ code, link }: { code: string; link: string | null }) {
 export function SiteControlView() {
   const zones = useCatalog(), chosen = useZoneSelection(), range = useDateRange();
   const [data, setData] = useState<SiteControl | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0);
+  const [savingId,setSavingId]=useState(""),[saveError,setSaveError]=useState("");
+  const reviewLock=useRef(false);
+  const toggleFuel=async(row:SiteFuelLoad)=>{
+    if(reviewLock.current||!row.review)return;
+    reviewLock.current=true;setSavingId(row.id);setSaveError("");
+    try{
+      await opCall("/api/operations/fuel-review",{id:row.id,ok:!row.review.ok,version:row.review.version,sourceHash:row.review.sourceHash});
+      const fresh=await opCall<SiteControl>("/api/operations?kind=sites");
+      setData(fresh);
+    }catch(e){setSaveError(e instanceof Error?e.message:"No se pudo guardar el control.");}
+    finally{setSavingId("");reviewLock.current=false;}
+  };
   const [tab, setTab] = useState<Tab>("summary"), [query, setQuery] = useState(""), [picked, setPicked] = useState<string[]>([]), [only, setOnly] = useState<Due | "">(""), [open, setOpen] = useState(""), [withoutData, setWithoutData] = useState(false);
   useEffect(() => {
     let active = true;
@@ -71,11 +85,12 @@ export function SiteControlView() {
   // Many sites have no generator or air conditioner, or no preventive in the synchronized months: they are hidden unless asked for.
   const empty = zoneSites.filter((r) => !hasData(r)).length;
   const sites = useMemo(() => withoutData || picked.length ? zoneSites : zoneSites.filter(hasData), [zoneSites, withoutData, picked]);
-  const fuel = useMemo(() => (data?.fuel ?? []).filter((f) => siteOk(f.siteCode, f.siteName, f.project) && inDateRange(f.date, range)), [data, chosen, picked, term, range]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fuel = useMemo(() => (data?.fuel ?? []).filter((f) => siteOk(f.siteCode, f.siteName, f.project) && fuelInDateRange(f.date, range)), [data, chosen, picked, term, range]); // eslint-disable-line react-hooks/exhaustive-deps
   const services = useMemo(() => (data?.services ?? []).filter((r) => siteOk(r.siteCode, r.siteName, r.project) && inDateRange(r.date, range)), [data, chosen, picked, term, range]); // eslint-disable-line react-hooks/exhaustive-deps
   const allSites = data?.sites ?? [];
   const count = (pick: (r: SiteControlRow) => SiteMaintenance | null, state: Due) => sites.filter((r) => dueState(pick(r)) === state).length;
   const totalLiters = fuel.reduce((sum, f) => sum + (f.liters ?? 0), 0);
+  const checkedTotals=reviewedFuelByOperation(fuel);
   const detail = open ? allSites.find((r) => r.siteCode === open) ?? null : null;
   const addSite = (value: string) => { const code = value.split(" · ")[0].trim().toUpperCase(); if (allSites.some((r) => r.siteCode === code) && !picked.includes(code)) setPicked([...picked, code]); setQuery(""); };
 
@@ -90,22 +105,30 @@ export function SiteControlView() {
       </label>
       {picked.length > 0 && <div className={c.chips}>{picked.map((code) => <button key={code} type="button" onClick={() => setPicked(picked.filter((p) => p !== code))} aria-label={"Quitar " + code}>{code} <span aria-hidden>×</span></button>)}<button type="button" className={c.clear} onClick={() => setPicked([])}>Quitar sitios</button></div>}
     </div>
-    <Feedback error={error || zones.error} />
+    <Feedback error={saveError || error || zones.error} />
     {loading && !data ? <p role="status">Consultando los sitios…</p> : <>
       <div className={s.stats}>
         <button type="button" aria-pressed={tab === "summary" && only === ""} onClick={() => { setTab("summary"); setOnly(""); }}>Sitios<strong>{sites.length}</strong><small>con service, filtros o combustible informados</small></button>
         <button type="button" aria-pressed={tab === "summary" && only === "overdue"} onClick={() => { setTab("summary"); setOnly(only === "overdue" ? "" : "overdue"); }}>Service vencido<strong>{count((r) => r.service, "overdue")}</strong><small>{count((r) => r.service, "soon")} vencen en {SOON_DAYS} días</small></button>
         <button type="button" aria-pressed={tab === "air"} onClick={() => setTab("air")}>Filtros de aire vencidos<strong>{count((r) => r.airFilters, "overdue")}</strong><small>{count((r) => r.airFilters, "soon")} vencen en {SOON_DAYS} días</small></button>
-        <button type="button" aria-pressed={tab === "fuel"} onClick={() => setTab("fuel")}>Combustible cargado<strong>{liters(Math.round(totalLiters * 100) / 100)}</strong><small>{fuel.length} cargas en el período</small></button>
+        <button type="button" aria-pressed={tab === "fuel"} onClick={() => setTab("fuel")}>Combustible cargado<strong>{liters(Math.round(totalLiters * 1000) / 1000)}</strong><small>{fuel.length} cargas en el período{fuel.some(f=>f.possibleDuplicate)?" · total provisional":""}</small></button>
       </div>
       <div className={c.tabs} role="tablist">{tabs.map((t) => <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>{t.label}</button>)}</div>
       {empty > 0 && <p className={s.note}>{withoutData || picked.length ? <>Se muestran también {empty} sitios sin datos en Sytex (sin grupo, sin aire o sin preventivo en los meses sincronizados). </> : <>Hay {empty} sitios más sin datos en Sytex: no tienen grupo o aire acondicionado, o no tuvieron preventivo en los meses sincronizados. </>}{!picked.length && <button type="button" className={c.inlineButton} onClick={() => setWithoutData(!withoutData)}>{withoutData ? "Ocultarlos" : "Mostrarlos"}</button>}</p>}
       {tab === "summary" && <Summary rows={sites.filter((r) => !only || dueState(r.service) === only)} onOpen={setOpen} />}
       {tab === "service" && <Services rows={services} sites={sites} onOpen={setOpen} />}
       {tab === "air" && <AirFilters rows={sites} onOpen={setOpen} />}
-      {tab === "fuel" && <FuelLoads rows={fuel} onOpen={setOpen} />}
+      {tab === "fuel" && <>
+        <p className={s.note}>Una fila por carga, de la más reciente a la más antigua, aunque se repita el sitio. Preventivos, correctivos y otros formularios disponibles. «Fecha del reporte» no confirma la fecha de carga. Elegí «Todas las fechas» para consultar todo lo guardado.</p>
+        <h2 className={c.subhead}>Litros controlados por operación</h2>
+        <p className={s.note}>Marcá OK para sumar esa carga. El control se guarda en FNET y se puede desmarcar. Estos totales respetan los filtros de arriba.</p>
+        <div className={c.cards} aria-live="polite">{checkedTotals.map(t=><div key={t.operation}><span>{t.operation}</span><strong>{liters(t.liters)}</strong><small>{t.count} cargas OK{t.unknownLiters?` · ${t.unknownLiters} sin litros informados`:""}</small></div>)}</div>
+        {!checkedTotals.length&&<p className={s.note}>Todavía no hay cargas marcadas OK en este filtro.</p>}
+        {fuel.some(f=>f.possibleDuplicate)&&<p className={s.note} role="status">Hay registros de ambas fuentes para un mismo formulario sin coincidencia exacta. Se conservan para revisión; el total puede incluir duplicados. Revisalos antes de marcar OK.</p>}
+        <FuelLoads rows={fuel} onOpen={setOpen} onToggle={toggleFuel} savingId={savingId} />
+      </>}
     </>}
-    {detail && data && <SiteDetail site={detail} fuel={data.fuel.filter((f) => f.siteCode === detail.siteCode)} services={data.services.filter((r) => r.siteCode === detail.siteCode)} onClose={() => setOpen("")} />}
+    {detail && data && <SiteDetail site={detail} fuel={data.fuel.filter((f) => f.siteCode === detail.siteCode)} services={data.services.filter((r) => r.siteCode === detail.siteCode)} onClose={() => setOpen("")} onToggle={toggleFuel} savingId={savingId} />}
   </section>;
 }
 
@@ -163,20 +186,22 @@ function AirFilters({ rows, onOpen }: { rows: SiteControlRow[]; onOpen: (code: s
   </tr>} />;
 }
 
-function FuelLoads({ rows, onOpen }: { rows: SiteFuelLoad[]; onOpen: (code: string) => void }) {
-  return <Paged rows={rows} empty="No hay cargas de combustible para este filtro." head={["Fecha", "Sitio", "Litros", "Nivel antes → después", "Combustible", "Horómetro", "Origen", "Formulario"]} render={(f) => <tr key={f.id}>
-    <td className={s.nowrap}>{dateTime(f.date)}</td>
-    <td><SiteName row={f} onOpen={onOpen} /></td>
+function FuelLoads({ rows, onOpen, onToggle, savingId="" }: { rows: SiteFuelLoad[]; onOpen?: (code: string) => void; onToggle?: (row:SiteFuelLoad)=>void; savingId?:string }) {
+  return <Paged rows={rows} empty="No hay cargas de combustible para este filtro." head={["Fecha", "Sitio", "Operación", "Litros", "Nivel antes → después", "Combustible", "Horómetro", "Origen", "Formulario", "Control"]} render={(f) => <tr key={f.id}>
+    <td className={s.nowrap}>{dateTime(f.date)}{f.dateBasis === "REPORTED" && <small>Fecha del reporte</small>}</td>
+    <td>{onOpen?<SiteName row={f} onOpen={onOpen} />:<><strong>{f.siteCode}</strong><small>{f.siteName}</small></>}</td>
+    <td>{f.project?projectLabel(f.project):"Sin operación"}</td>
     <td className={c.num}><strong>{liters(f.liters)}</strong></td>
     <td><Level before={f.levelBefore} after={f.levelAfter} /></td>
     <td>{f.fuel || <span className={c.muted}>No informado</span>}</td>
     <td className={c.num}>{f.hourmeter ? f.hourmeter + " h" : <span className={c.muted}>—</span>}</td>
-    <td><span className={c.origin}>{f.origin.charAt(0) + f.origin.slice(1).toLowerCase()}</span></td>
+    <td><span className={c.origin}>{f.origin.charAt(0) + f.origin.slice(1).toLowerCase()}</span><small>{f.source}{f.possibleDuplicate ? " · Revisar duplicado" : ""}</small></td>
     <td className={s.nowrap}><FormLink code={f.formCode} link={f.link} /></td>
+    <td><button type="button" className={f.review?.ok?c.fuelOk:undefined} aria-pressed={f.review?.ok??false} aria-label={`${f.review?.ok?"Desmarcar":"Marcar"} OK ${f.formCode} ${f.siteCode} ${dateTime(f.date)}`} disabled={!onToggle||!f.review||!!savingId} onClick={()=>onToggle?.(f)}>{savingId===f.id?"Guardando…":f.review?.ok?"✓ OK":"Marcar OK"}</button>{f.review?.updatedBy&&<small>{f.review.updatedBy} · {dateTime(f.review.updatedAt)}</small>}</td>
   </tr>} />;
 }
 
-function SiteDetail({ site, fuel, services, onClose }: { site: SiteControlRow; fuel: SiteFuelLoad[]; services: SiteServiceReport[]; onClose: () => void }) {
+function SiteDetail({ site, fuel, services, onClose, onToggle, savingId }: { site: SiteControlRow; fuel: SiteFuelLoad[]; services: SiteServiceReport[]; onClose: () => void; onToggle:(row:SiteFuelLoad)=>void; savingId:string }) {
   const last = services.find((r) => r.serviceDone) ?? services[0] ?? null, total = fuel.reduce((sum, f) => sum + (f.liters ?? 0), 0);
   return <div className={s.overlay} onClick={onClose}><section className={s.dialog + " " + c.detail} role="dialog" aria-modal="true" aria-label={"Sitio " + site.siteCode} onClick={(e) => e.stopPropagation()}>
     <div className={s.heading}><div><span className={s.kicker}>{site.project ? projectLabel(site.project) : "Sin zona"}</span><h2>{site.siteCode} · {site.siteName || "Sin nombre"}</h2></div><button onClick={onClose}>Cerrar</button></div>
@@ -190,6 +215,6 @@ function SiteDetail({ site, fuel, services, onClose }: { site: SiteControlRow; f
       {last.supplies.length > 0 && <p className={s.note}>Insumos del formulario: {last.supplies.join(" · ")}</p>}
       <details className={c.answers}><summary>Ver todas las respuestas del formulario ({last.answers.length})</summary><dl>{last.answers.map((a, i) => <div key={i}><dt>{a.question}</dt><dd>{a.answer}</dd></div>)}</dl></details></>}
     <h3 className={c.subhead}>Cargas de combustible</h3>
-    {fuel.length ? <ul className={c.timeline}>{fuel.slice(0, 12).map((f) => <li key={f.id}><span>{dateTime(f.date)}</span><strong>{liters(f.liters)}</strong><Level before={f.levelBefore} after={f.levelAfter} /><FormLink code={f.formCode} link={f.link} /></li>)}</ul> : <p className={s.note}>No hay cargas registradas para este sitio.</p>}
+    <FuelLoads rows={fuel} onToggle={onToggle} savingId={savingId} />
   </section></div>;
 }
