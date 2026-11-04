@@ -24,7 +24,38 @@ describe("site control answers from Sytex", () => {
     expect(answerNumber("40")).toBe(40);
     expect(answerNumber("12,5 litros")).toBe(12.5);
     expect(answerNumber("1.709,4")).toBe(1709.4);
+    expect(answerNumber("375.01")).toBe(375.01);
     expect(answerNumber("No informado")).toBeNull();
+  });
+  it("preserves the three decimal places exported by Sytex instead of reading them as thousands",()=>{
+    const loads=fuelLoadsFromAnswers(stored([row("General","1.46","CANTIDAD DE LITROS DE COMBUSTIBLE CARGADOS","31.515")]));
+    expect(loads[0].liters).toBe(31.515);
+    expect(answerNumber("12.298")).toBe(12.298);
+    expect(answerNumber("16.196")).toBe(16.196);
+    expect(answerNumber("1.709,4")).toBe(1709.4);
+  });
+  it("reads the verified corrective tank template without using requested liters as completed work",()=>{
+    const loads=fuelLoadsFromAnswers(stored([
+      row("Tarea a realizar","1.1","Se solicita carga de 400 litros de combustible", "OK"),
+      row("[#1] Tanque","1.5A.1","¿Se carga a:?","Tanque Grupo Electrógeno"),
+      row("[#1] Tanque","1.5A.2","Nivel Antes","50"),
+      row("[#1] Tanque","1.5A.3","Litros cargados","69"),
+      row("[#1] Tanque","1.5A.4","Valor horómetro","49888"),
+      row("[#1] Tanque","1.5A.5","Nivel final","100"),
+      row("[#1] Tanque","1.5A.6","¿El Grupo electrógeno se encuentra en marcha?","No"),
+    ]));
+    expect(loads).toHaveLength(1);
+    expect(loads[0]).toMatchObject({liters:69,levelBefore:"50",levelAfter:"100",hourmeter:"49888"});
+    expect(siteTopic("[#1] Tanque","Capacidad de tanque")).toBeNull();
+    expect(siteTopic("[#1] Tanque","Litros de agua")).toBeNull();
+  });
+  it("keeps two corrective tanks as independent loads with their own levels and meters",()=>{
+    const loads=fuelLoadsFromAnswers(stored([
+      row("[#1] Tanque","1.5A.3","Litros cargados","69"),row("[#1] Tanque","1.5A.2","Nivel Antes","50"),row("[#1] Tanque","1.5A.4","Valor horómetro","49888"),
+      row("[#2] Tanque","1.5A.3","Litros cargados","120,5"),row("[#2] Tanque","1.5A.2","Nivel Antes","20"),row("[#2] Tanque","1.5A.4","Valor horómetro","99"),
+    ]));
+    expect(loads).toHaveLength(2);expect(loads.map(r=>[r.liters,r.levelBefore,r.hourmeter])).toEqual([[69,"50","49888"],[120.5,"20","99"]]);
+    expect(new Set(loads.map(r=>r.id)).size).toBe(2);
   });
   it("keeps repeated loads and their own dates, instead of summing all amounts in a form",()=>{
     const loads=fuelLoadsFromAnswers(stored([

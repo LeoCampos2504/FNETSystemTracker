@@ -11,13 +11,12 @@ export type StoredAnswer = { formCode: string; siteCode: string; siteName: strin
 
 const fold = (value: string) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
 
-/** First number of an answer: "40", "40 L", "1.709,4", "12,5 litros". Null when there is none. */
+/** Sytex exports decimal dots, including three decimal places. A comma is also accepted in handwritten answers. */
 export function answerNumber(value: string | null | undefined): number | null {
   const match = (value ?? "").match(/-?\d+(?:[.,]\d+)*/);
   if (!match) return null;
   let text = match[0];
   if (text.includes(",")) text = text.replace(/\./g, "").replace(",", ".");
-  else if (/^\d{1,3}(?:\.\d{3})+$/.test(text)) text = text.replace(/\./g, "");
   const number = Number(text);
   return Number.isFinite(number) ? number : null;
 }
