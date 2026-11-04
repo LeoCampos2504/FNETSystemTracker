@@ -15,8 +15,12 @@ export function validAllocation(link: IntraAllocation, targets: IntraTarget[], r
 export function lineUse(record: IntraRecord, state: Pick<IntraOverview, 'allocations' | 'targets' | 'records'>) {
   const links = state.allocations.filter(a => a.lineId === record.id && a.active);
   const used = links.filter(a => validAllocation(a, state.targets, state.records)).reduce((sum, a) => sum + milli(a.quantity), 0);
-  return { used: used / 1000, remaining: (milli(record.quantity) - used) / 1000, invalid: links.some(a => !validAllocation(a, state.targets, state.records)) };
+  const reserved = links.reduce((sum, a) => sum + milli(a.quantity), 0);
+  return { used: used / 1000, remaining: (milli(record.quantity) - used) / 1000, available: Math.max(0, milli(record.quantity) - reserved) / 1000, invalid: links.some(a => !validAllocation(a, state.targets, state.records)) };
 }
+/** Stale evidence must be explicitly released: otherwise a source reverting to its old
+ * value could reactivate an old link after its capacity had been reused elsewhere. */
+export const targetAvailable = (state: Pick<IntraOverview, 'allocations'>, target: IntraTarget) => Math.max(0, milli(target.quantity) - state.allocations.filter(a => a.active && a.targetId === target.id && a.targetKind === target.kind).reduce((sum, a) => sum + milli(a.quantity), 0)) / 1000;
 export function intraFuelTotals(state: IntraOverview) {
   return [...new Set(state.scopes.map(s => intraScopeParts(s.name).operation))].sort().map(operation => {
     const rows = state.records.filter(r => r.present && r.fuel && r.operation === operation);
@@ -49,6 +53,5 @@ export function allocationLimits(state: IntraOverview, row: IntraRecord, target:
   if (!row.present || row.duplicate || row.operation !== target.operation || row.fuel !== (target.kind === 'FUEL')) return false;
   if (target.kind === 'MATERIAL' && fold(row.product) !== fold(target.description)) return false;
   if (target.invoice && target.invoice.replace(/\s|-/g, '').toUpperCase() !== row.invoice.replace(/\s|-/g, '').toUpperCase()) return false;
-  const used = state.allocations.filter(a => a.targetId === target.id && a.targetKind === target.kind && validAllocation(a, state.targets, state.records)).reduce((s, a) => s + milli(a.quantity), 0);
-  return milli(quantity) > 0 && milli(quantity) <= milli(lineUse(row, state).remaining) && used + milli(quantity) <= milli(target.quantity);
+  return milli(quantity) > 0 && milli(quantity) <= milli(lineUse(row, state).available) && milli(quantity) <= milli(targetAvailable(state, target));
 }

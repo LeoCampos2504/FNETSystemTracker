@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { IntraLine, IntraOverview, IntraTarget } from '@/contracts/intra-stock';
-import { allocationLimits, applyIntraSnapshot, emptyIntraState, intraFuel, intraFuelTotals, lineUse } from './intra-stock';
+import { allocationLimits, applyIntraSnapshot, emptyIntraState, intraFuel, intraFuelTotals, lineUse, targetAvailable } from './intra-stock';
 const line: IntraLine={id:'a',date:'2026-11-03',invoice:'0001',supplier:'Proveedor prueba',scope:'MED - NON - Salta',operation:'NON',location:'Salta',product:'Gasoil Premium',quantity:187.33,net:1000,liquidated:'NO',fuel:true,duplicate:false};
 const target: IntraTarget={id:'load1',kind:'FUEL',hash:'a'.repeat(64),operation:'NON',description:'Combustible',quantity:375.01,date:'2026-11-03',formCode:'FO-26-000001',siteCode:'ST00001'};
 const state=():IntraOverview=>({...emptyIntraState(),targets:[target],scopes:[{name:line.scope,fileName:'prueba.xlsx',fingerprint:'x',importedAt:'2026-11-04',importedBy:'Admin'}],records:applyIntraSnapshot(emptyIntraState(),[line,{...line,id:'b',invoice:'0002'}],[line.scope],'2026-11-04')});
@@ -43,5 +43,25 @@ describe('Intra pending stock versus explicitly linked usage',()=>{
     const s=state();s.records.push({...s.records[0],id:'oil',fuel:false,product:'Aceite',quantity:200});
     expect(intraFuelTotals(s)).toHaveLength(1);expect(intraFuelTotals(s)[0].pending).toBe(374.66);
     expect(intraFuel('Gasoil Estandar')).toBe(true);expect(intraFuel('Filtro Combustible')).toBe(false);expect(intraFuel('Aceite motor')).toBe(false);
+  });
+  it('reserves stale target capacity until explicit unlink, even if the source later returns to its previous value',()=>{
+    const s=linked();s.targets=[{...target,hash:'z'.repeat(64)}];
+    const r={...s.records[0],id:'new',invoice:'new'};s.records.push(r);
+    expect(targetAvailable(s,s.targets[0])).toBe(0.35);
+    expect(allocationLimits(s,r,s.targets[0],1)).toBe(false);
+    s.targets=[target];expect(intraFuelTotals(s)[0].unlinked).toBe(0.35);
+    s.allocations[0].active=false;expect(targetAvailable(s,target)).toBe(187.68);
+  });
+  it('reserves invoice capacity too when a target disappears or its OK is undone',()=>{
+    const s=linked();s.targets=[];
+    expect(lineUse(s.records[0],s)).toMatchObject({used:0,available:0,invalid:true});
+    const other={...target,id:'other',quantity:40};s.targets=[other];
+    expect(allocationLimits(s,s.records[0],other,1)).toBe(false);
+    s.allocations[0].active=false;expect(allocationLimits(s,s.records[0],other,1)).toBe(true);
+  });
+  it('does not release a reviewed quantity while identical duplicate source rows are ambiguous',()=>{
+    const s=linked();s.records[0].duplicate=true;
+    expect(lineUse(s.records[0],s)).toMatchObject({used:0,available:0,invalid:true});
+    expect(targetAvailable(s,target)).toBe(0.35);
   });
 });

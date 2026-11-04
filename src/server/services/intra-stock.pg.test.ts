@@ -79,4 +79,23 @@ describe('shared Intra snapshots and immutable history on existing ops_events, d
  it('paginates the full history instead of dropping older imports',async()=>{
   await save();await link();expect((await intraHistory(actor,2)).map(h=>h.version)).toEqual([1]);
  });
+ it('does not reuse capacity from a stale link until that link is explicitly retired',async()=>{
+  const second={...row,id:'f'.repeat(64)+':1',invoice:'0001-000002'};
+  const changed={...target,hash:'c'.repeat(64),quantity:60};
+  await save(0,[row,second]);await link(1,60);
+  const input={action:'link' as const,version:2,lineId:second.id,targetId:changed.id,targetKind:changed.kind,targetHash:changed.hash,quantity:1};
+  await expect(changeIntraLink(actor,input,async()=>[changed])).rejects.toMatchObject({code:'INTRA_ALLOCATION_INVALID'});
+  expect(await intraHistory(actor)).toHaveLength(2);
+  const [previous]=(await intraState(actor)).allocations;
+  await changeIntraLink(actor,{action:'unlink',version:2,id:previous.id},async()=>[]);
+  await changeIntraLink(actor,{...input,version:3,quantity:60},async()=>[changed]);
+  expect((await intraState(actor)).allocations.map(a=>a.active)).toEqual([false,true]);
+ });
+ it('loads source evidence before opening the ledger transaction, without holding its timeout or lock during source reads',async()=>{
+  await save();
+  const original=mock.db.$transaction as (fn:unknown)=>Promise<unknown>;let inTransaction=false;
+  mock.db.$transaction=async(fn:unknown)=>{inTransaction=true;try{return await original(fn);}finally{inTransaction=false;}};
+  await changeIntraLink(actor,{action:'link',version:1,lineId:row.id,targetId:target.id,targetKind:target.kind,targetHash:target.hash,quantity:40},async()=>{expect(inTransaction).toBe(false);return [target];});
+  expect((await intraState(actor)).allocations[0].quantity).toBe(40);
+ });
 });
