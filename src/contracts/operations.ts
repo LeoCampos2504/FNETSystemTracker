@@ -15,7 +15,8 @@ export type SiteContext = { maintenance:SiteMaintenance[]; forms:OperationsCatal
 
 /** Site control: generator service, air conditioner filters and fuel loads of every site, read from Sytex. */
 export type SiteAnswer = { question:string; answer:string };
-export type SiteFuelLoad = { id:string; formCode:string; siteCode:string; siteName:string; project:string; date:string|null; liters:number|null; fuel:string|null; levelBefore:string|null; levelAfter:string|null; hourmeter:string|null; origin:string; source:'Sytex'|'n8n'; link:string|null };
+export type FuelReview = { ok:boolean; version:number; sourceHash:string; updatedAt:string|null; updatedBy:string|null };
+export type SiteFuelLoad = { id:string; formCode:string; siteCode:string; siteName:string; project:string; date:string|null; dateBasis?:'LOAD'|'REPORTED'; possibleDuplicate?:boolean; review?:FuelReview; liters:number|null; fuel:string|null; levelBefore:string|null; levelAfter:string|null; hourmeter:string|null; origin:string; source:'Sytex'|'n8n'; link:string|null };
 /** Liters come from the insumos loaded in the same form (Insumo + Cantidad); the service questions only say what was changed. */
 export type SiteServiceReport = { formCode:string; siteCode:string; siteName:string; project:string; date:string|null; serviceDone:boolean; oilChanged:boolean; coolantChanged:boolean; oilLiters:number|null; waterLiters:number|null; coolantLiters:number|null; supplies:string[]; filters:string[]; hourmeter:string|null; link:string|null; answers:SiteAnswer[] };
 export type SiteControlRow = { siteCode:string; siteName:string; project:string; service:SiteMaintenance|null; airFilters:SiteMaintenance|null; lastService:SiteServiceReport|null; lastFuel:SiteFuelLoad|null };

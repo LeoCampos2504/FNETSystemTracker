@@ -53,3 +53,4 @@
 .table.table th,.table.table td{text-align:left;white-space:normal}
 .table.table td.num{white-space:nowrap}
 .inlineButton{display:inline !important;min-height:0 !important;padding:0 !important;border:0 !important;background:transparent !important;color:var(--brand) !important;font-weight:600 !important;text-decoration:underline;cursor:pointer}
+.fuelOk{background:#e5f5eb !important;color:#17683a !important;border-color:#a6d7b9 !important}

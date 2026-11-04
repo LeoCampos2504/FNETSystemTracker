@@ -2,6 +2,9 @@ import type { SiteControl, SiteControlRow, SiteFuelLoad, SiteServiceReport } fro
 import { allowedProject, projectKey, safeImage } from "@/server/operations-domain";
 import { getPrismaClient } from "@/server/prisma";
 import { catalog, yearlyMaintenance, type OperationsActor } from "./operations";
+import { operationalDateTimeToUtc } from "@/lib/operational-timezone";
+import { reconcileFuelLoads } from "@/lib/site-fuel-loads";
+import { attachFuelReviews } from "./fuel-review";
 
 /** One stored Sytex answer of the site control (sytex_site_answers). */
 export type StoredAnswer = { formCode: string; siteCode: string; siteName: string; topic: string; groupName: string; position: string; question: string; answer: string; reportedAt: string };
@@ -19,40 +22,64 @@ export function answerNumber(value: string | null | undefined): number | null {
   return Number.isFinite(number) ? number : null;
 }
 const yes = (answer: string) => /^(si|yes|x|cambiad|reemplaz|realizad|ok)/.test(fold(answer));
-const isLiters = (question: string) => { const q = fold(question); return /litro|\blts?\b|cantidad/.test(q) && !/nivel|filtro|porcentaje|%/.test(q); };
+const isLiters = (question: string) => { const q = fold(question); return /litro|\blts?\b|cantidad/.test(q) && !/nivel|filtro|porcentaje|%|capacidad|consumo|autonomia|comprad|solicitad|aceite|agua|refrigerante/.test(q); };
 const day = (value: string | null | undefined) => value?.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
 const sum = (values: (number | null)[]) => { const known = values.filter((v): v is number => v !== null); return known.length ? Math.round(known.reduce((a, b) => a + b, 0) * 100) / 100 : null; };
-const latestReport = (rows: StoredAnswer[]) => rows.map((row) => row.reportedAt).sort().at(-1) ?? "";
 const repeat = (group: string) => group.match(/^\[#(\d+)\]/)?.[1] ?? "";
 
 /**
  * Fuel loads reported in Sytex. In the generator preventive they are "CANTIDAD DE LITROS DE COMBUSTIBLE CARGADOS",
- * with "NIVEL DE COMBUSTIBLE [%]" before and "PORCENTAJE DE COMBUSTIBLE POSTERIOR A LA CARGA" after. One load per form
- * (and per repetition when the group repeats), only when it says how many liters were loaded.
+ * with before/after levels. Each positive loaded-quantity answer is an event, not a site/form total.
+ * A report timestamp is explicitly marked as such; it must not pretend to be the physical load date.
  */
 export function fuelLoadsFromAnswers(rows: StoredAnswer[]): Omit<SiteFuelLoad, "project" | "link" | "origin">[] {
   const groups = new Map<string, StoredAnswer[]>();
-  for (const row of rows) if (row.topic === "COMBUSTIBLE") { const key = row.formCode + "#" + repeat(row.groupName); groups.set(key, [...(groups.get(key) ?? []), row]); }
-  const hourmeter = new Map<string, string>();
-  for (const row of rows) if (row.topic === "HOROMETRO" && !hourmeter.has(row.formCode)) hourmeter.set(row.formCode, row.answer);
+  for (const row of rows) if (row.topic === "COMBUSTIBLE") { const key = JSON.stringify([row.formCode, row.siteCode, repeat(row.groupName)]); groups.set(key, [...(groups.get(key) ?? []), row]); }
+  const hourmeters = new Map<string, StoredAnswer[]>(), amounts = new Map<string, number>();
+  for (const row of rows) {
+    const key=JSON.stringify([row.formCode,row.siteCode]);
+    if (row.topic === "HOROMETRO") hourmeters.set(key,[...(hourmeters.get(key)??[]),row]);
+    if (row.topic === "COMBUSTIBLE" && isLiters(row.question) && (answerNumber(row.answer)??0)>0) amounts.set(key,(amounts.get(key)??0)+1);
+  }
   const loads: Omit<SiteFuelLoad, "project" | "link" | "origin">[] = [];
-  for (const [key, answers] of groups) {
-    const find = (test: (q: string) => boolean) => answers.find((a) => test(fold(a.question)))?.answer ?? null;
-    const liters = sum(answers.filter((a) => isLiters(a.question)).map((a) => answerNumber(a.answer)));
+  for (const [key, answers] of groups) for (const amount of answers.filter((a) => isLiters(a.question))) {
+    const quantities = answers.filter((a) => isLiters(a.question));
+    // Repeated events keep their own metadata. Never attach another load's date or meter to this one.
+    const context = quantities.length === 1 ? answers : answers.filter((a) => a.groupName === amount.groupName);
+    const unambiguous = context.filter((a) => isLiters(a.question)).length === 1;
+    const find = (test: (q: string) => boolean) => unambiguous ? context.find((a) => test(fold(a.question)))?.answer ?? null : null;
+    const liters = answerNumber(amount.answer);
     if (!liters || liters <= 0) continue;
-    const first = answers[0];
+    const first = amount;
+    const formSite=JSON.stringify([first.formCode,first.siteCode]);
+    const meters=hourmeters.get(formSite)??[];
+    const ownMeters=meters.filter(m=>m.groupName===first.groupName||(repeat(first.groupName)!==""&&repeat(m.groupName)===repeat(first.groupName)));
+    const meter=ownMeters.length===1?ownMeters[0].answer:amounts.get(formSite)===1&&meters.length===1?meters[0].answer:null;
+    const rawDate = find((q) => /fecha/.test(q) && /carga|combustible/.test(q));
+    const loadDate = fuelDate(rawDate);
     const after = find((q) => /posterior|final|despues|salida/.test(q) && /nivel|porcentaje|%/.test(q));
     loads.push({
-      id: "sytex:" + key, formCode: first.formCode, siteCode: first.siteCode, siteName: first.siteName,
-      date: latestReport(answers) || null, liters,
+      id: "sytex:" + JSON.stringify([key, amount.groupName, amount.position]), formCode: first.formCode, siteCode: first.siteCode, siteName: first.siteName,
+      date: loadDate ?? fuelDate(first.reportedAt), dateBasis: loadDate ? "LOAD" : "REPORTED", liters,
       fuel: find((q) => q.includes("tipo de combustible") || q.includes("combustible utilizado")),
       levelBefore: find((q) => (q.includes("nivel de combustible") || /inicial|antes|previo/.test(q) && /nivel|porcentaje/.test(q)) && !/posterior|final|despues/.test(q)),
       levelAfter: after,
-      hourmeter: hourmeter.get(first.formCode) ?? null,
+      hourmeter: unambiguous ? meter : null,
       source: "Sytex",
     });
   }
   return loads;
+}
+
+function fuelDate(value: string | null): string | null {
+  if (!value) return null;
+  const local = value.trim().replace(/^(\d{2})\/(\d{2})\/(\d{4})/, "$3-$2-$1").replace(" ", "T");
+  if (!/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/.test(local)) return null;
+  const civil = local.slice(0, 10);
+  try {
+    if (new Date(civil + "T00:00:00Z").toISOString().slice(0, 10) !== civil) return null;
+    return local.length === 10 ? local : operationalDateTimeToUtc(local);
+  } catch { return null; }
 }
 
 /** Fluids bought for a form, from its insumo list (Insumo + Cantidad): oil, distilled water and coolant. */
@@ -93,10 +120,8 @@ function newestPerForm<T extends { formCode: string; importedAt: Date }>(rows: T
 }
 
 async function storedAnswers() {
-  try {
     const rows = await getPrismaClient().sytex_site_answers.findMany({ include: { import: { select: { importedAt: true } } } });
     return newestPerForm(rows.map((row) => ({ ...row, importedAt: row.import.importedAt })));
-  } catch { return []; /* table created by db:prepare-app */ }
 }
 
 /** Insumos of every form, newest download per form, plus the n8n insumo table for forms not synchronized yet. */
@@ -112,9 +137,7 @@ async function formSupplies(): Promise<FormSupply[]> {
 }
 
 async function n8nFuel() {
-  try {
     return await getPrismaClient().cargas_combustible_ge.findMany({ orderBy: { fecha_evento: "desc" }, select: { id: true, formulario: true, codigo_sitio: true, nombre_sitio: true, origen: true, combustible: true, litros_cargados: true, nivel_antes: true, nivel_final: true, horometro: true, fecha_evento: true } });
-  } catch { return []; }
 }
 
 /** Every site the account can see with its yearly jobs, its last service report and its last fuel load. */
@@ -141,12 +164,11 @@ export async function siteControl(actor: OperationsActor): Promise<SiteControl> 
 
   const typeOfForm = new Map(c.tasks.map((t) => [t.code, t.type]));
   const fromSytex: SiteFuelLoad[] = fuelLoadsFromAnswers(answers).map((load) => ({ ...load, origin: typeOfForm.get(load.formCode) ?? "Sytex", project: projectOf(load.formCode, load.siteCode), link: link.get(load.formCode) ?? null }));
-  const sytexForms = new Set(fromSytex.map((load) => load.formCode));
-  const fromN8n: SiteFuelLoad[] = legacy.filter((r) => !sytexForms.has(r.formulario)).map((r) => {
+  const fromN8n: SiteFuelLoad[] = legacy.map((r) => {
     const siteCode = (r.codigo_sitio ?? "").trim().toUpperCase();
     return { id: "n8n:" + r.id.toString(), formCode: r.formulario, siteCode, siteName: r.nombre_sitio ?? "", project: projectOf(r.formulario, siteCode), date: r.fecha_evento?.toISOString() ?? null, liters: r.litros_cargados === null ? null : Number(r.litros_cargados), fuel: r.combustible, levelBefore: r.nivel_antes?.toString() ?? null, levelAfter: r.nivel_final?.toString() ?? null, hourmeter: r.horometro?.toString() ?? null, origin: r.origen, source: "n8n" as const, link: link.get(r.formulario) ?? null };
   });
-  const fuel = [...fromSytex, ...fromN8n].filter((load) => visible(load.project)).sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  const fuel = await attachFuelReviews(reconcileFuelLoads([...fromSytex, ...fromN8n].filter((load) => visible(load.project))));
 
   const serviceDate = new Map(facts.filter((f) => f.kind === "SERVICE_GE").map((f) => [f.formCode, f.lastDate.toISOString().slice(0, 10)]));
   const reportedAt = new Map<string, string>();

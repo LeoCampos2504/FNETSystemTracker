@@ -344,7 +344,8 @@ export function siteTopic(group: string, question: string): SytexSiteTopic | nul
   if (q.includes("fecha de reemplazo de los filtros") || q.startsWith("el filtro de aire fue") || (g.startsWith("aire acondicionado") && q.includes("filtro"))) return "FILTROS_AA";
   if (q.includes("gas refrigerante")) return null;
   if (q.includes("horometro")) return "HOROMETRO";
-  if (q.includes("combustible") && !q.includes("filtro")) return "COMBUSTIBLE";
+  if (!/filtro|aceite|refrigerante|agua/.test(q) && (q.includes("combustible") ||
+    (/combustible|carga de gasoil|carga de diesel/.test(g) && /litro|\blts?\b|cantidad|fecha|nivel|porcentaje|tipo/.test(q)))) return "COMBUSTIBLE";
   if (g.includes("service")) return "SERVICE_GE";
   if (/nivel de aceite|nivel del liquido refrigerante|completado de niveles/.test(q)) return "FLUIDOS";
   return null;

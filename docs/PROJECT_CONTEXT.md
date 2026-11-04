@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-11-04 — Combustible por carga y OK por operación (local)
+
+Preparado Control de sitios → Combustible con cada carga individual por fecha, sin consolidar por sitio ni truncar a doce en el detalle. Corrige la exclusión completa de n8n por formulario, reconoce preguntas de litros en grupos de combustible y conserva lotes con respuestas de sitio aunque no tengan insumos. Botón OK de un clic, reversible y compartido, con historial en ops_events y totales controlados por operación según filtros. Sin migraciones nuevas ni escritura real. Cobertura limitada a fuentes guardadas/proyectos sincronizados; no se certifica todo el histórico externo. Eugenia autorizó commit, push, PR, fusión y despliegue en FNET de Leo solo si pasa CI, sin migraciones ni cargas reales de prueba. 573 pruebas locales aprobadas; resultado de publicación pendiente de verificar y registrar en el PR. Ver [causas, permisos, límites y pruebas](reports/FUEL_LOADS_CONTROL_20261104.md). Se conserva el histórico siguiente.
+
 ## 2026-10-29 — Control de auditorías de seguridad física (local)
 
 Continuación 03/11: reanudado PR #61 con presentación compacta, resúmenes clicables, tarjetas móviles y ficha lateral para edición/historial/adjuntos. Integrado main para preservar el Excel de Mendel (#62). Misma autorización de publicación y tres tablas; sin nuevas ampliaciones de permisos. 548 pruebas locales aprobadas; certificación visual a cargo de la usuaria. El resultado de publicación se registra en el PR.

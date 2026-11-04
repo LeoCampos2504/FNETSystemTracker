@@ -11,6 +11,11 @@ const parsed = parseSytexSupplyRows([
 ]);
 beforeEach(() => { vi.resetAllMocks(); mocks.findUnique.mockResolvedValue(null); mocks.create.mockResolvedValue({ id: "saved-id" }); });
 describe("Sytex export persistence", () => {
+  it("saves fuel answers even when a form did not declare supply items",async()=>{
+    const answer={formCode:"FO-26-000001",siteCode:"ST00001",siteName:"Prueba",topic:"COMBUSTIBLE" as const,group:"Carga de combustible",index:"1",question:"Litros cargados",answer:"40",reportedAt:"2026-11-01T08:00:00"};
+    await saveSytexSupplyExport({...parsed,items:[],siteAnswers:[answer]},"fuel-only","source.xlsx","admin-id");
+    expect(mocks.create).toHaveBeenCalledWith({data:expect.objectContaining({items:{create:[]},siteAnswers:{create:[expect.objectContaining({formCode:answer.formCode,answer:"40"})]}}),select:{id:true}});
+  });
   it("saves the batch and its items as one atomic nested create in FNET-owned tables", async () => {
     expect(await saveSytexSupplyExport(parsed, "hash", "source.xlsx", "admin-id")).toEqual({ importId: "saved-id", alreadyImported: false });
     expect(mocks.create).toHaveBeenCalledWith({ data: expect.objectContaining({ fileHash: "hash", importedBy: "admin-id", answerCount: 2, items: { create: parsed.items } }), select: { id: true } });
