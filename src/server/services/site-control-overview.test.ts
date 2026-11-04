@@ -16,11 +16,20 @@ describe("fuel overview reads every authorized event",()=>{
   it("keeps n8n events alongside a Sytex fuel answer of the same form",async()=>{
     mock.answers.mockResolvedValue([{formCode:"FO-26-000001",siteCode:"ST00001",siteName:"Prueba",topic:"COMBUSTIBLE",groupName:"General",position:"1",question:"Litros de combustible cargados",answer:"40",reportedAt:"2026-11-03T08:00:00",import:{importedAt:new Date("2026-11-04T11:00Z")}}]);
     mock.fuel.mockResolvedValue([load(BigInt(1)),load(BigInt(2))]);
-    const result=await siteControl(actor);expect(result.fuel).toHaveLength(3);expect(result.fuel.map(r=>r.liters)).toEqual([40,50,50]);
+    const result=await siteControl(actor);expect(result.fuel).toHaveLength(3);expect(result.fuel.map(r=>r.liters).sort()).toEqual([40,50,50]);
+    expect(result.fuel.every(r=>r.date===null&&r.dateBasis==='UNVERIFIED')).toBe(true);
   });
   it("does not reduce a site's loads to its last record",async()=>{
     mock.fuel.mockResolvedValue([load(BigInt(1)),load(BigInt(2)),load(BigInt(3))]);
-    const result=await siteControl(actor);expect(result.sites).toHaveLength(1);expect(result.fuel).toHaveLength(3);expect(result.sites[0].lastFuel?.id).toBe("n8n:3");
+    const result=await siteControl(actor);expect(result.sites).toHaveLength(1);expect(result.fuel).toHaveLength(3);
+    expect(result.fuel.map(r=>r.id).sort()).toEqual(['n8n:1','n8n:2','n8n:3']);
+    expect(result.sites[0].lastFuel?.date).toBeNull();
+  });
+  it('uses the FO work start for n8n too, without presenting its old edit timestamp as realization',async()=>{
+    mock.answers.mockResolvedValue([{formCode:'FO-26-000001',siteCode:'ST00001',siteName:'Prueba',topic:'EJECUCION',groupName:'General',position:'1',question:'El Mantenimiento Correctivo Inicia el:',answer:'2026-10-02 10:00:00',reportedAt:'2026-10-13T17:25:45',import:{importedAt:new Date('2026-11-04T11:00Z')}}]);
+    mock.fuel.mockResolvedValue([load(BigInt(1))]);
+    const result=await siteControl(actor);
+    expect(result.fuel[0]).toMatchObject({date:'2026-10-02T13:00:00.000Z',dateBasis:'FORM_START',reportedAt:'2026-11-01T11:00:00.000Z'});
   });
   it("limits both the result and loaded review history to allowed projects",async()=>{
     mock.fuel.mockResolvedValue([load(BigInt(1)),load(BigInt(2),"FO-26-000002")]);

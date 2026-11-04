@@ -97,7 +97,7 @@ export function SiteControlView() {
   return <section className={s.app}>
     <header className={s.heading}><div><span className={s.kicker}>Service de grupos, filtros de aire y cargas de combustible</span><h1>Control de sitios</h1></div>
       <button onClick={() => { setLoading(true); setRevision((v) => v + 1); }} disabled={loading}>{loading ? "Actualizando…" : "Actualizar datos"}</button></header>
-    <ZoneFilter state={zones} dates={{ label: "Fecha del reporte", hint: "Filtra las cargas de combustible y los services por el día en que se informaron en Sytex. Los vencimientos se calculan siempre a hoy." }} />
+    <ZoneFilter state={zones} dates={{ label: "Fecha de realización", hint: "Combustible: fecha específica de carga o inicio de tareas informado en el FO. La aprobación y la última edición no se usan como fecha del trabajo. Los services conservan su fecha informada y los vencimientos se calculan a hoy." }} />
     <div className={c.siteFilter}>
       <label className={c.siteSearch}>Sitio
         <input list="site-control-sites" value={query} placeholder="Código o nombre del sitio" onChange={(e) => { const v = e.target.value; if (v.includes(" · ") && allSites.some((r) => v.startsWith(r.siteCode + " · "))) addSite(v); else setQuery(v); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); const match = allSites.find((r) => fold(r.siteCode) === term) ?? (sites.length === 1 ? sites[0] : null); if (match) addSite(match.siteCode); } }} />
@@ -119,7 +119,8 @@ export function SiteControlView() {
       {tab === "service" && <Services rows={services} sites={sites} onOpen={setOpen} />}
       {tab === "air" && <AirFilters rows={sites} onOpen={setOpen} />}
       {tab === "fuel" && <>
-        <p className={s.note}>Una fila por carga, de la más reciente a la más antigua, aunque se repita el sitio. Preventivos, correctivos y otros formularios disponibles. «Fecha del reporte» no confirma la fecha de carga. Elegí «Todas las fechas» para consultar todo lo guardado.</p>
+        <p className={s.note}>Una fila por carga, ordenada por realización: fecha de carga o inicio informado en el FO. No se usa la aprobación. Los registros sin fecha de realización se conservan y aparecen con «Todas las fechas».</p>
+        {(data?.fuel ?? []).some(f => !f.date) && <p className={s.note}>Hay cargas sin fecha de realización disponible. Se muestran como «Sin fecha en FO», sin inventar un día.</p>}
         <h2 className={c.subhead}>Litros controlados por operación</h2>
         <p className={s.note}>Marcá OK para sumar esa carga. El control se guarda en FNET y se puede desmarcar. Estos totales respetan los filtros de arriba.</p>
         <div className={c.cards} aria-live="polite">{checkedTotals.map(t=><div key={t.operation}><span>{t.operation}</span><strong>{liters(t.liters)}</strong><small>{t.count} cargas OK{t.unknownLiters?` · ${t.unknownLiters} sin litros informados`:""}</small></div>)}</div>
@@ -156,7 +157,7 @@ function Summary({ rows, onOpen }: { rows: SiteControlRow[]; onOpen: (code: stri
     <td><JobCell job={r.service} /></td>
     <td><JobCell job={r.airFilters} /></td>
     <td>{r.lastService ? <><strong>{date(r.lastService.date)}</strong><small>{[r.lastService.oilLiters !== null && "Aceite " + liters(r.lastService.oilLiters), r.lastService.filters.length ? r.lastService.filters.length + " filtro(s)" : ""].filter(Boolean).join(" · ") || "Ver detalle"}</small></> : <span className={c.muted}>—</span>}</td>
-    <td>{r.lastFuel ? <><strong>{liters(r.lastFuel.liters)}</strong><small>{dateTime(r.lastFuel.date)}</small></> : <span className={c.muted}>—</span>}</td>
+    <td>{r.lastFuel ? r.lastFuel.date ? <><strong>{liters(r.lastFuel.liters)}</strong><small>{dateTime(r.lastFuel.date)}</small></> : <span className={c.muted}>Cargas sin fecha informada</span> : <span className={c.muted}>—</span>}</td>
   </tr>} />;
 }
 
@@ -188,7 +189,7 @@ function AirFilters({ rows, onOpen }: { rows: SiteControlRow[]; onOpen: (code: s
 
 function FuelLoads({ rows, onOpen, onToggle, savingId="" }: { rows: SiteFuelLoad[]; onOpen?: (code: string) => void; onToggle?: (row:SiteFuelLoad)=>void; savingId?:string }) {
   return <Paged rows={rows} empty="No hay cargas de combustible para este filtro." head={["Fecha", "Sitio", "Operación", "Litros", "Nivel antes → después", "Combustible", "Horómetro", "Origen", "Formulario", "Control"]} render={(f) => <tr key={f.id}>
-    <td className={s.nowrap}>{dateTime(f.date)}{f.dateBasis === "REPORTED" && <small>Fecha del reporte</small>}</td>
+    <td className={s.nowrap}>{f.date ? dateTime(f.date) : 'Sin fecha en FO'}{f.dateBasis === "FORM_START" && <small>Inicio de tareas (FO)</small>}{f.dateBasis === "LOAD" && <small>Fecha de carga</small>}</td>
     <td>{onOpen?<SiteName row={f} onOpen={onOpen} />:<><strong>{f.siteCode}</strong><small>{f.siteName}</small></>}</td>
     <td>{f.project?projectLabel(f.project):"Sin operación"}</td>
     <td className={c.num}><strong>{liters(f.liters)}</strong></td>
@@ -197,7 +198,7 @@ function FuelLoads({ rows, onOpen, onToggle, savingId="" }: { rows: SiteFuelLoad
     <td className={c.num}>{f.hourmeter ? f.hourmeter + " h" : <span className={c.muted}>—</span>}</td>
     <td><span className={c.origin}>{f.origin.charAt(0) + f.origin.slice(1).toLowerCase()}</span><small>{f.source}{f.possibleDuplicate ? " · Revisar duplicado" : ""}</small></td>
     <td className={s.nowrap}><FormLink code={f.formCode} link={f.link} /></td>
-    <td><button type="button" className={f.review?.ok?c.fuelOk:undefined} aria-pressed={f.review?.ok??false} aria-label={`${f.review?.ok?"Desmarcar":"Marcar"} OK ${f.formCode} ${f.siteCode} ${dateTime(f.date)}`} disabled={!onToggle||!f.review||!!savingId} onClick={()=>onToggle?.(f)}>{savingId===f.id?"Guardando…":f.review?.ok?"✓ OK":"Marcar OK"}</button>{f.review?.updatedBy&&<small>{f.review.updatedBy} · {dateTime(f.review.updatedAt)}</small>}</td>
+    <td><button type="button" className={f.review?.ok?c.fuelOk:undefined} aria-pressed={f.review?.ok??false} aria-label={`${f.review?.ok?"Desmarcar":"Marcar"} OK ${f.formCode} ${f.siteCode} ${dateTime(f.date)}`} disabled={!onToggle||!f.review||!!savingId} onClick={()=>onToggle?.(f)}>{savingId===f.id?"Guardando…":f.review?.ok?"✓ OK":"Marcar OK"}</button>{f.review?.changed&&<small>Fecha o datos actualizados: revisá el OK anterior. Se conserva su historial.</small>}{f.review?.updatedBy&&<small>{f.review.updatedBy} · {dateTime(f.review.updatedAt)}</small>}</td>
   </tr>} />;
 }
 

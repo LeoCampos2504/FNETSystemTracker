@@ -1,5 +1,6 @@
 import { readSheet } from "read-excel-file/node";
 import { exactFormReference } from "./form-references";
+import { isFormStartQuestion } from '@/lib/form-execution-date';
 
 type Issue = { line: number; code: string; form?: string };
 type SourceAnswer = { line: number; index: string; question: string; answer: string | null; editedAt: string | null; editor: string | null };
@@ -25,7 +26,7 @@ export type SytexSupplyExport = {
 export type SytexMaintenanceKind = "SERVICE_GE" | "FILTROS_AA";
 export type SytexMaintenanceFact = { siteCode: string; kind: SytexMaintenanceKind; lastDate: string; formCode: string; reportedAt: string };
 /** Topics of the site control: what the technicians report about the generator, the fuel and the air conditioners. */
-export type SytexSiteTopic = "COMBUSTIBLE" | "SERVICE_GE" | "FLUIDOS" | "FILTROS_AA" | "HOROMETRO";
+export type SytexSiteTopic = "COMBUSTIBLE" | "SERVICE_GE" | "FLUIDOS" | "FILTROS_AA" | "HOROMETRO" | "EJECUCION";
 /** One answer of a form kept as Sytex wrote it, so the control can be read again without asking Sytex. */
 export type SytexSiteAnswer = { formCode: string; siteCode: string; siteName: string; topic: SytexSiteTopic; group: string; index: string; question: string; answer: string; reportedAt: string };
 const MAX_ROWS = 300_000;
@@ -340,6 +341,7 @@ export function siteTopic(group: string, question: string): SytexSiteTopic | nul
   const g = normalize(group.replace(/^\[#\d+\]\s*/, "")), q = normalize(question).replace(/^[¿¡]+\s*/, "");
   // Insumos bought for the visit are read from the insumo list, not as reports about the site.
   if (/insumo|material/.test(g)) return null;
+  if (isFormStartQuestion(question)) return "EJECUCION";
   // Air conditioner filters: the change date and how the filter was left, inside each unit's evaporator.
   if (q.includes("fecha de reemplazo de los filtros") || q.startsWith("el filtro de aire fue") || (g.startsWith("aire acondicionado") && q.includes("filtro"))) return "FILTROS_AA";
   if (q.includes("gas refrigerante")) return null;

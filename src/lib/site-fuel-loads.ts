@@ -30,6 +30,7 @@ export function fuelInDateRange(value: string | null, range: DateRange) {
 const measure = (value: string | null) => value === null ? null : value.trim().replace(",", ".");
 /** Only an exact, unique event match across sources may replace a row. Never deduplicate by site or form alone. */
 function fingerprint(row: SiteFuelLoad) {
+  if (row.dateBasis === 'FORM_START' || row.dateBasis === 'UNVERIFIED') return null;
   if (!row.siteCode || row.liters === null || !row.date || row.date.length <= 10 || !Number.isFinite(epoch(row.date))) return null;
   if (row.levelBefore === null && row.levelAfter === null && row.hourmeter === null) return null;
   return JSON.stringify([row.formCode, row.siteCode.trim().toUpperCase(), epoch(row.date), row.liters,
