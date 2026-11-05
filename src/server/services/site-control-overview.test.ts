@@ -15,7 +15,7 @@ beforeEach(()=>{
 describe("fuel overview reads every authorized event",()=>{
   it('uses only the newest ECP supply download, preserving its individual lines',async()=>{
     mock.catalog.mockResolvedValue({tasks:[{...task('FO-26-000001','NON - MPC','PREVENTIVO'),description:'ECP - Mantenimiento Preventivo Civil'}],projects:[]});
-    const row={formulario:'FO-26-000001',grupo:'[#1] Insumo',indice:'9.2A',description:'Diésel 500',quantity:'10.125',import:{importedAt:new Date('2026-11-04T11:00Z')}};
+    const row={formulario:'FO-26-000001',grupo:'[#1] Insumo',indice:'9.2A',description:'Diésel 500',sourceAnswers:[{question:'Cantidad utilizada:'}],quantity:'10.125',import:{importedAt:new Date('2026-11-04T11:00Z')}};
     mock.supplies.mockResolvedValue([{...row,quantity:'999',import:{importedAt:new Date('2026-11-03T11:00Z')}},row,{...row,grupo:'[#2] Insumo',indice:'9.2B'}]);
     const result=await siteControl(actor);
     expect(result.fuel).toHaveLength(2);expect(result.fuel.every(r=>r.liters===10.125&&r.origin==='ECP')).toBe(true);
@@ -23,7 +23,7 @@ describe("fuel overview reads every authorized event",()=>{
   });
   it('filters ECP supplies by server-side project scope before loading reviews',async()=>{
     mock.catalog.mockResolvedValue({tasks:[{...task('FO-26-000001','NON - MPC','PREVENTIVO'),description:'ECP - Civil'}],projects:[]});
-    mock.supplies.mockResolvedValue([{formulario:'FO-26-000001',grupo:'[#1] Insumo',indice:'9.2A',description:'Gasoil',quantity:'10',import:{importedAt:new Date()}}]);
+    mock.supplies.mockResolvedValue([{formulario:'FO-26-000001',grupo:'[#1] Insumo',indice:'9.2A',description:'Gasoil',sourceAnswers:[{question:'Cantidad utilizada:'}],quantity:'10',import:{importedAt:new Date()}}]);
     expect((await siteControl({...actor,allowed:['BAS - MPC']})).fuel).toEqual([]);
     expect(mock.reviews.mock.calls[0][0]).toEqual([]);
   });

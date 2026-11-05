@@ -94,7 +94,7 @@ function fuelDate(value: string | null): string | null {
 }
 
 /** Fluids bought for a form, from its insumo list (Insumo + Cantidad): oil, distilled water and coolant. */
-export type FormSupply = { formCode: string; description: string; quantity: string | null; groupName?: string; position?: string };
+export type FormSupply = { formCode: string; description: string; quantity: string | null; groupName?: string; position?: string; usedQuantity?: boolean };
 
 /** Civil ECP declares consumption in its supply table, not in the tank-load questionnaire.
  * Keep every original line; neither machine identity nor tank readings can be inferred from it.
@@ -105,7 +105,7 @@ export function ecpFuelFromSupplies(supplies: FormSupply[], tasks: { code: strin
   return supplies.flatMap(item => {
     const task = contexts.get(item.formCode), description = fold(item.description);
     // Nafta/2T may be lawnmower supplies. Parts, purchases and capacity are not consumed diesel.
-    if (!task || !item.groupName || !item.position || !/insumo/.test(fold(item.groupName)) ||
+    if (!task || !item.usedQuantity || !item.groupName || !item.position || !/insumo/.test(fold(item.groupName)) ||
       !/^(?:diesel|gasoil)\b/.test(description) || /filtro|aceite|bidon|envase|capacidad|comprad|solicitad/.test(description)) return [];
     const liters = answerNumber(item.quantity), siteCode = task.siteCode.trim().toUpperCase();
     if (!liters || liters <= 0 || !siteCode || siteCode.includes(",")) return [];
@@ -160,10 +160,10 @@ async function storedAnswers() {
 async function formSupplies(): Promise<FormSupply[]> {
   const db = getPrismaClient();
   const [synced, legacy] = await Promise.all([
-    db.sytex_supply_import_items.findMany({ select: { formulario: true, grupo: true, indice: true, description: true, quantity: true, import: { select: { importedAt: true } } } }),
+    db.sytex_supply_import_items.findMany({ select: { formulario: true, grupo: true, indice: true, description: true, quantity: true, sourceAnswers: true, import: { select: { importedAt: true } } } }),
     db.insumos.findMany({ select: { formulario: true, descripcion: true, cantidad: true } }).catch(() => []),
   ]);
-  const fresh = newestPerForm(synced.map((r) => ({ formCode: r.formulario, groupName: r.grupo, position: r.indice, description: r.description ?? "", quantity: r.quantity?.toString() ?? null, importedAt: r.import.importedAt })));
+  const fresh = newestPerForm(synced.map((r) => ({ formCode: r.formulario, groupName: r.grupo, position: r.indice, usedQuantity: Array.isArray(r.sourceAnswers) && r.sourceAnswers.some(a => a !== null && typeof a === "object" && !Array.isArray(a) && typeof a.question === "string" && /^cantidad.*utilizad/.test(fold(a.question))), description: r.description ?? "", quantity: r.quantity?.toString() ?? null, importedAt: r.import.importedAt })));
   const seen = new Set(fresh.map((r) => r.formCode));
   return [...fresh, ...legacy.filter((r) => !seen.has(r.formulario)).map((r) => ({ formCode: r.formulario, description: r.descripcion ?? "", quantity: r.cantidad?.toString() ?? null }))];
 }

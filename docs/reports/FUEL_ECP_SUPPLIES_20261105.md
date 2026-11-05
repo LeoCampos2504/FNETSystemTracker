@@ -4,7 +4,7 @@
 
 Civil ECP forms may declare diesel under repeated `Insumos utilizados` rows instead of a tank-load quantity question. Those rows were already synchronized into `sytex_supply_import_items` but were absent from the fuel overview.
 
-The overview now reads the newest supply import per form and keeps each positive diesel/gasoil row as a separate event, with its original form/group/index identity. Only forms whose catalog description identifies ECP and whose site is unambiguous qualify. Server-side project scope remains enforced before review history is loaded.
+The overview now reads the newest supply import per form and keeps each positive diesel/gasoil row as a separate event, with its original form/group/index identity. An explicit quantity-used source question is required; a generic or purchased quantity is insufficient. Only forms whose catalog description identifies ECP and whose site is unambiguous qualify. Server-side project scope remains enforced before review history is loaded.
 
 These events are explicitly labeled **Insumo declarado ECP**. They describe reported consumption, not independently verified tank fills. Machine numbers in descriptions remain literal source text; tank readings and hourmeters are not inferred. Nafta, 2T oil, mower parts, containers and expressly purchased/requested items are excluded from this fallback. Legacy supply rows without the synchronized identity are not inferred.
 
@@ -14,7 +14,7 @@ Structured tank evidence and ECP supply evidence for the same form/site are both
 
 ## Validation
 
-- Local: `npm test`: **639/639**, 90 files (published baseline 630; nine added regression cases).
+- Local: `npm test`: **640/640**, 90 files (published baseline 630; ten added regression cases).
 - `npm run lint`: zero errors, four preexisting warnings.
 - `npm run build -- --webpack`: successful (local alternative to the known Turbopack environment issue).
 - `npx tsc --noEmit`: successful after build.

@@ -3,7 +3,7 @@ vi.mock('@/server/prisma', () => ({ getPrismaClient: vi.fn() }));
 import { ecpFuelFromSupplies, type FormSupply, type StoredAnswer } from './site-control';
 import { fuelInDateRange, reconcileFuelLoads, reviewedFuelByOperation } from '@/lib/site-fuel-loads';
 const task = { code: 'FO-26-000001', description: 'ECP - Mantenimiento Preventivo Civil', siteCode: 'ST00001', siteName: 'Prueba', project: 'NON - MPC' };
-const supply = (description: string, n: number, quantity = '10.125'): FormSupply => ({ formCode: task.code, groupName: `[#${n}] Insumo`, position: `9.2${n}`, description, quantity });
+const supply = (description: string, n: number, quantity = '10.125'): FormSupply => ({ formCode: task.code, groupName: `[#${n}] Insumo`, position: `9.2${n}`, description, quantity, usedQuantity: true });
 const read = (items: FormSupply[], answers: StoredAnswer[] = []) => ecpFuelFromSupplies(items, [task], answers, new Map([[task.code, 'https://fv.sytex.io/example']]));
 describe('ECP fuel declared as used supplies', () => {
   it('keeps every diesel line and its identity, even repeated descriptions, without guessing tank metadata', () => {
@@ -20,6 +20,9 @@ describe('ECP fuel declared as used supplies', () => {
     const items=[supply('Gasoil',1)];
     expect(ecpFuelFromSupplies(items,[{...task,description:'Otro formulario'}],[],new Map())).toEqual([]);
     expect(ecpFuelFromSupplies(items,[{...task,siteCode:'ST00001, ST00002'}],[],new Map())).toEqual([]);
+  });
+  it('requires explicit quantity-used evidence, not a purchase or a generic amount', () => {
+    expect(read([{...supply('Diesel',1),usedQuantity:false},{...supply('Diesel',2),usedQuantity:undefined}])).toEqual([]);
   });
   it('requires a positive quantity and stable source row identity', () => {
     expect(read([supply('Diesel',1,'0'),supply('Diesel',2,'-1'),supply('Diesel',3,'sin dato'),{...supply('Diesel',4),position:undefined}])).toEqual([]);
