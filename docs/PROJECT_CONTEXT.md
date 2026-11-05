@@ -1,5 +1,9 @@
 # Contexto funcional — FNET System Tracker
 
+## 2026-11-05 — Combustible ECP declarado en insumos
+
+Corregida en un checkout aislado la omisión de diésel/gasoil utilizado en ECP civil: cada renglón sincronizado aparece como evidencia `Insumo declarado ECP`, sin inventar tanque, horómetro ni fecha. Se conserva el último import por FO, el alcance por proyecto y los OK existentes; las coincidencias con cargas estructuradas se señalan para revisión. Sin migración ni cambios en Sytex/n8n. El descuento automático FIFO permanece **PAUSADO** y fuera de esta entrega. Ver [alcance y validación](reports/FUEL_ECP_SUPPLIES_20261105.md).
+
 ## 2026-11-04 — Cruce Excel de Intra con combustible e insumos (local)
 
 Continuación de cierre R1: un vínculo desactualizado conserva su reserva hasta retirarlo expresamente, evitando reutilizar una cantidad que podría reactivarse si vuelve la fuente anterior. Se conserva historial y se agregan cinco regresiones: cuatro de reservas y una que comprueba que las lecturas amplias de fuente se hacen antes de abrir la transacción del control, sin consumir su timeout ni mantener el bloqueo durante esa consulta. Sin cambios de esquema ni datos reales. Misma autorización de publicación condicionada a CI; el resultado se documenta en el PR de corrección.

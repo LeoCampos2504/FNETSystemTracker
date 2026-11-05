@@ -127,7 +127,7 @@ export function SiteControlView() {
         <div className={c.cards} aria-live="polite">{checkedTotals.map(t=><div key={t.operation}><span>{t.operation}</span><strong>{liters(t.liters)}</strong><small>{t.count} cargas OK{t.unknownLiters?` · ${t.unknownLiters} sin litros informados`:""}</small></div>)}</div>
         {!checkedTotals.length&&<p className={s.note}>Todavía no hay cargas marcadas OK en este filtro.</p>}
         {zones.data?.admin && data && <IntraStockControl fuelRevision={data.fuel} />}
-        {fuel.some(f=>f.possibleDuplicate)&&<p className={s.note} role="status">Hay registros de ambas fuentes para un mismo formulario sin coincidencia exacta. Se conservan para revisión; el total puede incluir duplicados. Revisalos antes de marcar OK.</p>}
+        {fuel.some(f=>f.possibleDuplicate)&&<p className={s.note} role="status">Hay distintas evidencias para un mismo formulario sin coincidencia exacta. Se conservan para revisión; el total puede incluir duplicados. Revisalos antes de marcar OK.</p>}
         <FuelLoads rows={fuel} onOpen={setOpen} onToggle={toggleFuel} savingId={savingId} />
       </>}
     </>}
@@ -198,7 +198,7 @@ function FuelLoads({ rows, onOpen, onToggle, savingId="" }: { rows: SiteFuelLoad
     <td><Level before={f.levelBefore} after={f.levelAfter} /></td>
     <td>{f.fuel || <span className={c.muted}>No informado</span>}</td>
     <td className={c.num}>{f.hourmeter ? f.hourmeter + " h" : <span className={c.muted}>—</span>}</td>
-    <td><span className={c.origin}>{f.origin.charAt(0) + f.origin.slice(1).toLowerCase()}</span><small>{f.source}{f.possibleDuplicate ? " · Revisar duplicado" : ""}</small></td>
+    <td><span className={c.origin}>{f.origin.charAt(0) + f.origin.slice(1).toLowerCase()}</span><small>{f.evidence === "SUPPLY_DECLARATION" ? "Insumo declarado ECP" : f.source}{f.possibleDuplicate ? " · Revisar duplicado" : ""}</small></td>
     <td className={s.nowrap}><FormLink code={f.formCode} link={f.link} /></td>
     <td><button type="button" className={f.review?.ok?c.fuelOk:undefined} aria-pressed={f.review?.ok??false} aria-label={`${f.review?.ok?"Desmarcar":"Marcar"} OK ${f.formCode} ${f.siteCode} ${dateTime(f.date)}`} disabled={!onToggle||!f.review||!!savingId} onClick={()=>onToggle?.(f)}>{savingId===f.id?"Guardando…":f.review?.ok?"✓ OK":"Marcar OK"}</button>{f.review?.changed&&<small>Fecha o datos actualizados: revisá el OK anterior. Se conserva su historial.</small>}{f.review?.updatedBy&&<small>{f.review.updatedBy} · {dateTime(f.review.updatedAt)}</small>}</td>
   </tr>} />;
