@@ -46,7 +46,7 @@ export function reconcileFuelLoads(rows: SiteFuelLoad[]): SiteFuelLoad[] {
   }
   const kept = rows.filter((r) => !replaced.has(r.id));
   const byForm = new Map<string, Set<string>>();
-  for (const row of kept) { const key = JSON.stringify([row.formCode, row.siteCode.trim().toUpperCase()]); const sources = byForm.get(key) ?? new Set<string>(); sources.add(row.source); byForm.set(key, sources); }
+  for (const row of kept) { const key = JSON.stringify([row.formCode, row.siteCode.trim().toUpperCase()]); const sources = byForm.get(key) ?? new Set<string>(); sources.add(row.evidence ?? row.source); byForm.set(key, sources); }
   return kept.map((row) => ({ ...row, possibleDuplicate: (byForm.get(JSON.stringify([row.formCode, row.siteCode.trim().toUpperCase()]))?.size ?? 0) > 1 }))
     .sort((a, b) => epoch(b.date) - epoch(a.date) || a.id.localeCompare(b.id));
 }

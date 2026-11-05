@@ -94,7 +94,28 @@ function fuelDate(value: string | null): string | null {
 }
 
 /** Fluids bought for a form, from its insumo list (Insumo + Cantidad): oil, distilled water and coolant. */
-export type FormSupply = { formCode: string; description: string; quantity: string | null };
+export type FormSupply = { formCode: string; description: string; quantity: string | null; groupName?: string; position?: string };
+
+/** Civil ECP declares consumption in its supply table, not in the tank-load questionnaire.
+ * Keep every original line; neither machine identity nor tank readings can be inferred from it.
+ */
+export function ecpFuelFromSupplies(supplies: FormSupply[], tasks: { code: string; description: string; siteCode: string; siteName: string; project: string }[], answers: StoredAnswer[], links: Map<string, string | null>): SiteFuelLoad[] {
+  const contexts = new Map(tasks.filter(t => /\becp\b/.test(fold(t.description))).map(t => [t.code, t]));
+  const dates = formExecutionDates(answers);
+  return supplies.flatMap(item => {
+    const task = contexts.get(item.formCode), description = fold(item.description);
+    // Nafta/2T may be lawnmower supplies. Parts, purchases and capacity are not consumed diesel.
+    if (!task || !item.groupName || !item.position || !/insumo/.test(fold(item.groupName)) ||
+      !/^(?:diesel|gasoil)\b/.test(description) || /filtro|aceite|bidon|envase|capacidad|comprad|solicitad/.test(description)) return [];
+    const liters = answerNumber(item.quantity), siteCode = task.siteCode.trim().toUpperCase();
+    if (!liters || liters <= 0 || !siteCode || siteCode.includes(",")) return [];
+    const date = dates.get(JSON.stringify([item.formCode, siteCode])) ?? null;
+    return [{ id: "sytex-supply:" + JSON.stringify([item.formCode, item.groupName, item.position]), formCode: item.formCode,
+      siteCode, siteName: task.siteName, project: task.project, date, dateBasis: date ? "FORM_START" as const : "UNVERIFIED" as const,
+      liters, fuel: item.description, levelBefore: null, levelAfter: null, hourmeter: null, origin: "ECP",
+      evidence: "SUPPLY_DECLARATION" as const, source: "Sytex" as const, link: links.get(item.formCode) ?? null }];
+  });
+}
 const fluidKind = (description: string) => { const d = fold(description); if (/filtro|gas/.test(d)) return null; if (d.includes("destilada")) return "water"; if (d.includes("refrigerante") || d.includes("anticongelante")) return "coolant"; if (d.includes("aceite")) return "oil"; return null; };
 
 /** What each generator form reports about the yearly service: if it was done, what was changed and the fluids used. */
@@ -139,10 +160,10 @@ async function storedAnswers() {
 async function formSupplies(): Promise<FormSupply[]> {
   const db = getPrismaClient();
   const [synced, legacy] = await Promise.all([
-    db.sytex_supply_import_items.findMany({ select: { formulario: true, description: true, quantity: true, import: { select: { importedAt: true } } } }).catch(() => []),
+    db.sytex_supply_import_items.findMany({ select: { formulario: true, grupo: true, indice: true, description: true, quantity: true, import: { select: { importedAt: true } } } }),
     db.insumos.findMany({ select: { formulario: true, descripcion: true, cantidad: true } }).catch(() => []),
   ]);
-  const fresh = newestPerForm(synced.map((r) => ({ formCode: r.formulario, description: r.description ?? "", quantity: r.quantity?.toString() ?? null, importedAt: r.import.importedAt })));
+  const fresh = newestPerForm(synced.map((r) => ({ formCode: r.formulario, groupName: r.grupo, position: r.indice, description: r.description ?? "", quantity: r.quantity?.toString() ?? null, importedAt: r.import.importedAt })));
   const seen = new Set(fresh.map((r) => r.formCode));
   return [...fresh, ...legacy.filter((r) => !seen.has(r.formulario)).map((r) => ({ formCode: r.formulario, description: r.descripcion ?? "", quantity: r.cantidad?.toString() ?? null }))];
 }
@@ -181,7 +202,8 @@ export async function siteControl(actor: OperationsActor): Promise<SiteControl> 
     const date = executionDates.get(JSON.stringify([r.formulario, siteCode])) ?? null;
     return { id: "n8n:" + r.id.toString(), formCode: r.formulario, siteCode, siteName: r.nombre_sitio ?? "", project: projectOf(r.formulario, siteCode), date, dateBasis: date ? 'FORM_START' as const : 'UNVERIFIED' as const, reportedAt: r.fecha_evento?.toISOString() ?? null, liters: r.litros_cargados === null ? null : Number(r.litros_cargados), fuel: r.combustible, levelBefore: r.nivel_antes?.toString() ?? null, levelAfter: r.nivel_final?.toString() ?? null, hourmeter: r.horometro?.toString() ?? null, origin: r.origen, source: "n8n" as const, link: link.get(r.formulario) ?? null };
   });
-  const fuel = await attachFuelReviews(reconcileFuelLoads([...fromSytex, ...fromN8n].filter((load) => visible(load.project))));
+  const declared = ecpFuelFromSupplies(supplies, c.tasks, answers, link);
+  const fuel = await attachFuelReviews(reconcileFuelLoads([...fromSytex, ...fromN8n, ...declared].filter((load) => visible(load.project))));
 
   const serviceDate = new Map(facts.filter((f) => f.kind === "SERVICE_GE").map((f) => [f.formCode, f.lastDate.toISOString().slice(0, 10)]));
   const reportedAt = new Map<string, string>();
