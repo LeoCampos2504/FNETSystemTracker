@@ -4,6 +4,8 @@ import { requireAdminSession } from "@/server/services/auth-sessions";
 import { getPrismaClient } from "@/server/prisma";
 import { parseMendelCsv } from "@/server/mendel-csv";
 import { hasAllowedRequestOrigin } from "@/server/request-origin";
+import { operationalDateKey } from "@/lib/operational-timezone";
+import { importMendelBatch } from "@/server/mendel-import-batch";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,6 +44,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ code: ["CSV_EMPTY", "CSV_INVALID_QUOTE", "CSV_REQUIRED_HEADERS_MISSING"].includes(code) ? code : "CSV_INVALID" }, { status });
   }
   const fileHash = createHash("sha256").update(bytes).digest("hex");
+  const fileName = (file.name.split(/[\\/]/).pop() ?? "importacion.csv").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 255) || "importacion.csv";
+  const days = parsed.rows.map((row) => operationalDateKey(row.transactionDate)).sort();
   try {
     const prisma = getPrismaClient();
     const ids = parsed.rows.map((row) => row.transactionId);
@@ -56,33 +60,33 @@ export async function POST(request: NextRequest) {
       duplicateRowsSkipped: parsed.duplicateCount,
       invalidRows: parsed.invalidRowCount,
       errors: parsed.errors,
+      rowResults: [
+        ...parsed.rows.map((row, index) => ({ record: parsed.recordNumbers[index], transactionId: row.transactionId, action: existingIds.has(row.transactionId) ? 'ACTUALIZAR' : 'AGREGAR' })),
+        ...parsed.duplicates.map(row => ({ ...row, action: 'REPETIDA_OMITIDA' })),
+      ].sort((a, b) => a.record - b.record),
+      fileName,
+      periodStart: days[0] ?? null,
+      periodEnd: days.at(-1) ?? null,
       transactionsWithFormReferences: parsed.rows.filter((row) => row.formReferences?.length).length,
     };
     if (mode === "preview") return NextResponse.json(preview, { headers: { "Cache-Control": "no-store" } });
-    if (parsed.invalidRowCount > 0) return NextResponse.json({ code: "CSV_HAS_INVALID_ROWS", ...preview }, { status: 422, headers: { "Cache-Control": "no-store" } });
+    // Conflicting identifiers require review instead of associating the wrong purchase.
+    if (parsed.identityConflict)
+      return NextResponse.json({ code: "CSV_ID_CONFLICT", ...preview }, { status: 422, headers: { "Cache-Control": "no-store" } });
     if (!parsed.rows.length) return NextResponse.json({ code: "CSV_NO_TRANSACTIONS" }, { status: 422 });
 
     await prisma.$transaction(async (tx) => {
-      for (const row of parsed.rows) {
-        const { transactionId, formReferences, ...data } = row;
-        await tx.mendel_transactions.upsert({
-          where: { transactionId },
-          create: { transactionId, ...data },
-          update: data,
-        });
-        if (formReferences !== undefined) {
-          await tx.mendel_form_references.deleteMany({ where: { transactionId } });
-          if (formReferences.length) await tx.mendel_form_references.createMany({
-            data: formReferences.map((formCode) => ({ transactionId, formCode })),
-          });
-        }
-      }
-      await tx.mendel_import_batches.create({
-        data: { fileHash, rowCount: parsed.rows.length, insertedCount, updatedCount, importedBy: authorization.user.id },
+      for (let i = 0; i < parsed.rows.length; i += 500) await importMendelBatch(tx, parsed.rows.slice(i, i + 500));
+      const batch = await tx.mendel_import_batches.create({
+        data: { fileHash, rowCount: parsed.rows.length, insertedCount, updatedCount, importedBy: authorization.user.id }, select: { id: true },
       });
+      // Keep the original in a private database table, in the same transaction as the import.
+      await tx.$executeRaw`INSERT INTO mendel_csv_archives(batch_id,file_name,file_content,period_start,period_end,invalid_count,duplicate_count)
+        VALUES (${batch.id},${fileName},${Buffer.from(bytes)},${days[0]}::date,${days[days.length - 1]}::date,${parsed.invalidRowCount},${parsed.duplicateCount})`;
     }, { maxWait: 10_000, timeout: 60_000 });
     return NextResponse.json({ ...preview, imported: true }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
-    return NextResponse.json({ code: "MENDEL_IMPORT_FAILED" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    const conflict = error instanceof Error && error.message === 'MENDEL_ID_CONFLICT';
+    return NextResponse.json({ code: conflict ? 'CSV_ID_CONFLICT' : "MENDEL_IMPORT_FAILED" }, { status: conflict ? 409 : 503, headers: { "Cache-Control": "no-store" } });
   }
 }

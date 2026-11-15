@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { parseMendelCsv } from "@/server/mendel-csv";
 
 describe("parseMendelCsv", () => {
+  it("rejects two different full IDs sharing a short ID instead of silently merging them", () => {
+    const csv = 'ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda\nABC-123,ABC-123-ONE,2026/09/25,1,ARS\nABC-123,ABC-123-TWO,2026/09/25,1,ARS';
+    const result = parseMendelCsv(new TextEncoder().encode(csv));
+    expect(result.invalidRowCount).toBe(1);
+    expect(result.errors[0].fields).toContain('ID abreviado corresponde a transacciones distintas');
+    expect(result.duplicateCount).toBe(0);
+  });
+
+  it("rejects a full ID that does not match the provided abbreviated ID", () => {
+    const csv = 'ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda\nABC-123,XYZ-123-ONE,2026/09/25,1,ARS';
+    const result = parseMendelCsv(new TextEncoder().encode(csv));
+    expect(result.invalidRowCount).toBe(1);
+    expect(result.errors[0].fields).toContain('ID Completo Transaccion no coincide con el ID abreviado');
+  });
   it("reads quoted values, Argentina timestamps, decimals, and skips identical duplicate IDs", () => {
     const csv = [
       '"ID Transaccion","Fecha transaccion","Fecha confirmacion","Usuario","Comercio","Importe Total","Moneda","Hay ticket","Estado comprobacion"',

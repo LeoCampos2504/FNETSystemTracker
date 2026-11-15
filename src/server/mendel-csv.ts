@@ -2,6 +2,9 @@ import { extractFormReferences } from "./form-references";
 
 export type MendelTransactionImport = {
   transactionId: string;
+  fullId?: string | null;
+  sourceInvoice?: string | null;
+  sourceDescription?: string | null;
   transactionDate: Date;
   confirmationDate: Date | null;
   userName: string | null;
@@ -39,6 +42,9 @@ export type MendelCsvParseResult = {
   errors: Array<{ line: number; fields: string[] }>;
   invalidRowCount: number;
   duplicateCount: number;
+  identityConflict: boolean;
+  recordNumbers: number[];
+  duplicates: Array<{ record: number; transactionId: string }>;
 };
 
 function decode(bytes: Uint8Array): string {
@@ -153,18 +159,26 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
   const rows: MendelTransactionImport[] = [];
   const errors: MendelCsvParseResult["errors"] = [];
   const seen = new Map<string, string>();
+  const fullIds = new Map<string, string>();
+  const recordNumbers: number[] = [];
+  const duplicates: MendelCsvParseResult['duplicates'] = [];
   let invalidRowCount = 0;
   let duplicateCount = 0;
+  let identityConflict = false;
 
   for (let offset = 1; offset < records.length; offset += 1) {
     const record = records[offset];
     const line = offset + 1;
     const fields: string[] = [];
     const transactionId = clean(value(record, "ID Transaccion"), 80)?.toUpperCase() ?? null;
+    const fullId = clean(value(record, "ID Completo Transaccion"), 80)?.toUpperCase() ?? null;
     const transactionDate = parseDate(value(record, "Fecha transaccion"));
     const totalAmount = parseAmount(value(record, "Importe Total"));
     const currency = clean(value(record, "Moneda"), 3)?.toUpperCase() ?? null;
     if (!transactionId) fields.push("ID Transaccion");
+    if (transactionId && fullId && !fullId.startsWith(transactionId)) fields.push("ID Completo Transaccion no coincide con el ID abreviado");
+    if (transactionId && fullId && fullIds.has(transactionId) && fullIds.get(transactionId) !== fullId) fields.push("ID abreviado corresponde a transacciones distintas");
+    if (transactionId && fullId && !fullIds.has(transactionId)) fullIds.set(transactionId, fullId);
     if (!transactionDate) fields.push("Fecha transaccion");
     if (!totalAmount) fields.push("Importe Total");
     if (!currency || currency.length !== 3) fields.push("Moneda");
@@ -180,6 +194,7 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
     const confirmationDate = confirmationRaw?.trim() ? parseDate(confirmationRaw) : null;
     if (confirmationRaw?.trim() && !confirmationDate) fields.push("Fecha confirmacion");
     if (fields.length) {
+      if (fields.some(field => field.includes('ID '))) identityConflict = true;
       invalidRowCount += 1;
       if (errors.length < 100) errors.push({ line, fields });
       continue;
@@ -187,6 +202,9 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
 
     const row: MendelTransactionImport = {
       transactionId: transactionId!, transactionDate: transactionDate!, confirmationDate,
+      ...(index("ID Completo Transaccion") >= 0 ? { fullId } : {}),
+      ...(index("Numero de factura") >= 0 ? { sourceInvoice: clean(value(record, "Numero de factura"), 200) } : {}),
+      ...(index("Descripcion") >= 0 ? { sourceDescription: clean(value(record, "Descripcion"), 5000) } : {}),
       userName: clean(value(record, "Usuario"), 200), merchant: clean(value(record, "Comercio"), 250),
       totalAmount: totalAmount!, currency: currency!,
       internationalAmount: parsedAmounts[0], internationalCurrency: clean(value(record, "Moneda internacional"), 3)?.toUpperCase() ?? null,
@@ -204,13 +222,15 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
     const previous = seen.get(row.transactionId);
     if (previous !== undefined) {
       if (previous !== serialized) {
+        identityConflict = true;
         invalidRowCount += 1;
         if (errors.length < 100) errors.push({ line, fields: ["ID Transaccion duplicado con datos distintos"] });
-      } else duplicateCount += 1;
+      } else { duplicateCount += 1; duplicates.push({ record: line, transactionId: row.transactionId }); }
       continue;
     }
     seen.set(row.transactionId, serialized);
     rows.push(row);
+    recordNumbers.push(line);
   }
-  return { rows, errors, invalidRowCount, duplicateCount };
+  return { rows, errors, invalidRowCount, duplicateCount, identityConflict, recordNumbers, duplicates };
 }

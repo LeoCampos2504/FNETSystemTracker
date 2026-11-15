@@ -2,7 +2,7 @@ import {NextRequest} from 'next/server';
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 const m=vi.hoisted(()=>({auth:vi.fn(),find:vi.fn(),count:vi.fn(),group:vi.fn(),batch:vi.fn(),query:vi.fn()}));
 vi.mock('@/server/services/auth-sessions',()=>({requireAdminSession:m.auth}));
-vi.mock('@/server/prisma',()=>({getPrismaClient:()=>({mendel_transactions:{findMany:m.find,count:m.count,groupBy:m.group},mendel_import_batches:{findFirst:m.batch},$queryRawUnsafe:m.query})}));
+vi.mock('@/server/prisma',()=>({getPrismaClient:()=>({mendel_transactions:{findMany:m.find,count:m.count,groupBy:m.group},mendel_import_batches:{findFirst:m.batch},$queryRawUnsafe:m.query,$queryRaw:m.query})}));
 import {GET} from './route';
 const item={transactionId:'SYNTHETIC-001',transactionDate:new Date('2026-10-15T11:00:00Z'),userName:'Persona ficticia',merchant:'Comercio de prueba',totalAmount:'25000.00',currency:'ARS',budget:'TEST',reconciliationStatus:'PENDING'};
 const url='http://localhost:3001/api/mendel/transactions';
