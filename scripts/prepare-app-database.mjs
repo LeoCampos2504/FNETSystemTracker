@@ -25,13 +25,14 @@ const ownedMigrations = [
   "20261018_add_guard_crews",
   "20261029_add_physical_audits",
   "20261115_add_mendel_csv_archive",
+  "20261116_add_mendel_purchase_comments",
 ];
 const ownedTables = new Set([
   "fnet_audit_people", "fnet_audit_records", "fnet_audit_files",
   "ops_guard_crews", "ops_guard_crew_changes",
   "fnet_mendel_zone_expenses", "fnet_mendel_zone_access", "fnet_mendel_zone_decisions",
   "task_assignments", "task_assignment_history", "app_users", "app_sessions",
-  "app_login_attempts", "mendel_transactions", "mendel_import_batches", "mendel_csv_archives", "mendel_purchase_details", "mendel_purchase_detail_events",
+  "app_login_attempts", "mendel_transactions", "mendel_import_batches", "mendel_csv_archives", "mendel_purchase_details", "mendel_purchase_detail_events", "mendel_purchase_source_comments",
   "mendel_form_references",
   "sytex_supply_imports", "sytex_supply_import_items",
   "sytex_supply_form_contexts", "sytex_site_maintenance", "sytex_form_links", "sytex_form_states", "sytex_task_dates", "sytex_site_answers",

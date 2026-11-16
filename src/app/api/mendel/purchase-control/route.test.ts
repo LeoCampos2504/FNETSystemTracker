@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   m.auth.mockResolvedValue({ ok: true, user: { id: 'admin', role: 'ADMIN', active: true } });
   m.find.mockResolvedValue([purchase('A', 'CIVIL - NOA'), purchase('B', 'VIATICOS')]);
-  m.raw.mockResolvedValueOnce([{ transactionId: 'A', fullId: 'A-COMPLETO', sourceInvoice: '123', sourceDescription: null, manualInvoice: null, oppen: true, requiresIntra: true, version: 1 }]).mockResolvedValueOnce([{ transactionId: 'A', zone: 'NOA' }]).mockResolvedValueOnce([{ transactionId:'A', observation:'Observación ficticia' }]);
+  m.raw.mockResolvedValueOnce([{ transactionId: 'A', fullId: 'A-COMPLETO', sourceInvoice: '123', sourceDescription: null, manualInvoice: null, oppen: true, requiresIntra: true, version: 1 }]).mockResolvedValueOnce([{ transactionId: 'A', zone: 'NOA' }]).mockResolvedValueOnce([{ transactionId:'A', observation:'Observación ficticia' }]).mockResolvedValueOnce([{ transactionId:'A', comment:'Comentario ficticio de Mendel' }]);
   m.states.mockResolvedValue(new Map([['A', { uploaded: true, downloaded: false }], ['B', { uploaded: null, downloaded: null }]]));
 });
 describe('control de compras', () => {
@@ -21,14 +21,14 @@ describe('control de compras', () => {
     const response = await GET(new NextRequest(url + '?view=civil&zone=NOA&status=mismatch'));
     const data = await response.json();
     expect(data.summary).toMatchObject({ total: 1, loaded: 1, pendingDownload: 1, mismatch: 1 });
-    expect(data.items[0]).toMatchObject({ transactionId: 'A', details: { fullId: 'A-COMPLETO', oppen: true } });
+    expect(data.items[0]).toMatchObject({ transactionId: 'A', sourceComment:'Comentario ficticio de Mendel', details: { fullId: 'A-COMPLETO', oppen: true, observation:'Observación ficticia' } });
   });
   it('exports all matching rows as literal Excel text', async () => {
     const response = await GET(new NextRequest(url + '?view=civil&export=xlsx'));
     expect(response.status).toBe(200);
     const zip = unzipSync(new Uint8Array(await response.arrayBuffer()));
     const sheet = strFromU8(zip['xl/worksheets/sheet1.xml']);
-    expect(sheet).toContain('A-COMPLETO'); expect(sheet).toContain('Observación ficticia'); expect(sheet).not.toContain('VIATICOS'); expect(sheet).not.toContain('<f>');
+    expect(sheet).toContain('A-COMPLETO'); expect(sheet).toContain('Observación ficticia'); expect(sheet).toContain('Comentario ficticio de Mendel'); expect(sheet).not.toContain('VIATICOS'); expect(sheet).not.toContain('<f>');
   });
   it('allows review of purchases without an assigned zone', async () => {
     const response = await GET(new NextRequest(url + '?zone=__sin_zona__'));

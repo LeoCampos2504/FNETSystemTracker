@@ -48,7 +48,7 @@ describe("parseMendelCsv", () => {
     expect(() => parseMendelCsv(new TextEncoder().encode('"ID Transaccion","Fecha transaccion","Importe Total","Moneda"\n"ABC-123,2026/09/25,1,ARS'))).toThrow("CSV_INVALID_QUOTE");
   });
 
-  it("extracts distinct FO references without storing the original notes", () => {
+  it("extracts distinct FO references and retains the source notes", () => {
     const csv = [
       '"ID Transaccion","Fecha transaccion","Importe Total","Moneda","Notas"',
       '"ABC-123","2026/09/25 08:33",1234.50,"ARS","Técnico: fo-26-610350, FO-26-610351 y FO-26-610350; correo privado"',
@@ -56,7 +56,7 @@ describe("parseMendelCsv", () => {
     const result = parseMendelCsv(new TextEncoder().encode(csv));
     expect(result.errors).toEqual([]);
     expect(result.rows[0].formReferences).toEqual(["FO-26-610350", "FO-26-610351"]);
-    expect(JSON.stringify(result.rows[0])).not.toContain("correo privado");
+    expect(result.rows[0].sourceComment).toContain("correo privado");
   });
 
   it("does not turn malformed longer form numbers into valid references", () => {

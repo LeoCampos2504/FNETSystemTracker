@@ -18,6 +18,7 @@ beforeAll(async () => {
   await pg.exec(`CREATE TABLE app_users(id UUID PRIMARY KEY); INSERT INTO app_users VALUES ('${actor}');`);
   await pg.exec(readFileSync('prisma/migrations/20260925_add_mendel_transactions/migration.sql', 'utf8'));
   await pg.exec(readFileSync('prisma/migrations/20261115_add_mendel_csv_archive/migration.sql', 'utf8'));
+  await pg.exec(readFileSync('prisma/migrations/20261116_add_mendel_purchase_comments/migration.sql', 'utf8'));
 }, 20000);
 afterAll(async () => { await pg.close(); });
 beforeEach(async () => {
@@ -27,6 +28,7 @@ beforeEach(async () => {
     mendel_import_batches: { create: async ({ data }: { data: { fileHash: string; rowCount: number; insertedCount: number; updatedCount: number; importedBy: string } }) => (await pg.query<{id: string}>('INSERT INTO mendel_import_batches(file_hash,row_count,inserted_count,updated_count,imported_by) VALUES ($1,$2,$3,$4,$5) RETURNING id', [data.fileHash,data.rowCount,data.insertedCount,data.updatedCount,data.importedBy])).rows[0] },
     $executeRaw: async (strings: TemplateStringsArray, ...args: unknown[]) => { const sql = strings.reduce((out, part, i) => out + part + (i < args.length ? `$${i+1}` : ''), ''); return (await pg.query(sql, args)).affectedRows; },
     $executeRawUnsafe: async (sql: string, ...args: unknown[]) => (await pg.query(sql, args)).affectedRows,
+    mendel_form_references: { deleteMany: async () => ({}), createMany: async () => ({}) },
   };
   m.client = {
     mendel_transactions: { findMany: async ({ where }: { where: { transactionId: { in: string[] } } }) => (await pg.query<{transactionId: string}>('SELECT transaction_id AS "transactionId" FROM mendel_transactions WHERE transaction_id = ANY($1::text[])', [where.transactionId.in])).rows },
@@ -35,6 +37,18 @@ beforeEach(async () => {
   };
 });
 describe('incremental import using an isolated database', () => {
+  it('updates Mendel notes while keeping manual invoice, controls and observation', async () => {
+    const headers='ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda,Numero de factura,Notas';
+    expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,10,ARS,F-1,nota inicial',headers))).status).toBe(200);
+    await pg.query("UPDATE mendel_purchase_details SET oppen=true,requires_intra=true,manual_invoice='MANUAL' WHERE transaction_id='ABC-111'");
+    await pg.query(`INSERT INTO mendel_purchase_detail_events(id,transaction_id,actor_id,before,after) VALUES ('00000000-0000-4000-8000-000000000002','ABC-111',$1,'{}','{"observation":"nota FNET","version":1}')`,[actor]);
+    expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,12,ARS,F-2,nota actualizada',headers))).status).toBe(200);
+    expect((await pg.query("SELECT comment FROM mendel_purchase_source_comments WHERE transaction_id='ABC-111'")).rows[0]).toEqual({comment:'nota actualizada'});
+    expect((await pg.query("SELECT manual_invoice,oppen,requires_intra FROM mendel_purchase_details WHERE transaction_id='ABC-111'")).rows[0]).toEqual({manual_invoice:'MANUAL',oppen:true,requires_intra:true});
+    expect((await pg.query("SELECT after->>'observation' AS observation FROM mendel_purchase_detail_events WHERE transaction_id='ABC-111'")).rows[0]).toEqual({observation:'nota FNET'});
+    expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,12,ARS,F-3'))).status).toBe(200);
+    expect((await pg.query("SELECT comment FROM mendel_purchase_source_comments WHERE transaction_id='ABC-111'")).rows[0]).toEqual({comment:'nota actualizada'});
+  });
   it('archives original files, preserves manual fields and accepts a late older purchase', async () => {
     expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,10,ARS,F-1'))).status).toBe(200);
     await pg.query('UPDATE mendel_purchase_details SET oppen=true,requires_intra=true,manual_invoice=$1 WHERE transaction_id=$2', ['MANUAL','ABC-111']);

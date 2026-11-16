@@ -5,6 +5,7 @@ export type MendelTransactionImport = {
   fullId?: string | null;
   sourceInvoice?: string | null;
   sourceDescription?: string | null;
+  sourceComment?: string | null;
   transactionDate: Date;
   confirmationDate: Date | null;
   userName: string | null;
@@ -46,6 +47,9 @@ export type MendelCsvParseResult = {
   recordNumbers: number[];
   duplicates: Array<{ record: number; transactionId: string }>;
   presentSourceKeys: Array<keyof MendelTransactionImport>;
+  headers: string[];
+  commentColumnFound: boolean;
+  commentNonemptyRows: number;
 };
 
 function decode(bytes: Uint8Array): string {
@@ -162,6 +166,7 @@ export function parseMendelCsv(bytes: Uint8Array, options: { requireFullId?: boo
     ['merchantCategory','Categoria comercio'],['transactionCategory','Categoria transaccion'],['hasReceipt','Hay ticket'],['documentName','Nombre PDF'],
     ['invoiceTotal','Importe total de la factura'],['invoiceDifference','Diferencia importe total y facturado'],['receiptStatus','Estado comprobacion'],
     ['vat','IVA'],['grossIncomeTax','IIBB'],['otherTaxes','Otros impuestos'],['exemptAmount','Importe exento'],['nonTaxedAmount','Importe no gravado'],
+    ['sourceComment','Notas'],
   ];
   const presentSourceKeys = sourceHeaders.filter(([, header]) => index(header) >= 0).map(([key]) => key);
   const value = (record: string[], name: string) => {
@@ -218,6 +223,7 @@ export function parseMendelCsv(bytes: Uint8Array, options: { requireFullId?: boo
       ...(index("ID Completo Transaccion") >= 0 ? { fullId } : {}),
       ...(index("Numero de factura") >= 0 ? { sourceInvoice: clean(value(record, "Numero de factura"), 200) } : {}),
       ...(index("Descripcion") >= 0 ? { sourceDescription: clean(value(record, "Descripcion"), 5000) } : {}),
+      ...(index("Notas") >= 0 ? { sourceComment: value(record, "Notas")?.replace(/\u0000/g, "").trim() || null } : {}),
       userName: clean(value(record, "Usuario"), 200), merchant: clean(value(record, "Comercio"), 250),
       totalAmount: totalAmount!, currency: currency!,
       internationalAmount: parsedAmounts[0], internationalCurrency: clean(value(record, "Moneda internacional"), 3)?.toUpperCase() ?? null,
@@ -246,5 +252,5 @@ export function parseMendelCsv(bytes: Uint8Array, options: { requireFullId?: boo
     rows.push(row);
     recordNumbers.push(line);
   }
-  return { rows, errors, invalidRowCount, duplicateCount, identityConflict, recordNumbers, duplicates, presentSourceKeys };
+  return { rows, errors, invalidRowCount, duplicateCount, identityConflict, recordNumbers, duplicates, presentSourceKeys, headers: records[0], commentColumnFound: index("Notas") >= 0, commentNonemptyRows: index("Notas") < 0 ? 0 : records.slice(1).filter(record => !!value(record, "Notas")?.trim()).length };
 }

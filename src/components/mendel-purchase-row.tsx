@@ -5,7 +5,7 @@ import type { MendelIntraState } from '@/lib/mendel-intra';
 import type { PurchaseDetails } from './mendel-purchase-details';
 import s from './mendel-purchase-control.module.css';
 
-export type PurchaseRow = { transactionId: string; date: string; zone: string; userName: string | null; merchant: string | null; totalAmount: string; currency: string; budget: string | null; transactionCategory: string | null; transactionType: string | null; transactionStatus: string | null; details: PurchaseDetails; intra: MendelIntraState };
+export type PurchaseRow = { transactionId: string; date: string; zone: string; sourceComment: string | null; userName: string | null; merchant: string | null; totalAmount: string; currency: string; budget: string | null; transactionCategory: string | null; transactionType: string | null; transactionStatus: string | null; details: PurchaseDetails; intra: MendelIntraState };
 type Flags = Pick<PurchaseDetails, 'oppen' | 'requiresIntra' | 'manualInvoice'> & { observation: string };
 
 function Toggle({ label, value, busy, onClick }: { label: string; value: boolean | null; busy: boolean; onClick: () => void }) {
@@ -55,14 +55,15 @@ export function MendelPurchaseRow({ item, onSaved }: { item: PurchaseRow; onSave
   const invoiceBefore = details.manualInvoice ?? details.sourceInvoice ?? '';
   return <tr>
     <td>{item.date}<small>{item.zone || 'Sin zona'}</small></td>
+    <td><input className={s.invoice} aria-label={`Número de factura ${item.transactionId}`} placeholder="Agregar factura" value={invoice} maxLength={200} disabled={busy} onChange={e => setInvoice(e.target.value)} onBlur={() => { if (invoice.trim() !== invoiceBefore) void saveDetails({...current, manualInvoice:invoice.trim() || null}); }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}/></td>
     <td><strong>{item.merchant || 'Sin proveedor'}</strong><small>{item.userName} · {item.budget}</small><small>{item.details.sourceDescription ?? item.transactionCategory ?? item.transactionType ?? 'Sin descripción'}</small><small>{item.currency} {item.totalAmount}</small></td>
+    <td><div className={s.comment}>{item.sourceComment || 'Sin comentario'}</div></td>
+    <td><textarea className={s.observation} aria-label={`Observaciones ${item.transactionId}`} placeholder="Agregar observación" title={observation} value={observation} rows={2} maxLength={5000} disabled={busy} onChange={e => setObservation(e.target.value)} onBlur={() => { if (observation !== (details.observation ?? '')) void saveDetails({...current, observation}); }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.currentTarget.blur(); } }}/></td>
     <td className={s.id}>{details.fullId ?? `${item.transactionId} (abreviado)`}</td>
     <td><Toggle label={`Va en Oppen ${item.transactionId}`} value={details.oppen} busy={busy} onClick={() => void saveDetails({...current, oppen:!details.oppen})}/></td>
-    <td><input className={s.invoice} aria-label={`Número de factura ${item.transactionId}`} placeholder="Agregar factura" value={invoice} maxLength={200} disabled={busy} onChange={e => setInvoice(e.target.value)} onBlur={() => { if (invoice.trim() !== invoiceBefore) void saveDetails({...current, manualInvoice:invoice.trim() || null}); }} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}/></td>
     <td><Toggle label={`Debe cargar en Intra ${item.transactionId}`} value={details.requiresIntra} busy={busy} onClick={() => void saveDetails({...current, requiresIntra:details.requiresIntra !== true})}/></td>
     <td><Toggle label={`Cargada en Intra ${item.transactionId}`} value={intra.uploaded} busy={busy} onClick={() => void toggleIntra('uploaded')}/></td>
     <td><Toggle label={`Descargada en Intra ${item.transactionId}`} value={intra.downloaded} busy={busy} onClick={() => void toggleIntra('downloaded')}/></td>
-    <td><textarea className={s.observation} aria-label={`Observaciones ${item.transactionId}`} placeholder="Agregar observación" title={observation} value={observation} rows={2} maxLength={5000} disabled={busy} onChange={e => setObservation(e.target.value)} onBlur={() => { if (observation !== (details.observation ?? '')) void saveDetails({...current, observation}); }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.currentTarget.blur(); } }}/></td>
     <td className={s.rowStatus}>{busy && <span role="status">Guardando…</span>}{error && <span role="alert">{error}{loginNeeded && <> <a href="/" target="_blank" rel="noopener noreferrer">Ingresar de nuevo</a></>}</span>}{!busy && !error && intra.needsReview && <span>Compra modificada: revisar Intra</span>}{!busy && !error && intra.uploaded !== null && intra.downloaded !== null && intra.uploaded !== intra.downloaded && <span>Carga y descarga diferentes</span>}</td>
   </tr>;
 }

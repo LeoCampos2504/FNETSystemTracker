@@ -35,6 +35,12 @@ export async function importMendelBatch(tx: Prisma.TransactionClient, rows: Mend
   await tx.$executeRawUnsafe(sourceSql(new Set(presentSourceKeys)), JSON.stringify(source));
   const updated = await tx.$executeRawUnsafe(detailsSql, JSON.stringify(details), rows[0].sourceInvoice !== undefined, rows[0].sourceDescription !== undefined);
   if (updated !== rows.length) throw new Error('MENDEL_ID_CONFLICT');
+  if (presentSourceKeys.includes('sourceComment')) {
+    await tx.$executeRawUnsafe(`INSERT INTO mendel_purchase_source_comments(transaction_id,comment)
+      SELECT r.transaction_id,r.comment FROM jsonb_to_recordset($1::jsonb) AS r(transaction_id text,comment text)
+      ON CONFLICT (transaction_id) DO UPDATE SET comment=EXCLUDED.comment`,
+      JSON.stringify(rows.map(row => ({transaction_id: row.transactionId, comment: row.sourceComment ?? null}))));
+  }
   const references = rows.filter(row => row.formReferences !== undefined);
   if (references.length) {
     await tx.mendel_form_references.deleteMany({ where: { transactionId: { in: references.map(row => row.transactionId) } } });

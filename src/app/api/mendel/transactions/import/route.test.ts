@@ -46,9 +46,13 @@ describe("Mendel reference reimport", () => {
   });
   it("previews references without writing", async () => {
     const response = await POST(request("FO-26-610350", "preview"));
-    expect(await response.json()).toMatchObject({ transactionsWithFormReferences: 1 });
+    expect(await response.json()).toMatchObject({ transactionsWithFormReferences: 1, commentColumnFound:true, commentNonemptyRows:1 });
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.archive).not.toHaveBeenCalled();
+  });
+  it('reports headers when the notes column is absent', async () => {
+    const response = await POST(request(undefined, 'preview'));
+    expect(await response.json()).toMatchObject({ commentColumnFound:false, commentNonemptyRows:0, headers:expect.arrayContaining(['ID Transaccion','Moneda']) });
   });
   it("rejects a foreign origin before any purchase query or write", async () => {
     const input = request("FO-26-610350");

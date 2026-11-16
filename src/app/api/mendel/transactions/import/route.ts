@@ -73,6 +73,9 @@ export async function POST(request: NextRequest) {
       periodStart: days[0] ?? null,
       periodEnd: days.at(-1) ?? null,
       transactionsWithFormReferences: parsed.rows.filter((row) => row.formReferences?.length).length,
+      commentColumnFound: parsed.commentColumnFound,
+      commentNonemptyRows: parsed.commentNonemptyRows,
+      headers: parsed.commentColumnFound ? [] : parsed.headers,
     };
     if (mode === "preview") return NextResponse.json(preview, { headers: { "Cache-Control": "no-store" } });
     // Conflicting identifiers require review instead of associating the wrong purchase.

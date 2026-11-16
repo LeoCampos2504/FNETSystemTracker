@@ -17,7 +17,7 @@ describe("Railway application database preparation", () => {
       "ops_guard_crews", "ops_guard_crew_changes",
       "fnet_mendel_zone_expenses", "fnet_mendel_zone_access", "fnet_mendel_zone_decisions",
       "app_login_attempts", "app_sessions", "app_users", "mendel_form_references",
-      "mendel_import_batches", "mendel_transactions", "mendel_csv_archives", "mendel_purchase_details", "mendel_purchase_detail_events", "task_assignment_history", "task_assignments",
+      "mendel_import_batches", "mendel_transactions", "mendel_csv_archives", "mendel_purchase_details", "mendel_purchase_detail_events", "mendel_purchase_source_comments", "task_assignment_history", "task_assignments",
       "sytex_supply_import_items", "sytex_supply_imports",
       "sytex_supply_form_contexts", "sytex_site_maintenance", "sytex_form_links", "sytex_form_states", "sytex_task_dates", "sytex_site_answers",
       "supply_invoices", "supply_invoice_lines", "supply_invoice_attachments", "supply_invoice_events", "supply_handoffs", "supply_movements", "supply_consumption_forms",
