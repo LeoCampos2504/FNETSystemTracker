@@ -57,8 +57,15 @@ export async function GET(request: NextRequest) {
     ]);
     const db:IntraDb={query:<T>(sql:string,values:unknown[]=[])=>prisma.$queryRawUnsafe<T[]>(sql,...values)};
     const intra=await purchaseIntraStates(db,authorization.user,items);
+    const ids = items.map(item => item.transactionId);
+    const detailRows = ids.length ? await prisma.$queryRaw<Array<{ transactionId: string; fullId: string | null; sourceInvoice: string | null; sourceDescription: string | null; manualInvoice: string | null; oppen: boolean; requiresIntra: boolean | null; version: number }>>`
+      SELECT transaction_id AS "transactionId", full_id AS "fullId", source_invoice AS "sourceInvoice", source_description AS "sourceDescription", manual_invoice AS "manualInvoice", oppen, requires_intra AS "requiresIntra", version
+      FROM mendel_purchase_details WHERE transaction_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb))` : [];
+    const details = new Map(detailRows.map(row => [row.transactionId, row]));
+    const commentRows = ids.length ? await prisma.$queryRaw<Array<{ transactionId: string; comment: string | null }>>`SELECT transaction_id AS "transactionId", comment FROM mendel_purchase_source_comments WHERE transaction_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb))` : [];
+    const comments = new Map(commentRows.map(row => [row.transactionId, row.comment]));
     return NextResponse.json({
-      items:items.map(item=>({...item,intra:intra.get(item.transactionId)})), total, page, pageSize: 50,
+      items:items.map(item=>({...item,sourceComment:comments.get(item.transactionId) ?? null,intra:intra.get(item.transactionId), details: details.get(item.transactionId) ?? { fullId: null, sourceInvoice: null, sourceDescription: null, manualInvoice: null, oppen: false, requiresIntra: null, version: 0 }})), total, page, pageSize: 50,
       summary: {
         totalTransactions: total,
         amountByCurrency: currencyAggregates.map((aggregate) => ({ currency: aggregate.currency, totalAmount: aggregate._sum.totalAmount?.toString() ?? "0" })),

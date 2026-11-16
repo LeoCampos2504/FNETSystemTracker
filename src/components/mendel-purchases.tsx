@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FileUp, RefreshCw, Search, ShieldCheck } from "lucide-react";
-import { MendelIntraControl } from './mendel-intra-control';
+import type { PurchaseDetails } from './mendel-purchase-details';
+import { MendelPurchaseControl } from './mendel-purchase-control';
+import { MendelIdentityReview } from './mendel-identity-review';
+import './mendel-purchases-page.css';
 import type { MendelIntraState } from '@/lib/mendel-intra';
 
 type Purchase = {
   transactionId: string;
+  sourceComment: string | null;
   transactionDate: string;
   confirmationDate: string | null;
   userName: string | null;
@@ -23,8 +27,10 @@ type Purchase = {
   receiptStatus: string | null;
   reconciliationStatus: string;
   intra?: MendelIntraState;
+  details: PurchaseDetails;
 };
-type Preview = { rowCount: number; insertedCount: number; updatedCount: number; duplicateRowsSkipped: number; invalidRows: number; errors: Array<{ line: number; fields: string[] }>; imported?: boolean; code?: string };
+type Preview = { commentColumnFound: boolean; commentNonemptyRows: number; headers: string[]; rowCount: number; insertedCount: number; updatedCount: number; duplicateRowsSkipped: number; invalidRows: number; errors: Array<{ line: number; fields: string[] }>; rowResults: Array<{record: number; transactionId: string; action: string}>; imported?: boolean; code?: string };
+type ImportHistory = { id: string; importedAt: string; rowCount: number; insertedCount: number; updatedCount: number; fileName: string | null; periodStart: string | null; periodEnd: string | null; invalidCount: number | null; duplicateCount: number | null };
 type ResponseData = { items: Purchase[]; total: number; page: number; summary: { totalTransactions: number; amountByCurrency: Array<{ currency: string; totalAmount: string }>; pendingReceipt: number; overdueReceipt: number; pendingReconciliation: number }; latestImport: { importedAt: string; rowCount: number; insertedCount: number; updatedCount: number } | null };
 
 function money(value: string | number, currency: string) {
@@ -52,6 +58,19 @@ export function MendelPurchases() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [importRevision, setImportRevision] = useState(0);
+  const [history, setHistory] = useState<ImportHistory[] | null>(null);
+  const [historyError, setHistoryError] = useState("");
+
+  async function loadHistory() {
+    setHistoryError("");
+    try {
+      const response = await fetch('/api/mendel/transactions/history', { cache: 'no-store' });
+      if (!response.ok) throw new Error();
+      const result = await response.json() as { items: ImportHistory[] };
+      setHistory(result.items);
+    } catch { setHistoryError('No se pudo cargar el historial.'); }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -102,14 +121,17 @@ export function MendelPurchases() {
       const result = await response.json() as Preview;
       if (!response.ok) {
         setPreview(result.rowCount !== undefined ? result : null);
-        if (result.code === "CSV_HAS_INVALID_ROWS") setError("El archivo tiene filas para corregir. Revisá los números de fila que aparecen debajo.");
+        if (result.code === "CSV_ID_CONFLICT") setError("Hay identificadores que requieren revisión; no se modificó ninguna compra.");
+        else if (result.code === "CSV_NO_TRANSACTIONS") setError("No hay compras válidas para importar. Revisá los registros indicados, incluyendo los ID completos o vínculos históricos pendientes de revisión.");
         else setError(result.code === "CSV_REQUIRED_HEADERS_MISSING" ? "El archivo no parece una exportación de transacciones de Mendel." : result.code === "FILE_TOO_LARGE" ? "El archivo supera el límite de 8 MB." : "No se pudo procesar el CSV. Revisá el archivo y volvé a probar.");
         return;
       }
       if (mode === "preview") setPreview(result);
       else {
-        setSuccess(`Importación completada: ${result.insertedCount} nuevas y ${result.updatedCount} actualizadas.`);
-        setPreview(null); setSelectedFile(null);
+        setSuccess(`Importación completada: ${result.insertedCount} nuevas, ${result.updatedCount} actualizadas y ${result.invalidRows} filas con errores omitidas.${result.invalidRows ? ' Revisá las filas indicadas antes de volver a cargar.' : ''}`);
+        setImportRevision(value => value + 1);
+        if (history !== null) await loadHistory();
+        setPreview(result); setSelectedFile(null);
         const input = document.getElementById("mendel-csv") as HTMLInputElement | null;
         if (input) input.value = "";
         await load();
@@ -128,12 +150,18 @@ export function MendelPurchases() {
     <section className="mendel-import-card">
       <div className="mendel-section-heading"><span className="mendel-icon"><FileUp size={19} /></span><div><h2>Actualizar desde Mendel</h2><p>Subí la exportación CSV de transacciones. El mismo archivo se puede importar más de una vez.</p></div></div>
       <div className="mendel-upload-row"><input id="mendel-csv" type="file" accept=".csv,text/csv" onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setPreview(null); setError(""); setSuccess(""); }} /><button className="button primary" type="button" disabled={!selectedFile || busy} onClick={() => void upload("preview")}>{busy ? "Procesando…" : "Revisar archivo"}</button></div>
-      {preview && <div className="mendel-preview"><strong>Vista previa</strong><span>{preview.rowCount} transacciones</span><span>{preview.insertedCount} nuevas</span><span>{preview.updatedCount} se actualizarán</span>{preview.duplicateRowsSkipped > 0 && <span>{preview.duplicateRowsSkipped} filas repetidas omitidas</span>}{preview.invalidRows > 0 && <span className="mendel-danger">{preview.invalidRows} filas con errores</span>}{preview.invalidRows === 0 && <button className="button primary" type="button" disabled={busy} onClick={() => void upload("commit")}>{busy ? "Importando…" : "Confirmar importación"}</button>}</div>}
-      {preview?.errors.length ? <ul className="mendel-errors">{preview.errors.slice(0, 8).map((item) => <li key={`${item.line}-${item.fields.join(",")}`}>Fila {item.line}: revisar {item.fields.join(", ")}</li>)}</ul> : null}
+      {preview && <div className="mendel-preview"><span>{preview.commentColumnFound ? `Comentarios de Mendel: columna Notas encontrada · ${preview.commentNonemptyRows} filas con contenido` : `No se encontró la columna Notas. Encabezados encontrados: ${preview.headers.join(", ")}`}</span><strong>{preview.imported ? 'Resultado' : 'Vista previa'}</strong><span>{preview.rowCount} transacciones</span><span>{preview.insertedCount} nuevas</span><span>{preview.updatedCount} actualizadas o existentes</span>{preview.duplicateRowsSkipped > 0 && <span>{preview.duplicateRowsSkipped} filas repetidas omitidas</span>}{preview.invalidRows > 0 && <span className="mendel-danger">{preview.invalidRows} filas con errores omitidas; revisalas debajo.</span>}{!preview.imported && preview.rowCount > 0 && <button className="button primary" type="button" disabled={busy} onClick={() => void upload("commit")}>{busy ? "Importando…" : "Confirmar importación"}</button>}</div>}
+      {preview?.errors.length ? <><ul className="mendel-errors">{preview.errors.map((item) => <li key={`${item.line}-${item.fields.join(",")}`}>Registro {item.line}: revisar {item.fields.join(", ")}</li>)}</ul>{preview.invalidRows > preview.errors.length && <p>Se muestran los primeros {preview.errors.length} errores de {preview.invalidRows}.</p>}</> : null}
+      {preview?.rowResults?.length ? <details><summary>Ver resultado por registro</summary><ul>{preview.rowResults.map(row => <li key={row.record}>Registro {row.record}: {row.transactionId} · {row.action === 'AGREGAR' ? (preview.imported ? 'agregada' : 'se agregará') : row.action === 'ACTUALIZAR' ? (preview.imported ? 'actualizada' : 'se actualizará') : 'repetida, omitida'}</li>)}</ul></details> : null}
       {error && <p className="mendel-message error" role="alert">{error}</p>}{success && <p className="mendel-message success" role="status">{success}</p>}
-      <p className="mendel-privacy"><ShieldCheck size={15} /> Acceso solo Admin. FNET conserva los datos necesarios para compras y comprobantes; no importa correos, identificaciones personales ni datos de tarjeta.</p>
+      <p className="mendel-privacy"><ShieldCheck size={15} /> Acceso solo Admin. El archivo original se conserva de forma privada y puede contener los datos incluidos en el CSV.</p>
+      <button type="button" className="button secondary" onClick={() => void loadHistory()}>Ver historial de importaciones</button>
+      {historyError && <p role="alert">{historyError}</p>}
+      {history && <div className="mendel-table-wrap"><table><thead><tr><th>Fecha de carga</th><th>Archivo</th><th>Período</th><th>Procesadas</th><th>Nuevas</th><th>Existentes</th><th>Con errores</th><th>Repetidas omitidas</th></tr></thead><tbody>{history.map(item => <tr key={item.id}><td>{date(item.importedAt)}</td><td>{item.fileName ?? 'Archivo anterior no disponible'}</td><td>{item.periodStart && item.periodEnd ? `${item.periodStart} al ${item.periodEnd}` : 'No disponible'}</td><td>{item.rowCount}</td><td>{item.insertedCount}</td><td>{item.updatedCount}</td><td>{item.invalidCount ?? 'Sin dato'}</td><td>{item.duplicateCount ?? 'Sin dato'}</td></tr>)}</tbody></table>{history.length === 0 && <p>No hay importaciones registradas.</p>}</div>}
     </section>
 
+    <MendelIdentityReview onAssociated={() => { setImportRevision(value => value + 1); void load(); }} />
+    <MendelPurchaseControl importRevision={importRevision} />
     <section className="mendel-metrics" aria-label="Resumen de compras">
       <article><span>Compras registradas</span><strong>{data?.summary.totalTransactions ?? "—"}</strong><small>Transacciones de Mendel</small></article>
       <article><span>Importe total</span><strong>{data?.summary.amountByCurrency.length ? data.summary.amountByCurrency.map((amount) => money(amount.totalAmount, amount.currency)).join(" · ") : "—"}</strong><small>Por moneda</small></article>
@@ -144,7 +172,7 @@ export function MendelPurchases() {
 
     <section className="mendel-table-card">
       <div className="mendel-table-heading"><div><h2>Transacciones</h2><p>{data ? `${data.total} resultados` : "Cargando…"}{data?.latestImport ? ` · última carga ${date(data.latestImport.importedAt)}` : ""}</p></div><div className="mendel-controls"><label className="mendel-search"><Search size={16} /><input aria-label="Buscar compras" placeholder="Persona, comercio o categoría" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></label><label className="mendel-month">Mes <input type="month" aria-label="Filtrar por mes" value={month} onChange={(event) => { setMonth(event.target.value); setPage(1); }} /></label></div></div>
-      <div className="mendel-table-wrap"><table><thead><tr><th>Fecha</th><th>Persona</th><th>Comercio</th><th>Detalle</th><th>Importe</th><th>Comprobante Mendel</th><th>Intraoperativa · control manual</th></tr></thead><tbody>{data?.items.map((item) => { const missing = missingReceipt(item); const days = missing ? ageDays(item.transactionDate) : 0; return <tr key={item.transactionId}><td>{date(item.transactionDate)}</td><td>{item.userName ?? "Sin persona"}</td><td>{item.merchant ?? "Sin comercio"}</td><td><strong>{item.transactionCategory ?? item.transactionType ?? "—"}</strong><small>{item.budget ?? ""}</small></td><td>{money(item.totalAmount, item.currency)}</td><td><span className={`mendel-badge ${missing ? "needs" : item.hasReceipt ? "good" : "needs"}`}>{missing && days > 30 ? `Falta · ${days} d` : item.hasReceipt ? "Declarado" : item.hasReceipt === false ? "Falta" : "Revisar"}</span><small>{item.receiptStatus ?? ""}</small></td><td>{item.intra?<MendelIntraControl key={item.transactionId} transactionId={item.transactionId} state={item.intra} onSaved={next=>setData(previous=>previous?{...previous,items:previous.items.map(p=>p.transactionId===item.transactionId?{...p,intra:next}:p)}:previous)}/>:<span className="mendel-badge pending">Control no disponible</span>}</td></tr>; })}</tbody></table>{data?.items.length === 0 && <div className="mendel-empty">No hay transacciones. Importá un CSV de Mendel para comenzar.</div>}</div>
+      <div className="mendel-table-wrap"><table><thead><tr><th>Fecha</th><th>ID Mendel</th><th>Persona</th><th>Comercio</th><th>Detalle</th><th>Importe</th><th>Comprobante Mendel</th><th>Intraoperativa · control manual</th></tr></thead><tbody>{data?.items.map((item) => { const missing = missingReceipt(item); const days = missing ? ageDays(item.transactionDate) : 0; return <tr key={item.transactionId}><td>{date(item.transactionDate)}</td><td>{item.details.fullId ?? `${item.transactionId} (abreviado)`}</td><td>{item.userName ?? "Sin persona"}</td><td>{item.merchant ?? "Sin comercio"}</td><td><strong>{item.transactionCategory ?? item.transactionType ?? "—"}</strong><small>{item.budget ?? ""}</small><small>{item.details.sourceDescription ?? ""}</small><small><strong>Comentario de Mendel:</strong> {item.sourceComment || "Sin comentario"}</small></td><td>{money(item.totalAmount, item.currency)}</td><td><span className={`mendel-badge ${missing ? "needs" : item.hasReceipt ? "good" : "needs"}`}>{missing && days > 30 ? `Falta · ${days} d` : item.hasReceipt ? "Declarado" : item.hasReceipt === false ? "Falta" : "Revisar"}</span><small>{item.receiptStatus ?? ""}</small></td><td>{item.intra?<span>Cargada: {item.intra.uploaded === null ? "Sin confirmar" : item.intra.uploaded ? "Sí" : "No"} · Descargada: {item.intra.downloaded === null ? "Sin confirmar" : item.intra.downloaded ? "Sí" : "No"}</span>:<span className="mendel-badge pending">Control no disponible</span>}</td></tr>; })}</tbody></table>{data?.items.length === 0 && <div className="mendel-empty">No hay transacciones. Importá un CSV de Mendel para comenzar.</div>}</div>
       {data && data.total > 50 && <div className="mendel-pagination"><button className="button secondary" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Anterior</button><span>Página {page} de {Math.ceil(data.total / 50)}</span><button className="button secondary" disabled={page >= Math.ceil(data.total / 50)} onClick={() => setPage((current) => current + 1)}>Siguiente</button></div>}
     </section>
     <p className="mendel-footnote">Las confirmaciones “Subido a Intra” y “Descargado en Intra” son manuales, independientes y compartidas en FNET con autor, fecha e historial. No suben archivos ni descargan materiales automáticamente, no modifican el stock oficial y no cambian las aprobaciones de Mendel.</p>
