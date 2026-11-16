@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   m.auth.mockResolvedValue({ ok: true, user: { id: 'admin', role: 'ADMIN', active: true } });
   m.find.mockResolvedValue([purchase('A', 'CIVIL - NOA'), purchase('B', 'VIATICOS')]);
-  m.raw.mockResolvedValueOnce([{ transactionId: 'A', fullId: 'A-COMPLETO', sourceInvoice: '123', sourceDescription: null, manualInvoice: null, oppen: true, requiresIntra: true, version: 1 }]).mockResolvedValueOnce([{ transactionId: 'A', zone: 'NOA' }]);
+  m.raw.mockResolvedValueOnce([{ transactionId: 'A', fullId: 'A-COMPLETO', sourceInvoice: '123', sourceDescription: null, manualInvoice: null, oppen: true, requiresIntra: true, version: 1 }]).mockResolvedValueOnce([{ transactionId: 'A', zone: 'NOA' }]).mockResolvedValueOnce([{ transactionId:'A', observation:'Observación ficticia' }]);
   m.states.mockResolvedValue(new Map([['A', { uploaded: true, downloaded: false }], ['B', { uploaded: null, downloaded: null }]]));
 });
 describe('control de compras', () => {
@@ -28,6 +28,12 @@ describe('control de compras', () => {
     expect(response.status).toBe(200);
     const zip = unzipSync(new Uint8Array(await response.arrayBuffer()));
     const sheet = strFromU8(zip['xl/worksheets/sheet1.xml']);
-    expect(sheet).toContain('A-COMPLETO'); expect(sheet).not.toContain('VIATICOS'); expect(sheet).not.toContain('<f>');
+    expect(sheet).toContain('A-COMPLETO'); expect(sheet).toContain('Observación ficticia'); expect(sheet).not.toContain('VIATICOS'); expect(sheet).not.toContain('<f>');
+  });
+  it('allows review of purchases without an assigned zone', async () => {
+    const response = await GET(new NextRequest(url + '?zone=__sin_zona__'));
+    const result = await response.json();
+    expect(result.summary.total).toBe(1);
+    expect(result.items[0].transactionId).toBe('B');
   });
 });

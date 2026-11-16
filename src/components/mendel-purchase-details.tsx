@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export type PurchaseDetails = { fullId: string | null; sourceInvoice: string | null; sourceDescription: string | null; manualInvoice: string | null; oppen: boolean; requiresIntra: boolean | null; version: number };
+export type PurchaseDetails = { fullId: string | null; sourceInvoice: string | null; sourceDescription: string | null; manualInvoice: string | null; oppen: boolean; requiresIntra: boolean | null; version: number; observation?: string };
 
 export function MendelPurchaseDetails({ transactionId, value, onSaved }: { transactionId: string; value: PurchaseDetails; onSaved: (value: PurchaseDetails) => void }) {
   const [busy, setBusy] = useState(false);

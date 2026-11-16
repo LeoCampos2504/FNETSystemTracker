@@ -8,8 +8,8 @@ vi.mock('@/server/prisma', () => ({ getPrismaClient: () => m.client }));
 import { POST } from './route';
 let pg: PGlite;
 const actor = '00000000-0000-4000-8000-000000000001';
-const csvRequest = (rows: string) => {
-  const csv = 'ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda,Numero de factura\n' + rows;
+const csvRequest = (rows: string, headers = 'ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda,Numero de factura') => {
+  const csv = headers + '\n' + rows;
   const form = new FormData(); form.set('file', new File([csv], 'sintetico.csv', { type: 'text/csv' })); form.set('mode', 'commit');
   return new NextRequest('http://localhost:3001/api/mendel/transactions/import', { method: 'POST', headers: { origin: 'http://localhost:3001' }, body: form });
 };
@@ -30,24 +30,25 @@ beforeEach(async () => {
   };
   m.client = {
     mendel_transactions: { findMany: async ({ where }: { where: { transactionId: { in: string[] } } }) => (await pg.query<{transactionId: string}>('SELECT transaction_id AS "transactionId" FROM mendel_transactions WHERE transaction_id = ANY($1::text[])', [where.transactionId.in])).rows },
+    $queryRaw: async (strings: TemplateStringsArray, ...args: unknown[]) => { const sql = strings.reduce((out, part, i) => out + part + (i < args.length ? `$${i+1}` : ''), ''); return (await pg.query(sql, args)).rows; },
     $transaction: async (fn: (t: typeof tx) => Promise<void>) => { await pg.exec('BEGIN'); try { await fn(tx); await pg.exec('COMMIT'); } catch (error) { await pg.exec('ROLLBACK'); throw error; } },
   };
 });
 describe('incremental import using an isolated database', () => {
   it('archives original files, preserves manual fields and accepts a late older purchase', async () => {
     expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,10,ARS,F-1'))).status).toBe(200);
-    await pg.query('UPDATE mendel_purchase_details SET oppen=true,requires_intra=true,manual_invoice=$1 WHERE transaction_id=$2', ['MANUAL','ABC']);
+    await pg.query('UPDATE mendel_purchase_details SET oppen=true,requires_intra=true,manual_invoice=$1 WHERE transaction_id=$2', ['MANUAL','ABC-111']);
     const response = await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,12,ARS,F-2\nDEF,DEF-222,2026/09/01 10:00,20,ARS,F-3'));
     expect(response.status).toBe(200); expect(await response.json()).toMatchObject({ insertedCount: 1, updatedCount: 1 });
-    expect((await pg.query('SELECT full_id,source_invoice,manual_invoice,oppen,requires_intra FROM mendel_purchase_details WHERE transaction_id=$1', ['ABC'])).rows[0]).toMatchObject({ full_id: 'ABC-111', source_invoice: 'F-2', manual_invoice: 'MANUAL', oppen: true, requires_intra: true });
+    expect((await pg.query('SELECT full_id,source_invoice,manual_invoice,oppen,requires_intra FROM mendel_purchase_details WHERE transaction_id=$1', ['ABC-111'])).rows[0]).toMatchObject({ full_id: 'ABC-111', source_invoice: 'F-2', manual_invoice: 'MANUAL', oppen: true, requires_intra: true });
     expect((await pg.query('SELECT batch_id FROM mendel_csv_archives')).rows).toHaveLength(2);
   });
-  it('rolls back the complete import when a known abbreviated ID belongs to a different full ID', async () => {
+  it('imports different full IDs independently when they share an abbreviated prefix', async () => {
     expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,10,ARS,F-1'))).status).toBe(200);
     const response = await POST(csvRequest('XYZ,XYZ-222,2026/10/02 10:00,10,ARS,F-2\nABC,ABC-999,2026/10/02 10:00,10,ARS,F-3'));
-    expect(response.status).toBe(409);
-    expect((await pg.query('SELECT transaction_id FROM mendel_transactions')).rows).toHaveLength(1);
-    expect((await pg.query('SELECT batch_id FROM mendel_csv_archives')).rows).toHaveLength(1);
+    expect(response.status).toBe(200);
+    expect((await pg.query('SELECT transaction_id FROM mendel_transactions')).rows).toHaveLength(3);
+    expect((await pg.query('SELECT batch_id FROM mendel_csv_archives')).rows).toHaveLength(2);
   });
   it('imports more than one batch and skips an invalid row without losing valid rows', async () => {
     const lines = Array.from({ length: 501 }, (_, i) => `ID${i},ID${i}-FULL,2026/10/02 10:00,10,ARS,F-${i}`);
@@ -57,5 +58,32 @@ describe('incremental import using an isolated database', () => {
     expect(await response.json()).toMatchObject({ insertedCount: 501, invalidRows: 1 });
     expect((await pg.query('SELECT transaction_id FROM mendel_transactions')).rows).toHaveLength(501);
     expect((await pg.query('SELECT invalid_count FROM mendel_csv_archives')).rows[0]).toMatchObject({ invalid_count: 1 });
+  });
+  it('does not erase existing source fields when a later CSV omits their columns', async () => {
+    const headers='ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda,Numero de factura,Categoria transaccion,Hay ticket,Estado transaccion';
+    expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,10,ARS,F-1,Materiales,SI,CONFIRMADA', headers))).status).toBe(200);
+    expect((await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,12,ARS,F-2'))).status).toBe(200);
+    const result = await pg.query('SELECT transaction_category,has_receipt,transaction_status,total_amount FROM mendel_transactions WHERE transaction_id=$1', ['ABC-111']);
+    expect(result.rows[0]).toMatchObject({ transaction_category:'Materiales', has_receipt:true, transaction_status:'CONFIRMADA', total_amount:'12.00' });
+  });
+  it('preserves controls for an existing verified legacy mapping', async () => {
+    await pg.query("INSERT INTO mendel_transactions(transaction_id,transaction_date,total_amount,currency,updated_at) VALUES ('ABC',NOW(),10,'ARS',NOW())");
+    await pg.query("INSERT INTO mendel_purchase_details(transaction_id,full_id,oppen,manual_invoice) VALUES ('ABC','ABC-111',true,'MANUAL')");
+    const response = await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,12,ARS,F-2'));
+    expect(response.status).toBe(200);
+    expect((await pg.query("SELECT transaction_id,oppen,manual_invoice FROM mendel_purchase_details")).rows).toEqual([{transaction_id:'ABC',oppen:true,manual_invoice:'MANUAL'}]);
+  });
+  it('does not silently link an unverified historic short ID', async () => {
+    await pg.query("INSERT INTO mendel_transactions(transaction_id,transaction_date,total_amount,currency,updated_at) VALUES ('ABC',NOW(),10,'ARS',NOW())");
+    const response = await POST(csvRequest('ABC,ABC-111,2026/10/02 10:00,12,ARS,F-2'));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({invalidRows:1,errors:[{line:2}]});
+    expect((await pg.query('SELECT transaction_id FROM mendel_transactions')).rows).toHaveLength(1);
+  });
+  it('accepts an incremental file with the full ID and no abbreviated-ID column', async () => {
+    const headers='ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda';
+    const response = await POST(csvRequest('FULL-IDENTIFIER-1,2026/08/01 10:00,12,ARS', headers));
+    expect(response.status).toBe(200);
+    expect((await pg.query('SELECT transaction_id FROM mendel_transactions')).rows).toEqual([{transaction_id:'FULL-IDENTIFIER-1'}]);
   });
 });

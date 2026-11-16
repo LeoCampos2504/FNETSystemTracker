@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ authorize: vi.fn(), findMany: vi.fn(), importBatch: vi.fn(), createBatch: vi.fn(), archive: vi.fn(), transaction: vi.fn() }));
+const mocks = vi.hoisted(() => ({ authorize: vi.fn(), findMany: vi.fn(), query: vi.fn(), importBatch: vi.fn(), createBatch: vi.fn(), archive: vi.fn(), transaction: vi.fn() }));
 vi.mock("@/server/services/auth-sessions", () => ({ requireAdminSession: mocks.authorize }));
-vi.mock("@/server/prisma", () => ({ getPrismaClient: () => ({ mendel_transactions: { findMany: mocks.findMany }, $transaction: mocks.transaction }) }));
+vi.mock("@/server/prisma", () => ({ getPrismaClient: () => ({ mendel_transactions: { findMany: mocks.findMany }, $queryRaw: mocks.query, $transaction: mocks.transaction }) }));
 vi.mock("@/server/mendel-import-batch", () => ({ importMendelBatch: mocks.importBatch }));
 import { POST } from "./route";
 
 function request(notes: string | undefined, mode = "commit") {
-  const csv = `ID Transaccion,Fecha transaccion,Importe Total,Moneda${notes === undefined ? "" : ",Notas"}\nABC-123,2026/09/25 08:33,1,ARS${notes === undefined ? "" : `,${notes}`}`;
+  const csv = `ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda${notes === undefined ? "" : ",Notas"}\nABC-123,ABC-123-FULL,2026/09/25 08:33,1,ARS${notes === undefined ? "" : `,${notes}`}`;
   const form = new FormData();
   form.set("file", new File([csv], "mendel.csv", { type: "text/csv" }));
   form.set("mode", mode);
@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.authorize.mockResolvedValue({ ok: true, user: { id: "admin-1" } });
   mocks.findMany.mockResolvedValue([{ transactionId: "ABC-123" }]);
+  mocks.query.mockResolvedValue([{ transactionId: 'ABC-123', fullId: 'ABC-123-FULL' }]);
   mocks.createBatch.mockResolvedValue({ id: BigInt(1) });
   mocks.transaction.mockImplementation(async (callback) => callback({
     mendel_import_batches: { create: mocks.createBatch },

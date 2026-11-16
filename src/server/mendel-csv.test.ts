@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseMendelCsv } from "@/server/mendel-csv";
 
 describe("parseMendelCsv", () => {
-  it("rejects two different full IDs sharing a short ID instead of silently merging them", () => {
+  it("distinguishes two full IDs sharing a short ID", () => {
     const csv = 'ID Transaccion,ID Completo Transaccion,Fecha transaccion,Importe Total,Moneda\nABC-123,ABC-123-ONE,2026/09/25,1,ARS\nABC-123,ABC-123-TWO,2026/09/25,1,ARS';
     const result = parseMendelCsv(new TextEncoder().encode(csv));
-    expect(result.invalidRowCount).toBe(1);
-    expect(result.errors[0].fields).toContain('ID abreviado corresponde a transacciones distintas');
+    expect(result.invalidRowCount).toBe(0);
+    expect(result.rows.map(row => row.fullId)).toEqual(['ABC-123-ONE', 'ABC-123-TWO']);
     expect(result.duplicateCount).toBe(0);
   });
 

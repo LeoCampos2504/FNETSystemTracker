@@ -45,6 +45,7 @@ export type MendelCsvParseResult = {
   identityConflict: boolean;
   recordNumbers: number[];
   duplicates: Array<{ record: number; transactionId: string }>;
+  presentSourceKeys: Array<keyof MendelTransactionImport>;
 };
 
 function decode(bytes: Uint8Array): string {
@@ -144,14 +145,25 @@ function parseBoolean(value: string | undefined): boolean | null {
   return null;
 }
 
-export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
+export function parseMendelCsv(bytes: Uint8Array, options: { requireFullId?: boolean } = {}): MendelCsvParseResult {
   const records = parseCsv(decode(bytes));
   if (records.length < 2) throw new Error("CSV_EMPTY");
   const headers = records[0].map(headerKey);
   const index = (name: string) => headers.indexOf(headerKey(name));
-  const required = ["ID Transaccion", "Fecha transaccion", "Importe Total", "Moneda"];
+  const required = [options.requireFullId ? "ID Completo Transaccion" : "ID Transaccion", "Fecha transaccion", "Importe Total", "Moneda"];
   const absent = required.filter((name) => index(name) < 0);
   if (absent.length) throw new Error("CSV_REQUIRED_HEADERS_MISSING");
+  const sourceHeaders: Array<[keyof MendelTransactionImport, string]> = [
+    ['transactionId','ID Transaccion'],['transactionDate','Fecha transaccion'],['confirmationDate','Fecha confirmacion'],
+    ['userName','Usuario'],['merchant','Comercio'],['totalAmount','Importe Total'],['currency','Moneda'],
+    ['internationalAmount','Importe internacional'],['internationalCurrency','Moneda internacional'],['bankFee','Comision bancaria (en moneda nacional)'],
+    ['budget','Presupuesto'],['budgetId','ID presupuesto'],['paymentMethod','Metodo de pago'],['transactionType','Tipo Transaccion'],
+    ['transactionStatus','Estado transaccion'],['referenceCode','Codigo de referencia'],['paymentOrigin','Origen del pago'],['channel','Canal'],
+    ['merchantCategory','Categoria comercio'],['transactionCategory','Categoria transaccion'],['hasReceipt','Hay ticket'],['documentName','Nombre PDF'],
+    ['invoiceTotal','Importe total de la factura'],['invoiceDifference','Diferencia importe total y facturado'],['receiptStatus','Estado comprobacion'],
+    ['vat','IVA'],['grossIncomeTax','IIBB'],['otherTaxes','Otros impuestos'],['exemptAmount','Importe exento'],['nonTaxedAmount','Importe no gravado'],
+  ];
+  const presentSourceKeys = sourceHeaders.filter(([, header]) => index(header) >= 0).map(([key]) => key);
   const value = (record: string[], name: string) => {
     const i = index(name);
     return i < 0 ? undefined : record[i];
@@ -159,7 +171,6 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
   const rows: MendelTransactionImport[] = [];
   const errors: MendelCsvParseResult["errors"] = [];
   const seen = new Map<string, string>();
-  const fullIds = new Map<string, string>();
   const recordNumbers: number[] = [];
   const duplicates: MendelCsvParseResult['duplicates'] = [];
   let invalidRowCount = 0;
@@ -170,15 +181,17 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
     const record = records[offset];
     const line = offset + 1;
     const fields: string[] = [];
-    const transactionId = clean(value(record, "ID Transaccion"), 80)?.toUpperCase() ?? null;
-    const fullId = clean(value(record, "ID Completo Transaccion"), 80)?.toUpperCase() ?? null;
+    const rawShortId = value(record, "ID Transaccion")?.trim() ?? '';
+    const rawFullId = value(record, "ID Completo Transaccion")?.trim() ?? '';
+    const transactionId = clean(rawShortId || (options.requireFullId ? rawFullId : ''), 80)?.toUpperCase() ?? null;
+    const fullId = clean(rawFullId, 80)?.toUpperCase() ?? null;
     const transactionDate = parseDate(value(record, "Fecha transaccion"));
     const totalAmount = parseAmount(value(record, "Importe Total"));
     const currency = clean(value(record, "Moneda"), 3)?.toUpperCase() ?? null;
     if (!transactionId) fields.push("ID Transaccion");
+    if (options.requireFullId && !fullId) fields.push("ID Completo Transaccion requerido");
+    if (rawShortId.length > 80 || rawFullId.length > 80) fields.push("ID Transaccion supera el máximo permitido");
     if (transactionId && fullId && !fullId.startsWith(transactionId)) fields.push("ID Completo Transaccion no coincide con el ID abreviado");
-    if (transactionId && fullId && fullIds.has(transactionId) && fullIds.get(transactionId) !== fullId) fields.push("ID abreviado corresponde a transacciones distintas");
-    if (transactionId && fullId && !fullIds.has(transactionId)) fullIds.set(transactionId, fullId);
     if (!transactionDate) fields.push("Fecha transaccion");
     if (!totalAmount) fields.push("Importe Total");
     if (!currency || currency.length !== 3) fields.push("Moneda");
@@ -194,7 +207,7 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
     const confirmationDate = confirmationRaw?.trim() ? parseDate(confirmationRaw) : null;
     if (confirmationRaw?.trim() && !confirmationDate) fields.push("Fecha confirmacion");
     if (fields.length) {
-      if (fields.some(field => field.includes('ID '))) identityConflict = true;
+      if (fields.some(field => field.includes('no coincide'))) identityConflict = true;
       invalidRowCount += 1;
       if (errors.length < 100) errors.push({ line, fields });
       continue;
@@ -219,7 +232,8 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
       ...(index("Notas") >= 0 ? { formReferences: extractFormReferences(value(record, "Notas")) } : {}),
     };
     const serialized = JSON.stringify(row);
-    const previous = seen.get(row.transactionId);
+    const identity = fullId ?? row.transactionId;
+    const previous = seen.get(identity);
     if (previous !== undefined) {
       if (previous !== serialized) {
         identityConflict = true;
@@ -228,9 +242,9 @@ export function parseMendelCsv(bytes: Uint8Array): MendelCsvParseResult {
       } else { duplicateCount += 1; duplicates.push({ record: line, transactionId: row.transactionId }); }
       continue;
     }
-    seen.set(row.transactionId, serialized);
+    seen.set(identity, serialized);
     rows.push(row);
     recordNumbers.push(line);
   }
-  return { rows, errors, invalidRowCount, duplicateCount, identityConflict, recordNumbers, duplicates };
+  return { rows, errors, invalidRowCount, duplicateCount, identityConflict, recordNumbers, duplicates, presentSourceKeys };
 }

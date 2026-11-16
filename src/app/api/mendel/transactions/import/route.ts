@@ -6,6 +6,7 @@ import { parseMendelCsv } from "@/server/mendel-csv";
 import { hasAllowedRequestOrigin } from "@/server/request-origin";
 import { operationalDateKey } from "@/lib/operational-timezone";
 import { importMendelBatch } from "@/server/mendel-import-batch";
+import { resolveMendelIdentities } from "@/server/mendel-identity";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
   let parsed: ReturnType<typeof parseMendelCsv>;
   const bytes = new Uint8Array(await file.arrayBuffer());
   try {
-    parsed = parseMendelCsv(bytes);
+    parsed = parseMendelCsv(bytes, { requireFullId: true });
   } catch (error) {
     const code = error instanceof Error ? error.message : "CSV_INVALID";
     const status = code === "CSV_EMPTY" ? 400 : 422;
@@ -48,20 +49,24 @@ export async function POST(request: NextRequest) {
   const days = parsed.rows.map((row) => operationalDateKey(row.transactionDate)).sort();
   try {
     const prisma = getPrismaClient();
-    const ids = parsed.rows.map((row) => row.transactionId);
-    const existing = ids.length ? await prisma.mendel_transactions.findMany({ where: { transactionId: { in: ids } }, select: { transactionId: true } }) : [];
+    const shortIds = parsed.rows.map(row => row.transactionId), fullIds = parsed.rows.map(row => row.fullId!);
+    const mappings = shortIds.length ? await prisma.$queryRaw<Array<{transactionId:string;fullId:string|null}>>`SELECT transaction_id AS "transactionId",full_id AS "fullId" FROM mendel_purchase_details WHERE transaction_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(shortIds)}::jsonb)) OR full_id IN (SELECT jsonb_array_elements_text(${JSON.stringify(fullIds)}::jsonb))` : [];
+    const candidateIds = [...new Set([...shortIds, ...fullIds, ...mappings.map(row => row.transactionId)])];
+    const existing = candidateIds.length ? await prisma.mendel_transactions.findMany({ where: { transactionId: { in: candidateIds } }, select: { transactionId: true } }) : [];
     const existingIds = new Set(existing.map(({ transactionId }) => transactionId));
+    const resolved = resolveMendelIdentities(parsed.rows, parsed.recordNumbers, existingIds, mappings);
+    const ids = resolved.rows.map(row => row.transactionId);
     const insertedCount = ids.filter((id) => !existingIds.has(id)).length;
     const updatedCount = ids.length - insertedCount;
     const preview = {
-      rowCount: parsed.rows.length,
+      rowCount: resolved.rows.length,
       insertedCount,
       updatedCount,
       duplicateRowsSkipped: parsed.duplicateCount,
-      invalidRows: parsed.invalidRowCount,
-      errors: parsed.errors,
+      invalidRows: parsed.invalidRowCount + resolved.ambiguous.length,
+      errors: [...parsed.errors, ...resolved.ambiguous].slice(0, 100),
       rowResults: [
-        ...parsed.rows.map((row, index) => ({ record: parsed.recordNumbers[index], transactionId: row.transactionId, action: existingIds.has(row.transactionId) ? 'ACTUALIZAR' : 'AGREGAR' })),
+        ...resolved.rows.map((row, index) => ({ record: resolved.records[index], transactionId: row.fullId!, action: existingIds.has(row.transactionId) ? 'ACTUALIZAR' : 'AGREGAR' })),
         ...parsed.duplicates.map(row => ({ ...row, action: 'REPETIDA_OMITIDA' })),
       ].sort((a, b) => a.record - b.record),
       fileName,
@@ -73,16 +78,16 @@ export async function POST(request: NextRequest) {
     // Conflicting identifiers require review instead of associating the wrong purchase.
     if (parsed.identityConflict)
       return NextResponse.json({ code: "CSV_ID_CONFLICT", ...preview }, { status: 422, headers: { "Cache-Control": "no-store" } });
-    if (!parsed.rows.length) return NextResponse.json({ code: "CSV_NO_TRANSACTIONS" }, { status: 422 });
+    if (!resolved.rows.length) return NextResponse.json({ code: "CSV_NO_TRANSACTIONS", ...preview }, { status: 422 });
 
     await prisma.$transaction(async (tx) => {
-      for (let i = 0; i < parsed.rows.length; i += 500) await importMendelBatch(tx, parsed.rows.slice(i, i + 500));
+      for (let i = 0; i < resolved.rows.length; i += 500) await importMendelBatch(tx, resolved.rows.slice(i, i + 500), parsed.presentSourceKeys);
       const batch = await tx.mendel_import_batches.create({
-        data: { fileHash, rowCount: parsed.rows.length, insertedCount, updatedCount, importedBy: authorization.user.id }, select: { id: true },
+        data: { fileHash, rowCount: resolved.rows.length, insertedCount, updatedCount, importedBy: authorization.user.id }, select: { id: true },
       });
       // Keep the original in a private database table, in the same transaction as the import.
       await tx.$executeRaw`INSERT INTO mendel_csv_archives(batch_id,file_name,file_content,period_start,period_end,invalid_count,duplicate_count)
-        VALUES (${batch.id},${fileName},${Buffer.from(bytes)},${days[0]}::date,${days[days.length - 1]}::date,${parsed.invalidRowCount},${parsed.duplicateCount})`;
+        VALUES (${batch.id},${fileName},${Buffer.from(bytes)},${days[0]}::date,${days[days.length - 1]}::date,${preview.invalidRows},${parsed.duplicateCount})`;
     }, { maxWait: 10_000, timeout: 60_000 });
     return NextResponse.json({ ...preview, imported: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

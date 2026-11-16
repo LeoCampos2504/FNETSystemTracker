@@ -13,6 +13,7 @@ const inputSchema = z.object({
   oppen: z.boolean(),
   requiresIntra: z.boolean().nullable(),
   manualInvoice: z.string().trim().max(200).nullable(),
+  observation: z.string().max(5000).optional(),
   expectedVersion: z.number().int().nonnegative(),
 }).strict();
 
@@ -41,10 +42,12 @@ export async function POST(request: Request) {
       const [before] = await tx.$queryRaw<Array<{ oppen: boolean; requiresIntra: boolean | null; manualInvoice: string | null; version: number }>>`
         SELECT oppen, requires_intra AS "requiresIntra", manual_invoice AS "manualInvoice", version FROM mendel_purchase_details WHERE transaction_id=${input.transactionId} FOR UPDATE`;
       if (before.version !== input.expectedVersion) throw new SupplyError('DETAILS_CHANGED', 409);
-      const after = { oppen: input.oppen, requiresIntra: input.requiresIntra, manualInvoice: input.manualInvoice || null, version: before.version + 1 };
-      if (before.oppen === after.oppen && before.requiresIntra === after.requiresIntra && before.manualInvoice === after.manualInvoice) return before;
+      const [latest] = await tx.$queryRaw<Array<{ observation: string | null }>>`SELECT after->>'observation' AS observation FROM mendel_purchase_detail_events WHERE transaction_id=${input.transactionId} ORDER BY (after->>'version')::int DESC,created_at DESC,id DESC LIMIT 1`;
+      const previous = { ...before, observation: latest?.observation ?? '' };
+      const after = { oppen: input.oppen, requiresIntra: input.requiresIntra, manualInvoice: input.manualInvoice || null, observation: input.observation ?? previous.observation, version: before.version + 1 };
+      if (before.oppen === after.oppen && before.requiresIntra === after.requiresIntra && before.manualInvoice === after.manualInvoice && previous.observation === after.observation) return previous;
       await tx.$executeRaw`UPDATE mendel_purchase_details SET oppen=${after.oppen}, requires_intra=${after.requiresIntra}, manual_invoice=${after.manualInvoice}, version=${after.version} WHERE transaction_id=${input.transactionId}`;
-      await tx.$executeRaw`INSERT INTO mendel_purchase_detail_events(id,transaction_id,actor_id,before,after) VALUES (${randomUUID()}::uuid,${input.transactionId},${auth.user.id}::uuid,${JSON.stringify(before)}::jsonb,${JSON.stringify(after)}::jsonb)`;
+      await tx.$executeRaw`INSERT INTO mendel_purchase_detail_events(id,transaction_id,actor_id,before,after) VALUES (${randomUUID()}::uuid,${input.transactionId},${auth.user.id}::uuid,${JSON.stringify(previous)}::jsonb,${JSON.stringify(after)}::jsonb)`;
       return after;
     });
     return NextResponse.json({ state }, { headers: privateHeaders });

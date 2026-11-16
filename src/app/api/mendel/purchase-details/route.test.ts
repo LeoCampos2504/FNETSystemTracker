@@ -9,7 +9,7 @@ function request(body: unknown = input, origin = 'http://localhost:3001') { retu
 beforeEach(() => {
   vi.resetAllMocks();
   m.auth.mockResolvedValue({ ok: true, user: { id: '00000000-0000-4000-8000-000000000001', role: 'ADMIN', active: true } });
-  m.query.mockResolvedValueOnce([{ transaction_id: 'SYNTHETIC' }]).mockResolvedValueOnce([{ oppen: false, requiresIntra: null, manualInvoice: null, version: 0 }]);
+  m.query.mockResolvedValueOnce([{ transaction_id: 'SYNTHETIC' }]).mockResolvedValueOnce([{ oppen: false, requiresIntra: null, manualInvoice: null, version: 0 }]).mockResolvedValueOnce([]);
   m.transaction.mockImplementation(async cb => cb({ $queryRaw: m.query, $executeRaw: m.execute }));
 });
 describe('manual purchase controls', () => {
@@ -28,5 +28,17 @@ describe('manual purchase controls', () => {
   it('rejects stale updates and does not append an event', async () => {
     expect((await POST(request({ ...input, expectedVersion: 4 }))).status).toBe(409);
     expect(m.execute).toHaveBeenCalledTimes(1);
+  });
+  it('preserves a previous observation when an older client changes another control', async () => {
+    m.query.mockReset();
+    m.query.mockResolvedValueOnce([{ transaction_id: 'SYNTHETIC' }]).mockResolvedValueOnce([{ oppen: false, requiresIntra: null, manualInvoice: null, version: 0 }]).mockResolvedValueOnce([{ observation: 'Comentario de prueba' }]);
+    const response = await POST(request());
+    expect(await response.json()).toMatchObject({ state: { observation: 'Comentario de prueba' } });
+    expect(JSON.stringify(m.execute.mock.calls[2])).toContain('Comentario de prueba');
+  });
+  it('saves an observation with the same versioned audit history', async () => {
+    const response = await POST(request({ ...input, observation: 'Uso verificado' }));
+    expect(await response.json()).toMatchObject({ state: { observation: 'Uso verificado', version: 1 } });
+    expect(JSON.stringify(m.execute.mock.calls[2])).toContain('Uso verificado');
   });
 });
