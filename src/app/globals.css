@@ -551,3 +551,159 @@ input[type=checkbox], input[type=radio] { accent-color: var(--brand); }
 .login-hero-copy .eyebrow { color: #9fb0d2; }
 .login-hero-copy h1 { font-size: clamp(36px, 4vw, 52px); }
 .login-brand-panel::after { right: -340px; bottom: -150px; }
+
+/* Persistent app-wide theme control */
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border: 1px solid var(--control-line, var(--line));
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  color: var(--muted);
+  box-shadow: 0 4px 14px rgb(14 28 61 / 10%);
+  cursor: pointer;
+}
+.theme-toggle:hover { border-color: var(--brand); color: var(--brand); }
+.global-theme-toggle { position: fixed; z-index: 200; right: 20px; bottom: 20px; }
+
+/* Dark palette shared by the dashboard and every standalone module. */
+:root {
+  color-scheme: light;
+  --surface: #fff;
+  --surface-soft: #f7f9fc;
+  --surface-raised: #eff3f9;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e8eef7;
+  --muted: #a4b1c3;
+  --line: #2b3a4e;
+  --paper: #0c1420;
+  --surface: #131e2b;
+  --surface-soft: #192739;
+  --surface-raised: #223247;
+  --brand: #7898f2;
+  --brand-dark: #6283e1;
+  --brand-tint: #21314f;
+  --brand-green: #5bc982;
+  --green-tint: #193628;
+  --purple: #91adff;
+  --purple-dark: #bbcbff;
+  --green: #58c98c;
+  --orange: #f0b65e;
+  --red: #ff858b;
+  --navy: #09111e;
+  --control-line: #33465d;
+}
+
+html[data-theme="dark"], html[data-theme="dark"] body,
+html[data-theme="dark"] .app-shell, html[data-theme="dark"] .main-shell,
+html[data-theme="dark"] .content, html[data-theme="dark"] .mendel-page,
+html[data-theme="dark"] .standalone-resource-page, html[data-theme="dark"] .login-shell {
+  background: var(--paper);
+  color: var(--ink);
+}
+html[data-theme="dark"] .topbar { border-color: var(--line); background: rgb(13 22 34 / 93%); }
+html[data-theme="dark"] .sidebar, html[data-theme="dark"] .mobile-drawer,
+html[data-theme="dark"] .login-brand-panel { background: var(--navy); }
+html[data-theme="dark"] .sidebar-context { border-color: #26374d; background: #111d2c; }
+html[data-theme="dark"] .nav-item:hover { background: #1c2b3f; }
+html[data-theme="dark"] .nav-item.active { background: #203655; }
+
+html[data-theme="dark"] :is(.panel, .kpi-card, .summary-card, .table-panel,
+  .corrective-worktype-breakdown, .operational-filters, .breakdown-card,
+  .preventive-detail-grid > div, .preventive-site-row, .corrective-detail-grid > div,
+  .corrective-assignment-block, .role-popover, .detail-modal, .detail-modal-header,
+  .mendel-import-card, .mendel-table-card, .mendel-metrics article, .mendel-preview,
+  .login-card, .detail-panel, .resource-summary .summary-card, .technician-detail-panel) {
+  border-color: var(--line);
+  background-color: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 8px 26px rgb(0 0 0 / 18%);
+}
+html[data-theme="dark"] :is(.data-table-head, .mendel-table-wrap th,
+  .mendel-preview span, .schedule-toolbar, .guard-info-banner) {
+  border-color: var(--line);
+  background-color: var(--surface-soft);
+  color: var(--muted);
+}
+html[data-theme="dark"] :is(.data-table-row, .corrective-table-row, .detail-list div,
+  .mendel-table-wrap td, .preventive-project-row, .preventive-detail-form,
+  .technician-ranking-table .data-table-row, .technician-crew-table .data-table-row) {
+  border-color: var(--line);
+  background-color: var(--surface);
+  color: var(--muted);
+}
+html[data-theme="dark"] :is(.content-breadcrumb strong, .page-heading h1, .panel-heading h2,
+  .table-toolbar h2, .kpi-value, .summary-card strong, .data-table-row strong,
+  .task-row-main strong, .table-strong, .guard-date-range strong, .guard-member strong,
+  .preventive-project-row strong, .preventive-site-row strong, .corrective-table-row strong,
+  .corrective-detail-grid strong, .preventive-detail-grid strong, .mendel-title-row h1,
+  .mendel-section-heading h2, .mendel-table-heading h2, .mendel-preview strong,
+  .mendel-metrics article strong, .mendel-table-wrap td, .detail-modal-header h3,
+  .detail-list dd, .login-card h2, .login-form label, .role-switcher,
+  .role-popover button, .breakdown-row, .operational-table strong, .pending-table strong) {
+  color: var(--ink);
+}
+html[data-theme="dark"] :is(.page-subtitle, .content-breadcrumb, .task-row-main > span,
+  .task-row-main small, .table-muted, .kpi-detail, .summary-card span, .summary-card small,
+  .guard-date-range span, .guard-member small, .preventive-project-row small,
+  .preventive-site-row small, .corrective-table-row small, .mendel-subtitle,
+  .mendel-section-heading p, .mendel-table-heading p, .mendel-privacy, .mendel-footnote,
+  .mendel-empty, .mendel-table-wrap td small, .detail-list dt, .detail-modal-body,
+  .role-switcher small, .role-popover button span, .app-footer, .data-table small,
+  .technician-detail-copy, .source-footnote) { color: var(--muted); }
+
+html[data-theme="dark"] select,
+html[data-theme="dark"] input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),
+html[data-theme="dark"] textarea, html[data-theme="dark"] .mendel-search input {
+  border-color: var(--control-line) !important;
+  background-color: var(--surface-soft) !important;
+  color: var(--ink) !important;
+}
+html[data-theme="dark"] select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a4b1c3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+html[data-theme="dark"] input::placeholder, html[data-theme="dark"] textarea::placeholder { color: #8393a8; }
+html[data-theme="dark"] .search-field, html[data-theme="dark"] .mendel-search {
+  border-color: var(--control-line);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+html[data-theme="dark"] .segmented, html[data-theme="dark"] .provider-pill,
+html[data-theme="dark"] .source-tag { background: var(--surface-soft); color: var(--muted); }
+html[data-theme="dark"] .segmented button.active { background: var(--surface-raised); color: var(--purple); }
+html[data-theme="dark"] .mendel-page .button.secondary { border: 1px solid var(--line); background: var(--surface-soft); color: var(--ink); }
+html[data-theme="dark"] .mendel-page .button.primary { background: var(--brand); color: #fff; }
+html[data-theme="dark"] .mendel-table-wrap th { background: var(--surface-soft); }
+html[data-theme="dark"] .mendel-table-wrap td { border-color: var(--line); }
+html[data-theme="dark"] .mendel-badge.good { background: #173a2b; color: #84dbac; }
+html[data-theme="dark"] .mendel-badge.needs { background: #432629; color: #ff9a98; }
+html[data-theme="dark"] .mendel-badge.pending { background: #253554; color: #b2c4ff; }
+html[data-theme="dark"] .status-badge.success { background: #173a2b; color: #84dbac; }
+html[data-theme="dark"] .status-badge.warning { background: #44341f; color: #f4c879; }
+html[data-theme="dark"] .status-badge.danger { background: #432629; color: #ff9a98; }
+html[data-theme="dark"] .status-badge.neutral { background: #263346; color: #b4c0d1; }
+html[data-theme="dark"] .read-only-note, html[data-theme="dark"] .data-source-tag { border-color: #285440; background: #173327; color: #8bdbac; }
+html[data-theme="dark"] .detail-modal-backdrop, html[data-theme="dark"] .mobile-menu-overlay { background: rgb(0 0 0 / 70%); }
+html[data-theme="dark"] .theme-toggle { border-color: var(--line); background: var(--surface-soft); color: var(--ink); }
+html[data-theme="dark"] .theme-toggle:hover { border-color: var(--brand); color: var(--brand); }
+
+/* Keep columns, filters and actions inside the viewport on narrow screens. */
+.app-shell, .main-shell, .content, .mendel-page { min-width: 0; }
+.content > *, .dashboard-grid > *, .schedule-layout > *, .operational-breakdowns > * { min-width: 0; }
+.content { overflow-x: clip; }
+.mendel-header-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .topbar { gap: 8px; padding-inline: 14px; }
+  .topbar-actions { min-width: 0; gap: 7px; }
+  .topbar-title { min-width: 0; }
+  .topbar-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .content { max-width: 100vw; padding-inline: 14px; }
+  .content-breadcrumb .data-source-tag { margin-left: 0; }
+  .mendel-header-actions { align-self: flex-end; }
+  .global-theme-toggle { right: 12px; bottom: 12px; }
+}
