@@ -10,9 +10,21 @@ const empty: Filters = { q: '', view: '', zone: '', budget: '', category: '', fr
 export function MendelPurchaseControl({ importRevision }: { importRevision: number }) {
   const [filters, setFilters] = useState(empty), [page, setPage] = useState(1), [data, setData] = useState<Data | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const requestVersion = useRef(0);
+  const tableRef = useRef<HTMLDivElement>(null), railRef = useRef<HTMLDivElement>(null), railContentRef = useRef<HTMLDivElement>(null);
   const params = useCallback((exporting = false) => { const p = new URLSearchParams(); for (const [key,value] of Object.entries(filters)) if (value) p.set(key, value); p.set('page', String(page)); if (exporting) p.set('export', 'xlsx'); return p.toString(); }, [filters, page]);
   const load = useCallback(async () => { const version = ++requestVersion.current; setLoading(true); setError(''); try { const response = await fetch('/api/mendel/purchase-control?' + params(), { cache: 'no-store' }); if (!response.ok) throw new Error(); const result = await response.json() as Data; if (version === requestVersion.current) setData(result); } catch { if (version === requestVersion.current) setError('No se pudo cargar el control de compras.'); } finally { if (version === requestVersion.current) setLoading(false); } }, [params]);
   useEffect(() => { const timer = setTimeout(() => void load(), 250); return () => clearTimeout(timer); }, [load, importRevision]);
+  useEffect(() => {
+    const wrapper = tableRef.current, table = wrapper?.querySelector('table'), content = railContentRef.current;
+    if (!wrapper || !table || !content) return;
+    const updateWidth = () => { content.style.width = `${table.scrollWidth}px`; };
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [data?.items.length]);
+  const syncFromRail = () => { if (tableRef.current && railRef.current) tableRef.current.scrollLeft = railRef.current.scrollLeft; };
+  const syncFromTable = () => { if (tableRef.current && railRef.current) railRef.current.scrollLeft = tableRef.current.scrollLeft; };
   const change = (key: keyof Filters, value: string) => { setFilters(previous => ({ ...previous, [key]: value })); setPage(1); };
   return <section className="mendel-table-card" aria-label="Control de compras Mendel">
     <div className="mendel-table-heading"><div><h2>Control de compras</h2><p>Filtrá los gastos y revisá si corresponde cargarlos y descargarlos en Intra.</p></div><a className="button primary" href={'/api/mendel/purchase-control?' + params(true)}>Descargar Excel filtrado</a></div>
@@ -27,9 +39,26 @@ export function MendelPurchaseControl({ importRevision }: { importRevision: numb
       <label>Estado de pago <select value={filters.transactionStatus} onChange={e => change('transactionStatus', e.target.value)}><option value="">Todos</option>{data?.options.transactionStatuses.map(v => <option key={v}>{v}</option>)}</select></label>
       <label>Estado <select value={filters.status} onChange={e => change('status', e.target.value)}><option value="">Todos</option><option value="pending-load">Pendientes de carga o sin confirmar</option><option value="loaded">Cargadas</option><option value="pending-download">Pendientes de descarga o sin confirmar</option><option value="downloaded">Descargadas</option><option value="mismatch">Diferencias</option></select></label>
     </div>
-    {data && <p>{data.summary.total} transacciones · Cargadas: {data.summary.loaded} · Pendientes de carga: {data.summary.pendingLoad} · Descargadas: {data.summary.downloaded} · Pendientes de descarga: {data.summary.pendingDownload} · Diferencias: {data.summary.mismatch} · De las pendientes, sin confirmar carga: {data.summary.unconfirmedLoad} / descarga: {data.summary.unconfirmedDownload}</p>}
+    {data && <div className={s.summary} aria-label="Resumen del control">
+      <span><strong>{data.summary.total.toLocaleString('es-AR')}</strong> transacciones</span>
+      <span>Cargadas <strong>{data.summary.loaded.toLocaleString('es-AR')}</strong></span>
+      <span>Pendientes de carga <strong>{data.summary.pendingLoad.toLocaleString('es-AR')}</strong></span>
+      <span>Descargadas <strong>{data.summary.downloaded.toLocaleString('es-AR')}</strong></span>
+      <span>Pendientes de descarga <strong>{data.summary.pendingDownload.toLocaleString('es-AR')}</strong></span>
+      <span>Diferencias <strong>{data.summary.mismatch.toLocaleString('es-AR')}</strong></span>
+      <span>Sin confirmar: carga <strong>{data.summary.unconfirmedLoad.toLocaleString('es-AR')}</strong> · descarga <strong>{data.summary.unconfirmedDownload.toLocaleString('es-AR')}</strong></span>
+    </div>}
     {error && <p role="alert">{error}</p>}{loading && <p role="status">Actualizando control…</p>}
-    <p className={s.scrollHint}>Deslizá hacia los lados para ver todos los controles.</p><div className="mendel-table-wrap" role="region" aria-label="Tabla de compras, desplazable horizontalmente" tabIndex={0}><table className={s.table}><thead><tr><th>Fecha / zona</th><th>Número de factura</th><th>Compra</th><th>Comentario de Mendel</th><th>Observación de FNET</th><th>ID Mendel</th><th>Va en Oppen</th><th>Web Claro<br/>(debe cargar)</th><th>Cargada en Intra</th><th>Descargada en Intra</th><th>Estado</th></tr></thead><tbody>{data?.items.map(item => <MendelPurchaseRow key={`${item.transactionId}:${item.details.version}:${item.intra.eventId}:${item.intra.sourceHash}:${item.details.sourceInvoice}`} item={item} onSaved={updated => {setData(previous=>previous?{...previous,items:previous.items.map(p=>p.transactionId===updated.transactionId?updated:p)}:previous); void load();}} />)}</tbody></table>{data && data.items.length === 0 && <p>No hay compras para estos filtros.</p>}</div>
+    <div className={s.tableNav}>
+      <span>Columnas</span>
+      <div className={s.horizontalRail} ref={railRef} onScroll={syncFromRail} role="region" aria-label="Barra para desplazar la tabla hacia las columnas de la derecha" aria-controls="mendel-purchase-table" tabIndex={0} onKeyDown={event => { const rail = railRef.current; if (!rail) return; if (event.key === 'ArrowRight') rail.scrollBy({ left: 160 }); if (event.key === 'ArrowLeft') rail.scrollBy({ left: -160 }); if (event.key === 'Home') rail.scrollLeft = 0; if (event.key === 'End') rail.scrollLeft = rail.scrollWidth; }}>
+        <div ref={railContentRef} className={s.horizontalRailContent} />
+      </div>
+      <span className={s.scrollHint}>Deslizá para ver las columnas de la derecha</span>
+    </div>
+    <div className={`mendel-table-wrap ${s.tableWrap}`} ref={tableRef} onScroll={syncFromTable} role="region" aria-label="Tabla de compras, desplazable horizontalmente" tabIndex={0}>
+      <table id="mendel-purchase-table" className={s.table}><thead><tr><th>Fecha / zona</th><th>Número de factura</th><th>Compra</th><th>Comentario de Mendel</th><th>Observación de FNET</th><th>ID Mendel</th><th>Va en Oppen</th><th>Web Claro<br/>(debe cargar)</th><th>Cargada en Intra</th><th>Descargada en Intra</th><th>Estado</th></tr></thead><tbody>{data?.items.map(item => <MendelPurchaseRow key={`${item.transactionId}:${item.details.version}:${item.intra.eventId}:${item.intra.sourceHash}:${item.details.sourceInvoice}`} item={item} onSaved={updated => {setData(previous=>previous?{...previous,items:previous.items.map(p=>p.transactionId===updated.transactionId?updated:p)}:previous); void load();}} />)}</tbody></table>{data && data.items.length === 0 && <p>No hay compras para estos filtros.</p>}
+    </div>
     {data && data.summary.total > 50 && <div className="mendel-pagination"><button className="button secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Anterior</button><span>Página {page} de {Math.ceil(data.summary.total / 50)}</span><button className="button secondary" disabled={page * 50 >= data.summary.total} onClick={() => setPage(p => p + 1)}>Siguiente</button></div>}
   </section>;
 }
