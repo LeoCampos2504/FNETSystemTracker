@@ -1,18 +1,75 @@
-/* Estilos exclusivos de Compras; no modifica componentes de otras secciones. */
-.mendel-page { color: #192a43; line-height: 1.5; }
-.mendel-page .mendel-import-card, .mendel-page .mendel-table-card, .mendel-page .mendel-metrics article { border-color: #dfe7f1; box-shadow: 0 3px 14px rgba(31, 53, 86, .05); }
-.mendel-page .mendel-table-card { margin-block: 18px; }
-.mendel-page .mendel-metric-action { min-width: 0; padding: 18px; text-align: left; font: inherit; background: #fff; border: 1px solid #dfe7f1; border-radius: 15px; color: #192a43; cursor: pointer; }
-.mendel-page .mendel-metric-action span, .mendel-page .mendel-metric-action small { display: block; color: #526780; font-size: 13px; }
-.mendel-page .mendel-metric-action strong { display: block; margin: 10px 0 5px; font-size: clamp(19px, 2vw, 26px); }
-.mendel-page .mendel-metric-action.selected { border-color: #577ed9; background: #f2f6ff; }
-.mendel-page .mendel-table-heading h2, .mendel-page .mendel-section-heading h2 { color: #152942; font-size: 1.15rem; }
-.mendel-page .mendel-subtitle, .mendel-page .mendel-section-heading p, .mendel-page .mendel-table-heading p { color: #526780; }
-.mendel-page .mendel-preview { background: #f2f6fc; color: #30455f; line-height: 1.5; }
-.mendel-page .mendel-preview span { white-space: normal; overflow-wrap: anywhere; }
-.mendel-page .mendel-table-wrap { max-width: 100%; overscroll-behavior-x: contain; }
-.mendel-page .mendel-table-wrap th { color: #344c68; background: #f2f6fb; }
-.mendel-page .mendel-table-wrap td { color: #233a56; }
-.mendel-page .mendel-table-wrap td small { color: #536b84; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
-.mendel-page input:focus-visible, .mendel-page select:focus-visible, .mendel-page textarea:focus-visible, .mendel-page button:focus-visible, .mendel-page a:focus-visible { outline: 3px solid #8eb4ed; outline-offset: 2px; }
-.mendel-page .mendel-table-wrap:focus-visible { outline: 3px solid #8eb4ed; outline-offset: -3px; }
+/* Compras comparte los tokens del tema global para verse igual en claro y oscuro. */
+.mendel-page { width: min(100%, 1480px); min-width: 0; margin: 0 auto; padding: 28px clamp(16px, 3vw, 40px) 48px; color: var(--ink); line-height: 1.5; }
+.mendel-header { margin-bottom: 18px; }
+.mendel-back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 15px; color: var(--brand); font-size: 13px; font-weight: 650; }
+.mendel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.mendel-title-row > div:first-child { min-width: 0; }
+.mendel-title-row h1 { margin: 3px 0 5px; color: var(--ink); font-size: clamp(26px, 2.5vw, 32px); font-weight: 750; letter-spacing: -.025em; line-height: 1.15; }
+.mendel-subtitle, .mendel-section-heading p, .mendel-table-heading p { margin: 0; color: var(--muted); font-size: 13px; }
+.mendel-header-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mendel-header-actions .button { gap: 7px; }
+.mendel-header-actions .mendel-theme-toggle { width: 40px; height: 40px; border-color: var(--control-line); background: var(--surface); color: var(--muted); box-shadow: none; }
+.mendel-header-actions .mendel-theme-toggle:hover { border-color: var(--brand); color: var(--brand); }
+.mendel-import-card, .mendel-table-card { border-color: var(--line); background: var(--surface); box-shadow: 0 3px 14px rgb(14 28 61 / 5%); }
+.mendel-page .mendel-import-card { margin-top: 16px; padding: 19px 20px; border-radius: 14px; }
+.mendel-page .mendel-table-card { margin-block: 16px; border-radius: 14px; }
+.mendel-section-heading { display: flex; align-items: center; gap: 12px; }
+.mendel-section-heading h2 { margin: 0 0 3px; color: var(--ink); font-size: 16px; }
+.mendel-section-heading p { font-size: 12px; }
+.mendel-icon { width: 38px; height: 38px; background: var(--brand-tint); color: var(--brand); }
+.mendel-upload-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 8px; }
+.mendel-upload-row input { max-width: min(100%, 460px); color: var(--muted); font-size: 13px; }
+.mendel-preview { margin-top: 12px; padding: 12px; border: 1px solid var(--line); background: var(--surface-soft); color: var(--muted); font-size: 12px; line-height: 1.5; }
+.mendel-preview strong { color: var(--ink); }
+.mendel-preview span { border-color: var(--line); background: var(--surface); color: var(--muted); }
+.mendel-preview .mendel-danger { border-color: color-mix(in srgb, var(--red) 28%, var(--line)); background: color-mix(in srgb, var(--red) 9%, var(--surface)); color: var(--red); }
+.mendel-errors { color: var(--red); font-size: 12px; }
+.mendel-message { margin: 10px 0 0; font-size: 12px; }
+.mendel-message.error { color: var(--red); }
+.mendel-message.success { color: var(--green); }
+.mendel-privacy { display: flex; align-items: center; gap: 7px; margin: 12px 0; color: var(--muted); font-size: 11px; }
+.mendel-privacy svg { flex: none; color: var(--green); }
+.mendel-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.mendel-metrics article, .mendel-page .mendel-metric-action { min-width: 0; padding: 13px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(14 28 61 / 4%); }
+.mendel-metrics article span, .mendel-metrics article small, .mendel-page .mendel-metric-action span, .mendel-page .mendel-metric-action small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.mendel-metrics article strong, .mendel-page .mendel-metric-action strong { display: block; margin: 6px 0 3px; color: var(--ink); font-size: clamp(17px, 1.5vw, 22px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.mendel-page .mendel-metric-action { text-align: left; font: inherit; cursor: pointer; }
+.mendel-page .mendel-metric-action:hover { border-color: var(--brand); }
+.mendel-page .mendel-metric-action.selected { border-color: var(--brand); background: var(--brand-tint); }
+.mendel-page .mendel-table-heading h2 { margin: 0 0 3px; color: var(--ink); font-size: 17px; }
+.mendel-controls { display: flex; align-items: center; gap: 8px; }
+.mendel-search, .mendel-month { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 7px 9px; border: 1px solid var(--control-line); border-radius: 9px; background: var(--surface); color: var(--muted); font-size: 12px; }
+.mendel-search input { min-width: 180px; border: 0 !important; background: transparent !important; color: var(--ink); outline: 0; }
+.mendel-month input { width: 130px; border: 0 !important; background: transparent !important; color: var(--ink); }
+.mendel-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.mendel-table-wrap table { width: 100%; min-width: 920px; border-collapse: separate; border-spacing: 0; color: var(--ink); font-size: 12px; }
+.mendel-table-wrap th { padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--surface-soft); color: var(--muted); font-size: 11.5px; font-weight: 700; text-align: left; }
+.mendel-table-wrap td { padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); vertical-align: top; overflow-wrap: anywhere; }
+.mendel-table-wrap td small { display: block; margin-top: 4px; color: var(--muted); font-size: 11.5px; white-space: normal; overflow-wrap: anywhere; }
+.mendel-badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 11px; font-weight: 700; }
+.mendel-badge.good { background: var(--green-tint); color: var(--green); }
+.mendel-badge.needs { background: color-mix(in srgb, var(--red) 10%, var(--surface)); color: var(--red); }
+.mendel-badge.pending { background: var(--brand-tint); color: var(--brand); }
+.mendel-empty { padding: 28px; color: var(--muted); text-align: center; }
+.mendel-footnote { margin: 12px 2px; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.mendel-pagination { border-color: var(--line); color: var(--muted); }
+.mendel-page input:focus-visible, .mendel-page select:focus-visible, .mendel-page textarea:focus-visible, .mendel-page button:focus-visible, .mendel-page a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.mendel-page .mendel-table-wrap:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+@media (max-width: 1050px) { .mendel-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .mendel-page { padding: 20px 14px 32px; }
+  .mendel-title-row { align-items: flex-start; flex-direction: column; }
+  .mendel-header-actions { width: 100%; }
+  .mendel-header-actions .button { flex: 1; }
+  .mendel-page .mendel-import-card { padding: 15px; }
+  .mendel-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .mendel-metrics article, .mendel-page .mendel-metric-action { padding: 12px; }
+  .mendel-controls { width: 100%; flex-wrap: wrap; }
+  .mendel-search { flex: 1 1 190px; }
+  .mendel-search input { min-width: 0; width: 100%; }
+  .mendel-month { flex: 1 1 130px; }
+  .mendel-month input { width: 100%; }
+  .mendel-page .mendel-table-heading { align-items: stretch; flex-direction: column; padding: 16px; }
+  .mendel-upload-row { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 420px) { .mendel-metrics { grid-template-columns: 1fr; } }
