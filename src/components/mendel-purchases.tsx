@@ -6,6 +6,7 @@ import { ArrowLeft, FileUp, RefreshCw, Search, ShieldCheck } from "lucide-react"
 import type { PurchaseDetails } from './mendel-purchase-details';
 import { MendelPurchaseControl } from './mendel-purchase-control';
 import { MendelIdentityReview } from './mendel-identity-review';
+import { ThemeToggle } from './theme-toggle';
 import './mendel-purchases-page.css';
 import type { MendelIntraState } from '@/lib/mendel-intra';
 
@@ -144,7 +145,10 @@ export function MendelPurchases() {
   return <main className="mendel-page">
     <header className="mendel-header">
       <Link className="mendel-back" href="/"><ArrowLeft size={17} /> Volver a FNET</Link>
-      <div className="mendel-title-row"><div><p className="eyebrow">Compras · fuente Mendel</p><h1>Registro de compras</h1><a className="button primary" href="/compras/bandeja">Mendel por zonas · confirmaciones y prints</a><p className="mendel-subtitle">Importación de exportaciones y seguimiento de comprobantes.</p></div><button className="button secondary" type="button" onClick={() => void load()}><RefreshCw size={16} /> Actualizar</button></div>
+      <div className="mendel-title-row">
+        <div><p className="eyebrow">Compras · fuente Mendel</p><h1>Registro de compras</h1><p className="mendel-subtitle">Importación de exportaciones y seguimiento de comprobantes.</p></div>
+        <div className="mendel-header-actions"><Link className="button secondary" href="/compras/bandeja">Mendel por zonas</Link><button className="button secondary" type="button" onClick={() => void load()}><RefreshCw size={16} /> Actualizar</button><ThemeToggle className="mendel-theme-toggle" /></div>
+      </div>
     </header>
 
     <section className="mendel-import-card">
@@ -160,8 +164,6 @@ export function MendelPurchases() {
       {history && <div className="mendel-table-wrap"><table><thead><tr><th>Fecha de carga</th><th>Archivo</th><th>Período</th><th>Procesadas</th><th>Nuevas</th><th>Existentes</th><th>Con errores</th><th>Repetidas omitidas</th></tr></thead><tbody>{history.map(item => <tr key={item.id}><td>{date(item.importedAt)}</td><td>{item.fileName ?? 'Archivo anterior no disponible'}</td><td>{item.periodStart && item.periodEnd ? `${item.periodStart} al ${item.periodEnd}` : 'No disponible'}</td><td>{item.rowCount}</td><td>{item.insertedCount}</td><td>{item.updatedCount}</td><td>{item.invalidCount ?? 'Sin dato'}</td><td>{item.duplicateCount ?? 'Sin dato'}</td></tr>)}</tbody></table>{history.length === 0 && <p>No hay importaciones registradas.</p>}</div>}
     </section>
 
-    <MendelIdentityReview onAssociated={() => { setImportRevision(value => value + 1); void load(); }} />
-    <MendelPurchaseControl importRevision={importRevision} />
     <section className="mendel-metrics" aria-label="Resumen de compras">
       <article><span>Compras registradas</span><strong>{data?.summary.totalTransactions ?? "—"}</strong><small>Transacciones de Mendel</small></article>
       <article><span>Importe total</span><strong>{data?.summary.amountByCurrency.length ? data.summary.amountByCurrency.map((amount) => money(amount.totalAmount, amount.currency)).join(" · ") : "—"}</strong><small>Por moneda</small></article>
@@ -169,6 +171,9 @@ export function MendelPurchases() {
       <button className={`mendel-metric-action ${overdueOnly ? "selected" : ""}`} type="button" onClick={() => { setOverdueOnly((value) => !value); setPage(1); }}><span>Falta comprobante · +30 días</span><strong>{data?.summary.overdueReceipt ?? "—"}</strong><small>{overdueOnly ? "Mostrar todas" : "Ver pendientes antiguos"}</small></button>
       <article><span>Sin conciliación automática</span><strong>{data?.summary.pendingReconciliation ?? "—"}</strong><small>Distinta de las confirmaciones manuales de Intra</small></article>
     </section>
+
+    <MendelIdentityReview onAssociated={() => { setImportRevision(value => value + 1); void load(); }} />
+    <MendelPurchaseControl importRevision={importRevision} />
 
     <section className="mendel-table-card">
       <div className="mendel-table-heading"><div><h2>Transacciones</h2><p>{data ? `${data.total} resultados` : "Cargando…"}{data?.latestImport ? ` · última carga ${date(data.latestImport.importedAt)}` : ""}</p></div><div className="mendel-controls"><label className="mendel-search"><Search size={16} /><input aria-label="Buscar compras" placeholder="Persona, comercio o categoría" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} /></label><label className="mendel-month">Mes <input type="month" aria-label="Filtrar por mes" value={month} onChange={(event) => { setMonth(event.target.value); setPage(1); }} /></label></div></div>

@@ -16,5 +16,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: "#0e1c3d", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="es" className={sans.variable}><body><ThemeToggle className="global-theme-toggle" />{children}</body></html>;
+  return <html lang="es" data-theme="light" suppressHydrationWarning className={sans.variable}>
+    <head>
+      <script dangerouslySetInnerHTML={{ __html: `(function(){try{var saved=localStorage.getItem("fnet-theme");var theme=saved==="dark"||saved==="light"?saved:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme}catch(_){}})()` }} />
+    </head>
+    <body><ThemeToggle className="global-theme-toggle" />{children}</body>
+  </html>;
 }
